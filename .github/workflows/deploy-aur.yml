@@ -1,0 +1,63 @@
+name: Deploy to AUR
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (without leading v) to publish'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for GitHub release tarball
+        id: tarball
+        run: |
+          URL="https://github.com/${{ github.repository }}/archive/v${{ steps.version.outputs.version }}.tar.gz"
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsSL -o /tmp/src.tar.gz "$URL"; then
+              echo "ok"; exit 0
+            fi
+            echo "tarball not ready yet, retry $i/10..."
+            sleep 6
+          done
+          echo "tarball never showed up at $URL" >&2
+          exit 1
+
+      - name: Compute sha256
+        id: hash
+        run: echo "sha256=$(sha256sum /tmp/src.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Patch PKGBUILD with real pkgver and sha256
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${{ steps.version.outputs.version }}/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('${{ steps.hash.outputs.sha256 }}')/" PKGBUILD
+          echo "--- patched PKGBUILD ---"
+          cat PKGBUILD
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v2.7.2
+        with:
+          pkgname: download-media
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email:    ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ steps.version.outputs.version }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+          force_push: false
