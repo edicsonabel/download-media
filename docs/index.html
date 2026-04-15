@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>download-media — interactive yt-dlp wrapper for Arch Linux</title>
+<meta name="description" content="A friendly Bash wrapper around yt-dlp with a step-by-step wizard, clipboard URL detection, carousel selection, browser cookies, and download history. Packaged for Arch Linux (AUR).">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314b8a6'/%3E%3Cpath d='M32 14v26m0 0l-9-9m9 9l9-9M14 46h36' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --surface-2: #eaeef2;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text-muted: #656d76;
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-fg: #ffffff;
+  --code-bg: #f6f8fa;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.08);
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #7d8590;
+  --accent: #14b8a6;
+  --accent-hover: #2dd4bf;
+  --accent-fg: #0d1117;
+  --code-bg: #161b22;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.5);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s, color 0.2s;
+}
+code, pre, kbd { font-family: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas, monospace; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+.container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+/* Header */
+header {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.nav {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; }
+.brand-icon {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: var(--accent); display: grid; place-items: center;
+  color: var(--accent-fg);
+}
+.nav-links { display: flex; align-items: center; gap: 8px; }
+.nav-links a {
+  color: var(--text-muted); padding: 8px 12px; border-radius: 8px; font-size: 14px;
+}
+.nav-links a:hover { color: var(--text); background: var(--surface); text-decoration: none; }
+.theme-toggle {
+  background: transparent; border: 1px solid var(--border); color: var(--text);
+  width: 36px; height: 36px; border-radius: 8px; cursor: pointer;
+  display: grid; place-items: center; transition: background 0.15s, border-color 0.15s;
+}
+.theme-toggle:hover { background: var(--surface); border-color: var(--text-muted); }
+.theme-toggle .sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .moon { display: none; }
+
+/* Hero */
+.hero { padding: 96px 0 64px; text-align: center; }
+.eyebrow {
+  display: inline-block; padding: 6px 14px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent); font-size: 13px; font-weight: 500; margin-bottom: 24px;
+}
+.hero h1 {
+  font-size: clamp(36px, 6vw, 64px); line-height: 1.1; font-weight: 700;
+  letter-spacing: -0.025em; margin-bottom: 20px;
+}
+.hero h1 .accent { color: var(--accent); }
+.hero p.lead {
+  font-size: clamp(17px, 2.2vw, 21px); color: var(--text-muted);
+  max-width: 640px; margin: 0 auto 40px;
+}
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 22px; border-radius: 10px; font-weight: 500; font-size: 15px;
+  border: 1px solid transparent; cursor: pointer; transition: all 0.15s;
+  text-decoration: none;
+}
+.btn-primary { background: var(--accent); color: var(--accent-fg); }
+.btn-primary:hover { background: var(--accent-hover); color: var(--accent-fg); text-decoration: none; transform: translateY(-1px); }
+.btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+
+/* Install command box */
+.install-box {
+  margin: 48px auto 0; max-width: 480px;
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; display: flex; align-items: center; gap: 12px;
+  font-family: inherit; box-shadow: var(--shadow);
+}
+.install-box code {
+  flex: 1; font-size: 14px; color: var(--text);
+  white-space: nowrap; overflow-x: auto;
+}
+.install-box code .prompt { color: var(--text-muted); user-select: none; }
+.copy-btn {
+  background: transparent; border: none; color: var(--text-muted); cursor: pointer;
+  padding: 6px; border-radius: 6px; display: grid; place-items: center;
+  transition: color 0.15s, background 0.15s;
+}
+.copy-btn:hover { color: var(--text); background: var(--surface-2); }
+.copy-btn.copied { color: var(--accent); }
+
+/* Section base */
+section { padding: 80px 0; }
+section h2 {
+  font-size: clamp(28px, 4vw, 40px); font-weight: 700; letter-spacing: -0.02em;
+  text-align: center; margin-bottom: 16px;
+}
+section .section-lead {
+  text-align: center; color: var(--text-muted); max-width: 600px; margin: 0 auto 56px;
+  font-size: 17px;
+}
+
+/* Features grid */
+.features {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+.feature {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 28px; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.feature:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow-lg); }
+.feature-icon {
+  width: 44px; height: 44px; border-radius: 10px; margin-bottom: 16px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); display: grid; place-items: center;
+}
+.feature h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+.feature p { color: var(--text-muted); font-size: 14px; }
+
+/* Code examples */
+.examples { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.example-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+.example {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
+  overflow: hidden;
+}
+.example-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  font-size: 14px; font-weight: 500; color: var(--text-muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.example-header svg { color: var(--accent); }
+.example pre {
+  margin: 0; padding: 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.65;
+  background: var(--code-bg);
+}
+.example pre code { color: var(--text); }
+.example pre .cmt { color: var(--text-muted); }
+.example pre .cmd { color: var(--accent); }
+.example pre .arg { color: var(--text); }
+
+/* Quick start */
+.quickstart-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+}
+@media (max-width: 720px) { .quickstart-grid { grid-template-columns: 1fr; } }
+.step {
+  position: relative; padding: 24px 24px 24px 64px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+}
+.step-num {
+  position: absolute; left: 20px; top: 24px;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg);
+  display: grid; place-items: center; font-weight: 600; font-size: 14px;
+}
+.step h3 { font-size: 16px; margin-bottom: 8px; }
+.step p { color: var(--text-muted); font-size: 14px; margin-bottom: 12px; }
+.step code {
+  display: block; padding: 8px 12px; background: var(--code-bg);
+  border: 1px solid var(--border); border-radius: 6px;
+  font-size: 12.5px; overflow-x: auto;
+}
+
+/* Footer */
+footer {
+  border-top: 1px solid var(--border); padding: 40px 0 60px;
+  color: var(--text-muted); font-size: 14px;
+}
+.footer-grid {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 24px;
+}
+.footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+.footer-links a { color: var(--text-muted); }
+.footer-links a:hover { color: var(--text); }
+
+/* Tooltip on copy */
+@keyframes fadeOut {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.tooltip {
+  position: absolute; transform: translate(-50%, -130%);
+  background: var(--text); color: var(--bg);
+  padding: 4px 10px; border-radius: 6px; font-size: 12px;
+  pointer-events: none; animation: fadeOut 1.4s forwards;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container nav">
+    <a href="#" class="brand">
+      <span class="brand-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v14m0 0l-5-5m5 5l5-5M5 21h14"/>
+        </svg>
+      </span>
+      download-media
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#quickstart">Install</a>
+      <a href="#examples">Examples</a>
+      <a href="https://github.com/edicsonabel/download-media" target="_blank" rel="noopener">GitHub</a>
+      <button class="theme-toggle" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun"  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <span class="eyebrow">v0.0.1 · For Arch Linux</span>
+    <h1>Download <span class="accent">anything</span><br>from anywhere.</h1>
+    <p class="lead">A friendly <code>yt-dlp</code> wrapper with a step-by-step wizard, smart clipboard detection, carousel item picker, and zero learning curve.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#quickstart">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v14m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
+        Install now
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/edicsonabel/download-media" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.3v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
+        View on GitHub
+      </a>
+    </div>
+    <div class="install-box" id="installBox">
+      <code><span class="prompt">$</span> yay -S download-media</code>
+      <button class="copy-btn" aria-label="Copy to clipboard" onclick="copyInstall(this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <h2>Built for humans, not flags</h2>
+    <p class="section-lead">Every annoying <code>yt-dlp</code> command you keep googling — turned into a few keystrokes.</p>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3>Step-by-step wizard</h3>
+        <p>URL → type → quality → format → folder → cookies. Type <kbd>b</kbd> to go back, <kbd>c</kbd> to cancel.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </div>
+        <h3>Smart clipboard</h3>
+        <p>Run with no args. If you copied a URL, it offers to use it. No more pasting.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        </div>
+        <h3>Carousel picker</h3>
+        <p>Instagram carousel? Pick exactly which slides you want: <code>1-3</code>, <code>1,2,4</code>, or all.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Preview before download</h3>
+        <p>Title, channel, duration, size — see what you're about to grab before it starts.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l3 3 3-3h7a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
+        </div>
+        <h3>Browser cookies</h3>
+        <p><code>--cookies brave</code> works for YouTube logged-in, Instagram private, age-restricted videos.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+        </div>
+        <h3>1800+ sites</h3>
+        <p>YouTube, Twitter/X, Instagram, TikTok, Facebook, Twitch, Vimeo, Reddit — anything yt-dlp supports.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <h3>Localized output</h3>
+        <p>Respects your XDG dirs — saves to <code>Vídeos</code>, <code>Música</code>, <code>Movies</code>, or wherever you set them.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>Equivalent command hint</h3>
+        <p>After every wizard run, prints the exact CLI command — so you can repeat without prompts.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="container">
+    <h2>Get started in 3 steps</h2>
+    <p class="section-lead">From zero to first download in under a minute.</p>
+    <div class="quickstart-grid">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Install from AUR</h3>
+        <p>Use your favorite AUR helper:</p>
+        <code>yay -S download-media</code>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Run the wizard</h3>
+        <p>No flags needed. It asks everything:</p>
+        <code>download-media</code>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Or jump straight in</h3>
+        <p>Pass a URL to skip the wizard:</p>
+        <code>download-media -a "https://..."</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="examples" class="examples">
+  <div class="container">
+    <h2>Recipes</h2>
+    <p class="section-lead">Common things you might want to do.</p>
+    <div class="example-grid">
+      <div class="example">
+        <div class="example-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          YouTube video at 1080p
+        </div>
+<pre><code><span class="cmt"># mp4 → ~/Vídeos</span>
+<span class="cmd">download-media</span> <span class="arg">"https://youtu.be/dQw4w9WgXcQ"</span></code></pre>
+      </div>
+      <div class="example">
+        <div class="example-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          Just the audio (mp3)
+        </div>
+<pre><code><span class="cmd">download-media</span> <span class="arg">-a "https://youtu.be/dQw4w9WgXcQ"</span></code></pre>
+      </div>
+      <div class="example">
+        <div class="example-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          Instagram with browser cookies
+        </div>
+<pre><code><span class="cmd">download-media</span> <span class="arg">--cookies brave \</span>
+  <span class="arg">"https://instagram.com/p/xxx/"</span></code></pre>
+      </div>
+      <div class="example">
+        <div class="example-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          Pick items from a carousel
+        </div>
+<pre><code><span class="cmt"># Wizard shows the list, you type "1,3,5"</span>
+<span class="cmd">download-media</span> <span class="arg">"https://instagram.com/p/xxx/"</span></code></pre>
+      </div>
+      <div class="example">
+        <div class="example-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          With embedded subtitles
+        </div>
+<pre><code><span class="cmd">download-media</span> <span class="arg">-s --sub-langs en,es \</span>
+  <span class="arg">"https://youtu.be/xxx"</span></code></pre>
+      </div>
+      <div class="example">
+        <div class="example-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          Multiple URLs in one go
+        </div>
+<pre><code><span class="cmd">download-media</span> <span class="arg">"url1" "url2" "url3"</span></code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container footer-grid">
+    <div>
+      Made with ☕ for Arch Linux. <span style="color: var(--text-muted)">MIT licensed.</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/edicsonabel/download-media">GitHub</a>
+      <a href="https://aur.archlinux.org/packages/download-media">AUR</a>
+      <a href="https://github.com/edicsonabel/download-media/issues">Issues</a>
+      <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Theme handling: respects system pref, allows override via localStorage.
+(function(){
+  const stored = localStorage.getItem("theme");
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const theme = stored || (prefersDark ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", theme);
+})();
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+}
+function copyInstall(btn) {
+  navigator.clipboard.writeText("yay -S download-media").then(() => {
+    btn.classList.add("copied");
+    const tip = document.createElement("span");
+    tip.className = "tooltip"; tip.textContent = "Copied!";
+    btn.style.position = "relative";
+    btn.appendChild(tip);
+    setTimeout(() => { btn.classList.remove("copied"); tip.remove(); }, 1400);
+  });
+}
+</script>
+
+</body>
+</html>
