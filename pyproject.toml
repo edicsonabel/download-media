@@ -1,0 +1,102 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "download-media"
+version = "0.0.1"
+description = "Interactive yt-dlp wrapper with wizard, clipboard, history, subtitles, cookies, and carousel item picker."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Edicson Abel" }]
+requires-python = ">=3.10"
+
+dependencies = [
+    "yt-dlp>=2024.10.0",
+    # Required to decrypt cookies from Chromium-family browsers (Brave, Chrome,
+    # Chromium, Edge, Opera, Vivaldi) on Linux. yt-dlp itself doesn't declare
+    # it but errors hard without it when --cookies brave/chrome/... is used.
+    "secretstorage>=3.3; sys_platform == 'linux'",
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Video",
+]
+
+[project.urls]
+Homepage = "https://github.com/edicsonabel/download-media"
+Source = "https://github.com/edicsonabel/download-media"
+Issues = "https://github.com/edicsonabel/download-media/issues"
+
+[project.scripts]
+download-media = "download_media.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "ruff>=0.6",
+    "mypy>=1.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/download_media"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/download_media",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "B",           # bugbear
+    "UP",          # pyupgrade
+    "SIM",         # simplify
+    "RUF",         # ruff-specific
+]
+ignore = [
+    "E501",        # line too long (handled by formatter)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+files = ["src/download_media"]
+
+[[tool.mypy.overrides]]
+module = ["yt_dlp", "yt_dlp.*"]
+ignore_missing_imports = true
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]
