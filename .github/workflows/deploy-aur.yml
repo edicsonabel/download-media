@@ -51,7 +51,9 @@ jobs:
           cat PKGBUILD
 
       - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v2.7.2
+        # v2.7.2 had a bash invocation bug ("bash: --command: invalid option"
+        # on first run). v3.0.1 fixes it.
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
         with:
           pkgname: download-media
           pkgbuild: ./PKGBUILD
