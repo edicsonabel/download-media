@@ -1,5 +1,11 @@
 name: Deploy to AUR
 
+# Runs on tag pushes (v*) and on manual dispatch with an explicit version.
+# We do the AUR push inline using an Arch Linux container — third-party
+# actions for this workflow turned out to be unreliable (KSXGitHub@v2.7.2
+# and v3.0.1 both fail with "bash: --command: invalid option" before
+# reaching the SSH setup step).
+
 on:
   push:
     tags:
@@ -13,30 +19,35 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
     steps:
-      - uses: actions/checkout@v4
+      - name: Install required tooling
+        run: |
+          pacman -Syu --noconfirm --needed git openssh
 
       - name: Resolve version
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
             echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: actions/checkout@v4
+
       - name: Wait for GitHub release tarball
-        id: tarball
         run: |
           URL="https://github.com/${{ github.repository }}/archive/v${{ steps.version.outputs.version }}.tar.gz"
           for i in 1 2 3 4 5 6 7 8 9 10; do
             if curl -fsSL -o /tmp/src.tar.gz "$URL"; then
-              echo "ok"; exit 0
+              echo "tarball available"; exit 0
             fi
-            echo "tarball not ready yet, retry $i/10..."
+            echo "tarball not ready (attempt $i/10), retrying in 6s..."
             sleep 6
           done
-          echo "tarball never showed up at $URL" >&2
+          echo "tarball never appeared at $URL" >&2
           exit 1
 
       - name: Compute sha256
@@ -50,16 +61,50 @@ jobs:
           echo "--- patched PKGBUILD ---"
           cat PKGBUILD
 
-      - name: Publish to AUR
-        # v2.7.2 had a bash invocation bug ("bash: --command: invalid option"
-        # on first run). v3.0.1 fixes it.
-        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
-        with:
-          pkgname: download-media
-          pkgbuild: ./PKGBUILD
-          commit_username: ${{ secrets.AUR_USERNAME }}
-          commit_email:    ${{ secrets.AUR_EMAIL }}
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to ${{ steps.version.outputs.version }}"
-          ssh_keyscan_types: rsa,ecdsa,ed25519
-          force_push: false
+      - name: Set up builder user and SSH (makepkg refuses to run as root)
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          useradd -m builder
+          install -d -m 700 -o builder -g builder /home/builder/.ssh
+          # Write the key via env so YAML quoting doesn't mangle newlines.
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > /home/builder/.ssh/id_aur
+          chmod 600 /home/builder/.ssh/id_aur
+          chown builder:builder /home/builder/.ssh/id_aur
+          cat > /home/builder/.ssh/config <<'EOF'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/id_aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+          EOF
+          chown builder:builder /home/builder/.ssh/config
+          ssh-keyscan aur.archlinux.org >> /home/builder/.ssh/known_hosts 2>/dev/null
+          chown builder:builder /home/builder/.ssh/known_hosts
+          # Stage the patched PKGBUILD where the builder user can read it.
+          install -m 644 -o builder -g builder PKGBUILD /home/builder/PKGBUILD
+
+      - name: Clone AUR, generate .SRCINFO, push
+        env:
+          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+          AUR_EMAIL:    ${{ secrets.AUR_EMAIL }}
+          VERSION:      ${{ steps.version.outputs.version }}
+        run: |
+          su builder <<'BASH'
+          set -euo pipefail
+          cd /tmp
+          rm -rf aur-repo
+          git clone ssh://aur@aur.archlinux.org/download-media.git aur-repo
+          cd aur-repo
+          cp /home/builder/PKGBUILD .
+          makepkg --printsrcinfo > .SRCINFO
+          git config user.name  "$AUR_USERNAME"
+          git config user.email "$AUR_EMAIL"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "Nothing to publish — PKGBUILD identical to what's already on AUR."
+            exit 0
+          fi
+          git commit -m "Update to $VERSION"
+          git push origin master
+          BASH
