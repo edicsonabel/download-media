@@ -1,0 +1,27 @@
+# Maintainer: Edicson Abel <edicsonabelinfo@gmail.com>
+pkgname=download-media
+pkgver=0.0.1
+pkgrel=1
+pkgdesc="Interactive wrapper for yt-dlp with wizard, clipboard, history, subtitles and cookies support"
+arch=('any')
+url="https://github.com/edicsonabel/download-media"
+license=('MIT')
+depends=('bash' 'yt-dlp' 'ffmpeg')
+optdepends=(
+  'xdg-user-dirs: detect localized Videos/Music folders (e.g. Vídeos, Música)'
+  'wl-clipboard: clipboard integration on Wayland'
+  'xclip: clipboard integration on X11'
+  'xsel: alternate clipboard integration on X11'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  install -Dm755 bin/download-media              "$pkgdir/usr/bin/download-media"
+  install -Dm644 completions/download-media.bash "$pkgdir/usr/share/bash-completion/completions/download-media"
+  install -Dm644 completions/_download-media     "$pkgdir/usr/share/zsh/site-functions/_download-media"
+  install -Dm644 man/download-media.1            "$pkgdir/usr/share/man/man1/download-media.1"
+  install -Dm644 LICENSE                         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md                       "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

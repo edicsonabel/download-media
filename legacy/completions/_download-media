@@ -1,0 +1,26 @@
+#compdef download-media
+
+_download-media() {
+  local -a args
+  args=(
+    '(-a --audio)'{-a,--audio}'[audio only]'
+    '(-q --quality)'{-q,--quality}'[max video quality]:quality:(360 480 720 1080 1440 2160 best)'
+    '(-f --format)'{-f,--format}'[audio format]:format:(mp3 m4a opus wav)'
+    '--video-format[video container]:format:(mp4 mkv webm)'
+    '(-o --output)'{-o,--output}'[output folder]:folder:_files -/'
+    '(-l --list)'{-l,--list}'[list available formats]'
+    '(-p --playlist -P --no-playlist)'{-p,--playlist}'[force full playlist]'
+    '(-p --playlist -P --no-playlist)'{-P,--no-playlist}'[single video only]'
+    '(-s --subs)'{-s,--subs}'[download subtitles]'
+    '--sub-langs[subtitle languages, comma-separated]:langs'
+    '--cookies[use browser cookies]:browser:(firefox chrome chromium brave edge opera vivaldi safari)'
+    '(-i --interactive)'{-i,--interactive}'[interactive wizard]'
+    '(-y --yes)'{-y,--yes}'[skip confirmation]'
+    '(-v --version)'{-v,--version}'[show version]'
+    '(-h --help)'{-h,--help}'[show help]'
+    '*:url:_urls'
+  )
+  _arguments -s $args
+}
+
+_download-media "$@"

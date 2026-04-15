@@ -1,0 +1,136 @@
+.TH DOWNLOAD-VIDEO 1 "2026-04-14" "0.0.1" "User Commands"
+.SH NAME
+download-media \- interactive wrapper for yt-dlp
+.SH SYNOPSIS
+.B download-media
+[\fIOPTIONS\fR] [\fIURL\fR...]
+.SH DESCRIPTION
+.B download-media
+is an interactive wrapper around
+.BR yt-dlp (1)
+that streamlines downloading video and audio from 1800+ supported sites
+including YouTube, Twitter/X, Instagram, TikTok, Facebook and more.
+
+If no URL is provided, it first checks the system clipboard for a URL
+and falls back to an interactive wizard that prompts for URL, type,
+quality, format and destination folder.
+
+Before downloading, a preview (title, uploader, duration, approx. size)
+is shown and the user is asked to confirm. Playlist URLs are detected
+and the user is offered a choice between downloading a single video or
+the full playlist.
+
+Successful downloads are appended to a history log at
+.IR $XDG_STATE_HOME/download-media/history.log .
+.SH OPTIONS
+.TP
+.BR \-a ", " \-\-audio
+Audio only (mp3 by default). Output goes to
+.I ~/Music
+unless overridden.
+.TP
+.BR \-q ", " \-\-quality " " \fIN\fR
+Maximum video quality. One of:
+.BR 360 ", " 480 ", " 720 ", " 1080 ", " 1440 ", " 2160 ", " best .
+Default:
+.BR 1080 .
+.TP
+.BR \-f ", " \-\-format " " \fIFMT\fR
+Audio format when
+.B \-\-audio
+is used:
+.BR mp3 ", " m4a ", " opus ", " wav .
+Default:
+.BR mp3 .
+.TP
+.BR \-o ", " \-\-output " " \fIDIR\fR
+Destination folder. Default:
+.I ~/Videos
+for video,
+.I ~/Music
+for audio.
+.TP
+.BR \-l ", " \-\-list
+List available formats for the given URL and exit.
+.TP
+.BR \-p ", " \-\-playlist
+Force full playlist download.
+.TP
+.BR \-P ", " \-\-no\-playlist
+Force single-video download, ignoring playlist membership.
+.TP
+.BR \-s ", " \-\-subs
+Download subtitles (auto-generated when available) and embed them.
+Default languages:
+.BR es,en .
+.TP
+.BR \-\-sub\-langs " " \fILANGS\fR
+Comma-separated list of subtitle language codes (implies
+.BR \-\-subs ).
+.TP
+.BR \-\-cookies " " \fIBROWSER\fR
+Use cookies from the given browser for authenticated content
+(age-restricted, private accounts, etc.). One of:
+.BR firefox ", " chrome ", " chromium ", " brave ", " edge ", " opera ", " vivaldi ", " safari .
+.TP
+.BR \-i ", " \-\-interactive
+Force the interactive wizard even when a URL is provided.
+.TP
+.BR \-y ", " \-\-yes
+Skip all confirmation prompts. Useful for scripting.
+.TP
+.BR \-v ", " \-\-version
+Print version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print help and exit.
+.SH EXAMPLES
+.PP
+Interactive wizard:
+.PP
+.RS
+.B download\-video
+.RE
+.PP
+Download a video at 1080p:
+.PP
+.RS
+.B download\-video https://youtu.be/xxxxx
+.RE
+.PP
+Extract audio as mp3:
+.PP
+.RS
+.B download\-video \-a https://youtu.be/xxxxx
+.RE
+.PP
+Download with English subtitles:
+.PP
+.RS
+.B download\-video \-s \-\-sub\-langs en https://youtu.be/xxxxx
+.RE
+.PP
+Download a private Instagram post using Firefox cookies:
+.PP
+.RS
+.B download\-video \-\-cookies firefox https://instagram.com/p/xxxxx
+.RE
+.SH FILES
+.TP
+.I $XDG_STATE_HOME/download-media/history.log
+Tab-separated log of successful downloads: timestamp, type, URL, folder.
+.SH DEPENDENCIES
+.TP
+Required:
+.BR yt-dlp (1),
+.BR ffmpeg (1)
+.TP
+Optional (clipboard):
+.BR wl-paste (1),
+.BR xclip (1),
+.BR xsel (1)
+.SH SEE ALSO
+.BR yt-dlp (1),
+.BR ffmpeg (1)
+.SH AUTHOR
+Edicson Abel

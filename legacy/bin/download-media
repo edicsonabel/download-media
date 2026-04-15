@@ -1,0 +1,908 @@
+#!/bin/bash
+#
+# download-media — interactive wrapper for yt-dlp
+#
+# Features:
+#   - Wizard mode (step-by-step prompts)
+#   - Direct CLI mode with flags
+#   - Clipboard fallback (auto-detects URL in clipboard)
+#   - Playlist auto-detection with interactive choice
+#   - Preview + confirmation before downloading
+#   - Subtitle download (--subs)
+#   - Browser cookies (--cookies <browser>) for private/age-gated content
+#   - Download history log
+#
+# License: MIT
+
+set -euo pipefail
+
+VERSION="0.0.1"
+
+# ---------------------------------------------------------------------------
+# Colors (disabled if stdout is not a TTY)
+# ---------------------------------------------------------------------------
+if [[ -t 1 ]]; then
+  GREEN=$'\e[0;32m'; CYAN=$'\e[0;36m'; YELLOW=$'\e[0;33m'
+  RED=$'\e[0;31m';   BOLD=$'\e[1m';    DIM=$'\e[2m'; RESET=$'\e[0m'
+else
+  GREEN=""; CYAN=""; YELLOW=""; RED=""; BOLD=""; DIM=""; RESET=""
+fi
+
+# ---------------------------------------------------------------------------
+# i18n (es/en)
+# ---------------------------------------------------------------------------
+if [[ "${LANG:-}" == es* ]]; then
+  M_DESC="Descargador de video/audio (YouTube, Twitter/X, Instagram, TikTok, ...)"
+  M_USAGE="Uso"; M_OPTIONS="Opciones"; M_EXAMPLES="Ejemplos"
+  M_H_AUDIO="Solo audio (mp3 por defecto)"
+  M_H_QUALITY="Calidad máx.: 360, 480, 720, 1080, 1440, 2160, best (def: 1080)"
+  M_H_FORMAT="Formato audio: mp3, m4a, opus, wav (def: mp3)"
+  M_H_VFORMAT="Contenedor de video: mp4, mkv, webm (def: mp4)"
+  M_H_OUTPUT="Carpeta destino (def: ~/Videos o ~/Music)"
+  M_H_LIST="Listar formatos disponibles y salir"
+  M_H_PLAYLIST="Forzar descarga de playlist completa"
+  M_H_NO_PLAYLIST="Forzar solo video individual (ignorar playlist)"
+  M_H_SUBS="Descargar subtítulos (def: es,en)"
+  M_H_SUB_LANGS="Idiomas de subtítulos separados por coma"
+  M_H_COOKIES="Cookies del navegador (firefox, chrome, chromium, brave, edge, opera, vivaldi, safari)"
+  M_H_INTER="Modo wizard interactivo"
+  M_H_YES="No pedir confirmación antes de descargar"
+  M_H_VERSION="Mostrar versión"
+  M_H_HELP="Mostrar esta ayuda"
+  M_NO_YTDLP="yt-dlp no está instalado."
+  M_INSTALL_YTDLP="Instálalo con: sudo pacman -S yt-dlp"
+  M_NO_FFMPEG="ffmpeg no está instalado (necesario para audio y merge de calidades)."
+  M_INSTALL_FFMPEG="Instálalo con: sudo pacman -S ffmpeg"
+  M_WIZARD="Wizard de descarga"
+  M_ASK_URL="URL del video: "
+  M_EMPTY_URL="URL vacía. Abortando."
+  M_ASK_TYPE="¿Qué quieres descargar?"
+  M_TYPE_VIDEO="Video (con audio)"
+  M_TYPE_AUDIO="Solo audio"
+  M_ASK_CHOICE="Selecciona [%s]: "
+  M_ASK_QUALITY="Calidad máxima de video"
+  M_ASK_AFORMAT="Formato de audio"
+  M_ASK_VFORMAT="Contenedor de video"
+  M_ASK_COOKIES="¿Usar cookies de un navegador? (necesario para YouTube logueado, contenido privado)"
+  M_NO_COOKIES="No usar cookies"
+  M_ASK_USE_CLIP="Usar URL del portapapeles? [S/n]: "
+  M_EQUIV_CMD="Comando equivalente para repetir esta descarga:"
+  M_BACK="atrás"
+  M_CANCEL="cancelar"
+  M_SUMMARY="Selecciones hasta ahora:"
+  M_PROBING="Inspeccionando contenido..."
+  M_CAROUSEL_HDR="Carrusel/Playlist con %d items:"
+  M_ITEM_VIDEO="video"
+  M_ITEM_IMAGE="imagen"
+  M_ITEM_OTHER="otro"
+  M_ASK_SELECTION="Selecciona items (ej: 1-3; 1,2,4; %sEnter%s = todo, %sc%s = cancelar): "
+  M_INVALID_SELECTION="Selección inválida. Intenta de nuevo."
+  M_SELECTED="Seleccionados: %s"
+  M_INVALID_RETRY="Opción inválida. Intenta de nuevo."
+  M_S_URL="URL"
+  M_S_TYPE="Tipo"
+  M_S_QUALITY="Calidad"
+  M_S_VFORMAT="Contenedor"
+  M_S_AFORMAT="Formato"
+  M_S_OUTPUT="Carpeta"
+  M_S_COOKIES="Cookies"
+  M_ASK_OUTPUT="Carpeta destino [%s]: "
+  M_INVALID="Opción inválida."
+  M_FROM_CLIP="URL detectada en el portapapeles:"
+  M_FETCHING="Obteniendo información..."
+  M_PREVIEW="Vista previa"
+  M_P_TITLE="Título"
+  M_P_UPLOADER="Canal"
+  M_P_DURATION="Duración"
+  M_P_SIZE="Tamaño aprox."
+  M_ASK_CONFIRM="¿Continuar con la descarga? [S/n]: "
+  M_PLAYLIST_DETECTED="URL de playlist detectada."
+  M_ASK_PL_MODE="¿Qué hacer?"
+  M_PL_SINGLE="Solo este video"
+  M_PL_ALL="Toda la playlist"
+  M_CANCELLED="Cancelado."
+  M_DOWNLOADING="Descargando..."
+  M_DONE="Listo."
+  M_FAILED="Falló la descarga."
+  M_URL_REQUIRED="Falta la URL."
+else
+  M_DESC="Video/audio downloader (YouTube, Twitter/X, Instagram, TikTok, ...)"
+  M_USAGE="Usage"; M_OPTIONS="Options"; M_EXAMPLES="Examples"
+  M_H_AUDIO="Audio only (mp3 by default)"
+  M_H_QUALITY="Max quality: 360, 480, 720, 1080, 1440, 2160, best (def: 1080)"
+  M_H_FORMAT="Audio format: mp3, m4a, opus, wav (def: mp3)"
+  M_H_VFORMAT="Video container: mp4, mkv, webm (def: mp4)"
+  M_H_OUTPUT="Output folder (def: ~/Videos or ~/Music)"
+  M_H_LIST="List available formats and exit"
+  M_H_PLAYLIST="Force full playlist download"
+  M_H_NO_PLAYLIST="Force single video only (ignore playlist)"
+  M_H_SUBS="Download subtitles (def: es,en)"
+  M_H_SUB_LANGS="Subtitle languages (comma-separated)"
+  M_H_COOKIES="Browser cookies (firefox, chrome, chromium, brave, edge, opera, vivaldi, safari)"
+  M_H_INTER="Interactive wizard mode"
+  M_H_YES="Skip confirmation before download"
+  M_H_VERSION="Show version"
+  M_H_HELP="Show this help"
+  M_NO_YTDLP="yt-dlp is not installed."
+  M_INSTALL_YTDLP="Install it with: sudo pacman -S yt-dlp"
+  M_NO_FFMPEG="ffmpeg is not installed (required for audio and quality merging)."
+  M_INSTALL_FFMPEG="Install it with: sudo pacman -S ffmpeg"
+  M_WIZARD="Download wizard"
+  M_ASK_URL="Video URL: "
+  M_EMPTY_URL="Empty URL. Aborting."
+  M_ASK_TYPE="What do you want to download?"
+  M_TYPE_VIDEO="Video (with audio)"
+  M_TYPE_AUDIO="Audio only"
+  M_ASK_CHOICE="Select [%s]: "
+  M_ASK_QUALITY="Max video quality"
+  M_ASK_AFORMAT="Audio format"
+  M_ASK_VFORMAT="Video container"
+  M_ASK_COOKIES="Use browser cookies? (required for logged-in YouTube, private content)"
+  M_NO_COOKIES="No cookies"
+  M_ASK_USE_CLIP="Use URL from clipboard? [Y/n]: "
+  M_EQUIV_CMD="Equivalent command to repeat this download:"
+  M_BACK="back"
+  M_CANCEL="cancel"
+  M_SUMMARY="Selections so far:"
+  M_PROBING="Inspecting content..."
+  M_CAROUSEL_HDR="Carousel/Playlist with %d items:"
+  M_ITEM_VIDEO="video"
+  M_ITEM_IMAGE="image"
+  M_ITEM_OTHER="other"
+  M_ASK_SELECTION="Pick items (e.g. 1-3; 1,2,4; %sEnter%s = all, %sc%s = cancel): "
+  M_INVALID_SELECTION="Invalid selection. Try again."
+  M_SELECTED="Selected: %s"
+  M_INVALID_RETRY="Invalid option. Try again."
+  M_S_URL="URL"
+  M_S_TYPE="Type"
+  M_S_QUALITY="Quality"
+  M_S_VFORMAT="Container"
+  M_S_AFORMAT="Format"
+  M_S_OUTPUT="Folder"
+  M_S_COOKIES="Cookies"
+  M_ASK_OUTPUT="Output folder [%s]: "
+  M_INVALID="Invalid option."
+  M_FROM_CLIP="URL detected in clipboard:"
+  M_FETCHING="Fetching info..."
+  M_PREVIEW="Preview"
+  M_P_TITLE="Title"
+  M_P_UPLOADER="Channel"
+  M_P_DURATION="Duration"
+  M_P_SIZE="Approx. size"
+  M_ASK_CONFIRM="Proceed with download? [Y/n]: "
+  M_PLAYLIST_DETECTED="Playlist URL detected."
+  M_ASK_PL_MODE="What to do?"
+  M_PL_SINGLE="Just this video"
+  M_PL_ALL="Whole playlist"
+  M_CANCELLED="Cancelled."
+  M_DOWNLOADING="Downloading..."
+  M_DONE="Done."
+  M_FAILED="Download failed."
+  M_URL_REQUIRED="Missing URL."
+fi
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/download-media"
+HISTORY_FILE="$STATE_DIR/history.log"
+mkdir -p "$STATE_DIR"
+
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+AUDIO_ONLY=0
+QUALITY="1080"
+AUDIO_FORMAT="mp3"
+VIDEO_FORMAT="mp4"
+OUTPUT=""
+LIST_FORMATS=0
+PLAYLIST_MODE=""   # "" = auto, "yes" = full, "no" = single
+PLAYLIST_ITEMS=""  # yt-dlp --playlist-items value when the user picks specific items
+INTERACTIVE=0
+SUBS=0
+SUB_LANGS="es,en"
+COOKIES_BROWSER=""
+NO_CONFIRM=0
+URLS=()
+EXPLICIT_OPTS=0   # incremented when user passes intent flags (skips wizard)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+die()  { printf "%s%s%s\n" "$RED" "$*" "$RESET" >&2; exit 1; }
+info() { printf "%s%s%s\n" "$CYAN" "$*" "$RESET"; }
+ok()   { printf "%s%s%s\n" "$GREEN" "$*" "$RESET"; }
+warn() { printf "%s%s%s\n" "$YELLOW" "$*" "$RESET"; }
+
+print_help() {
+  cat <<EOF
+${BOLD}download-media${RESET} v${VERSION} — ${M_DESC}
+
+${BOLD}${M_USAGE}:${RESET}
+  download-media [${M_OPTIONS}] <url>...
+  download-media                         # ${M_H_INTER}
+
+${BOLD}${M_OPTIONS}:${RESET}
+  -a, --audio                ${M_H_AUDIO}
+  -q, --quality <N>          ${M_H_QUALITY}
+  -f, --format <fmt>         ${M_H_FORMAT}
+      --video-format <fmt>   ${M_H_VFORMAT}
+  -o, --output <dir>         ${M_H_OUTPUT}
+  -l, --list                 ${M_H_LIST}
+  -p, --playlist             ${M_H_PLAYLIST}
+  -P, --no-playlist          ${M_H_NO_PLAYLIST}
+  -s, --subs                 ${M_H_SUBS}
+      --sub-langs <langs>    ${M_H_SUB_LANGS}
+      --cookies <browser>    ${M_H_COOKIES}
+  -i, --interactive          ${M_H_INTER}
+  -y, --yes                  ${M_H_YES}
+  -v, --version              ${M_H_VERSION}
+  -h, --help                 ${M_H_HELP}
+
+${BOLD}${M_EXAMPLES}:${RESET}
+  ${DIM}# Wizard${RESET}
+  download-media
+
+  ${DIM}# Video 1080p${RESET}
+  download-media https://youtu.be/xxxxx
+
+  ${DIM}# Audio mp3${RESET}
+  download-media -a https://youtu.be/xxxxx
+
+  ${DIM}# With English subtitles${RESET}
+  download-media -s --sub-langs en https://youtu.be/xxxxx
+
+  ${DIM}# Instagram with Firefox cookies${RESET}
+  download-media --cookies firefox https://instagram.com/p/xxxxx
+
+  ${DIM}# Multiple URLs${RESET}
+  download-media url1 url2 url3
+
+  ${DIM}# From clipboard (no args = auto-detect)${RESET}
+  download-media
+EOF
+}
+
+read_clipboard() {
+  local text=""
+  if [[ -n "${WAYLAND_DISPLAY:-}" ]] && command -v wl-paste >/dev/null 2>&1; then
+    text=$(wl-paste 2>/dev/null || true)
+  elif command -v xclip >/dev/null 2>&1; then
+    text=$(xclip -selection clipboard -o 2>/dev/null || true)
+  elif command -v xsel >/dev/null 2>&1; then
+    text=$(xsel -b 2>/dev/null || true)
+  fi
+  if [[ "$text" =~ ^https?://[^[:space:]]+$ ]]; then
+    printf "%s" "$text"
+  fi
+}
+
+# ask_yn PROMPT DEFAULT(y|n) → returns 0 for yes, 1 for no
+ask_yn() {
+  local prompt="$1" default="$2" reply
+  read -r -p "$prompt" reply
+  reply="${reply,,}"
+  if [[ -z "$reply" ]]; then
+    [[ "$default" == "y" ]]
+    return
+  fi
+  [[ "$reply" == "y" || "$reply" == "s" ]]
+}
+
+is_playlist_url() {
+  local u="$1"
+  # Generic playlist params
+  [[ "$u" =~ [\?\&]list=        ]] && return 0
+  [[ "$u" =~ /playlist          ]] && return 0
+  [[ "$u" =~ /sets/             ]] && return 0
+  # Instagram posts/reels (carousels are common)
+  [[ "$u" =~ instagram\.com/(p|reel|tv)/ ]] && return 0
+  # TikTok carousels (photo URLs) and user feeds
+  [[ "$u" =~ tiktok\.com/.*/photo/      ]] && return 0
+  [[ "$u" =~ tiktok\.com/@[^/]+/?$      ]] && return 0
+  # Twitter/X tweets can have multiple media
+  [[ "$u" =~ (twitter|x)\.com/.*/status/ ]] && return 0
+  return 1
+}
+
+# Probe a URL and emit one line per entry: "INDEX|TYPE|TITLE"
+# TYPE is one of: video, image, other.
+# Falls back gracefully if python3 is unavailable or yt-dlp can't parse the URL.
+probe_playlist_items() {
+  local url="$1"
+  local extra=()
+  [[ -n "$COOKIES_BROWSER" ]] && extra+=(--cookies-from-browser "$COOKIES_BROWSER")
+
+  # yt-dlp may exit 1 even when it produced valid single-json output (e.g.
+  # carousels with images that have "No video formats" — the entries are still
+  # in the JSON). Capture stdout regardless of exit code; validate via python.
+  local json
+  json=$(yt-dlp --no-warnings --skip-download --yes-playlist --dump-single-json "${extra[@]}" "$url" 2>/dev/null || true)
+  [[ -z "$json" ]] && return 1
+
+  command -v python3 >/dev/null 2>&1 || return 1
+
+  python3 - "$json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+entries = data.get("entries")
+if not entries:
+    sys.exit(0)
+for i, e in enumerate(entries, 1):
+    # yt-dlp returns None for entries it couldn't extract video info from
+    # (typical for images in Instagram carousels). Treat them as images.
+    if e is None:
+        print(f"{i}|image|(image #{i})")
+        continue
+    duration = e.get("duration") or 0
+    formats = e.get("formats") or []
+    if duration > 0 or any(f.get("ext") in ("mp4","webm","mkv") for f in formats):
+        typ = "video"
+    else:
+        typ = "image"
+    title = e.get("title") or e.get("id") or f"Item {i}"
+    title = str(title).replace("\n", " ").replace("|", "/")[:80]
+    print(f"{i}|{typ}|{title}")
+PY
+}
+
+# Parse "1-3,5,7-9" or "1,2,4" or empty into a normalized comma-list of ints.
+# Returns 0 with REPLY set; returns 1 on parse error.
+# Empty input → returns 0 with REPLY="" (caller treats as "all").
+parse_selection() {
+  local input="$1" max="$2"
+  REPLY=""
+  input="${input// /}"
+  [[ -z "$input" ]] && return 0
+  local out=() part a b i
+  IFS=',' read -ra parts <<< "$input"
+  for part in "${parts[@]}"; do
+    if [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+      a="${BASH_REMATCH[1]}"; b="${BASH_REMATCH[2]}"
+      (( a < 1 || b < 1 || a > max || b > max || a > b )) && return 1
+      for ((i=a; i<=b; i++)); do out+=("$i"); done
+    elif [[ "$part" =~ ^[0-9]+$ ]]; then
+      (( part < 1 || part > max )) && return 1
+      out+=("$part")
+    else
+      return 1
+    fi
+  done
+  REPLY=$(IFS=','; echo "${out[*]}")
+}
+
+# Show carousel items and ask the user which to download.
+# Sets PLAYLIST_ITEMS (yt-dlp --playlist-items value, "" = all).
+# Sets _PROMPT_PLAYLIST_RESULT to: "playlist" (multi-entry, user picked),
+# "single" (probe found 0 or 1 entry → not a real playlist), "cancel".
+prompt_playlist_selection() {
+  local url="$1"
+  _PROMPT_PLAYLIST_RESULT="single"
+  info "$M_PROBING"
+  local items
+  items=$(probe_playlist_items "$url") || return 0
+  [[ -z "$items" ]] && return 0
+  local count
+  count=$(printf "%s\n" "$items" | wc -l)
+  (( count <= 1 )) && return 0
+  _PROMPT_PLAYLIST_RESULT="playlist"
+
+  printf "\n%s%s%s\n" "$BOLD" "$(printf "$M_CAROUSEL_HDR" "$count")" "$RESET"
+  local idx typ title type_lbl color
+  while IFS='|' read -r idx typ title; do
+    case "$typ" in
+      video) type_lbl="$M_ITEM_VIDEO"; color="$GREEN" ;;
+      image) type_lbl="$M_ITEM_IMAGE"; color="$CYAN" ;;
+      *)     type_lbl="$M_ITEM_OTHER"; color="$DIM" ;;
+    esac
+    printf "  %2d. %s[%s]%s  %s\n" "$idx" "$color" "$type_lbl" "$RESET" "$title"
+  done <<< "$items"
+
+  while true; do
+    printf "\n"
+    printf "$M_ASK_SELECTION" "$BOLD" "$RESET" "$RED" "$RESET"
+    local sel
+    read -r sel
+    case "$sel" in
+      c|C) _PROMPT_PLAYLIST_RESULT="cancel"; return 1 ;;
+    esac
+    if parse_selection "$sel" "$count"; then
+      PLAYLIST_ITEMS="$REPLY"
+      printf "%s${M_SELECTED}%s\n" "$DIM" "$RESET" "${PLAYLIST_ITEMS:-all (1-$count)}"
+      return 0
+    fi
+    warn "$M_INVALID_SELECTION"
+  done
+}
+
+# xdg_dir TYPE FALLBACK_NAME → resolves localized XDG dir or falls back to ~/<name>
+# Uses xdg-user-dir if available; respects user's localized folder names.
+xdg_dir() {
+  local type="$1" fallback="$2" path=""
+  if command -v xdg-user-dir >/dev/null 2>&1; then
+    path=$(xdg-user-dir "$type" 2>/dev/null || true)
+  fi
+  # Defensive: if empty or equals $HOME (xdg-user-dir falls back to $HOME when undefined), use the named fallback
+  if [[ -z "$path" || "$path" == "$HOME" ]]; then
+    path="$HOME/$fallback"
+  fi
+  printf "%s" "$path"
+}
+
+fmt_duration() {
+  local s="${1:-}"
+  [[ -z "$s" || "$s" == "NA" ]] && { printf "N/A"; return; }
+  s=${s%.*}
+  [[ ! "$s" =~ ^[0-9]+$ ]] && { printf "%s" "$s"; return; }
+  if (( s >= 3600 )); then
+    printf "%d:%02d:%02d" $((s/3600)) $(((s%3600)/60)) $((s%60))
+  else
+    printf "%d:%02d" $((s/60)) $((s%60))
+  fi
+}
+
+fmt_bytes() {
+  local b="${1:-}"
+  [[ -z "$b" || "$b" == "NA" ]] && { printf "N/A"; return; }
+  [[ ! "$b" =~ ^[0-9]+$ ]] && { printf "%s" "$b"; return; }
+  if (( b >= 1073741824 )); then
+    awk -v b="$b" 'BEGIN { printf "%.2f GB", b/1073741824 }'
+  elif (( b >= 1048576 )); then
+    awk -v b="$b" 'BEGIN { printf "%.1f MB", b/1048576 }'
+  elif (( b >= 1024 )); then
+    awk -v b="$b" 'BEGIN { printf "%.1f KB", b/1024 }'
+  else
+    printf "%s B" "$b"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Arg parsing
+# ---------------------------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -a|--audio)        AUDIO_ONLY=1;     EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift ;;
+    -q|--quality)      QUALITY="${2:-}"; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift 2 ;;
+    -f|--format)       AUDIO_FORMAT="${2:-}"; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift 2 ;;
+    --video-format)    VIDEO_FORMAT="${2:-}"; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift 2 ;;
+    -o|--output)       OUTPUT="${2:-}"; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift 2 ;;
+    -l|--list)         LIST_FORMATS=1; shift ;;
+    -p|--playlist)     PLAYLIST_MODE="yes"; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift ;;
+    -P|--no-playlist)  PLAYLIST_MODE="no";  EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift ;;
+    -s|--subs)         SUBS=1; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift ;;
+    --sub-langs)       SUB_LANGS="${2:-}"; SUBS=1; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift 2 ;;
+    --cookies)         COOKIES_BROWSER="${2:-}"; EXPLICIT_OPTS=$((EXPLICIT_OPTS+1)); shift 2 ;;
+    -i|--interactive)  INTERACTIVE=1; shift ;;
+    -y|--yes)          NO_CONFIRM=1; shift ;;
+    -v|--version)      echo "download-media $VERSION"; exit 0 ;;
+    -h|--help)         print_help; exit 0 ;;
+    --) shift; while [[ $# -gt 0 ]]; do URLS+=("$1"); shift; done ;;
+    -*) die "$M_INVALID ($1)" ;;
+    *)  URLS+=("$1"); shift ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Dependency checks
+# ---------------------------------------------------------------------------
+command -v yt-dlp >/dev/null 2>&1 || { warn "$M_NO_YTDLP"; echo "  $M_INSTALL_YTDLP"; exit 1; }
+command -v ffmpeg >/dev/null 2>&1 || warn "$M_NO_FFMPEG — $M_INSTALL_FFMPEG"
+
+# ---------------------------------------------------------------------------
+# Decide if wizard runs.
+# Rules:
+#   -y           → never wizard (direct mode, defaults + any flags)
+#   -i           → always wizard
+#   no URL       → wizard (clipboard offered as default for the URL question)
+#   intent flags → no wizard (user already signaled what they want)
+#   otherwise    → wizard
+# ---------------------------------------------------------------------------
+should_wizard=0
+if [[ "$NO_CONFIRM" -eq 1 ]]; then
+  should_wizard=0
+elif [[ "$INTERACTIVE" -eq 1 ]]; then
+  should_wizard=1
+elif [[ ${#URLS[@]} -eq 0 ]]; then
+  should_wizard=1
+elif [[ "$EXPLICIT_OPTS" -eq 0 ]]; then
+  should_wizard=1
+fi
+
+# ---------------------------------------------------------------------------
+# Wizard (state machine with back-navigation)
+# ---------------------------------------------------------------------------
+# Steps run in this order: url → type → (quality+container | aformat) → output → cookies
+# Each step function returns: 0 = next, 1 = back. History stack tracks completed
+# steps so 'b' rewinds one at a time.
+#
+# Globals mutated: URLS, AUDIO_ONLY, QUALITY, VIDEO_FORMAT, AUDIO_FORMAT,
+# OUTPUT, COOKIES_BROWSER.
+
+_wizard_history=()
+
+print_wizard_summary() {
+  [[ ${#_wizard_history[@]} -eq 0 ]] && return
+  printf "\n%s%s%s\n" "$DIM" "$M_SUMMARY" "$RESET"
+  local s
+  for s in "${_wizard_history[@]}"; do
+    case "$s" in
+      url)       printf "  %s✓%s %s: %s\n" "$GREEN" "$RESET" "$M_S_URL"     "${URLS[0]}" ;;
+      type)      printf "  %s✓%s %s: %s\n" "$GREEN" "$RESET" "$M_S_TYPE"    "$([[ "$AUDIO_ONLY" -eq 1 ]] && echo "$M_TYPE_AUDIO" || echo "$M_TYPE_VIDEO")" ;;
+      quality)   printf "  %s✓%s %s: %s\n" "$GREEN" "$RESET" "$M_S_QUALITY" "$([[ "$QUALITY" == "best" ]] && echo "best" || echo "${QUALITY}p")" ;;
+      container) printf "  %s✓%s %s: %s\n" "$GREEN" "$RESET" "$M_S_VFORMAT" "$VIDEO_FORMAT" ;;
+      aformat)   printf "  %s✓%s %s: %s\n" "$GREEN" "$RESET" "$M_S_AFORMAT" "$AUDIO_FORMAT" ;;
+      output)    printf "  %s✓%s %s: %s\n" "$GREEN" "$RESET" "$M_S_OUTPUT"  "$OUTPUT" ;;
+      cookies)   printf "  %s✓%s %s: %s\n" "$GREEN" "$RESET" "$M_S_COOKIES" "${COOKIES_BROWSER:-$M_NO_COOKIES}" ;;
+    esac
+  done
+  printf "\n"
+}
+
+# Render an option line; pass the indicator (number/letter) and label
+_opt() { printf "  %s%s%s) %s\n" "$GREEN" "$1" "$RESET" "$2"; }
+_back_opt()   { printf "  %sb%s) ← %s\n" "$YELLOW" "$RESET" "$M_BACK"; }
+_cancel_opt() { printf "  %sc%s) ✗ %s\n" "$RED"    "$RESET" "$M_CANCEL"; }
+
+cancel_wizard() {
+  printf "\n%s%s%s\n" "$YELLOW" "$M_CANCELLED" "$RESET"
+  exit 0
+}
+
+# Read a choice. $1 = default, $2... = valid choices (numbers). Returns 0 on
+# valid number (sets REPLY), 1 on 'b' (back). 'c' cancels the wizard entirely.
+read_choice() {
+  local default="$1"; shift
+  local valid=("$@") reply
+  while true; do
+    printf "$M_ASK_CHOICE" "$default"
+    read -r reply
+    reply="${reply:-$default}"
+    case "$reply" in
+      b|B) return 1 ;;
+      c|C) cancel_wizard ;;
+    esac
+    local v
+    for v in "${valid[@]}"; do
+      [[ "$reply" == "$v" ]] && { REPLY="$reply"; return 0; }
+    done
+    warn "$M_INVALID_RETRY"
+  done
+}
+
+step_url() {
+  local current="${URLS[0]:-}"
+  if [[ -z "$current" ]]; then
+    local clip_url
+    clip_url=$(read_clipboard || true)
+    if [[ -n "$clip_url" ]]; then
+      printf "%s%s%s %s\n" "$DIM" "$M_FROM_CLIP" "$RESET" "$clip_url"
+      if ask_yn "$M_ASK_USE_CLIP" "y"; then
+        URLS=("$clip_url")
+        return 0
+      fi
+    fi
+  fi
+  printf "%s(%sc%s = %s)%s\n" "$DIM" "$RED" "$DIM$RESET$DIM" "$M_CANCEL" "$RESET"
+  if [[ -n "$current" ]]; then
+    printf "%s [%s]: " "${M_ASK_URL%: }" "$current"
+  else
+    printf "%s" "$M_ASK_URL"
+  fi
+  local url_input
+  read -r url_input
+  url_input="${url_input:-$current}"
+  case "$url_input" in
+    c|C) cancel_wizard ;;
+  esac
+  [[ -z "$url_input" ]] && die "$M_EMPTY_URL"
+  URLS=("$url_input")
+  return 0
+}
+
+step_type() {
+  printf "%s\n" "$M_ASK_TYPE"
+  _opt 1 "$M_TYPE_VIDEO"
+  _opt 2 "$M_TYPE_AUDIO"
+  _back_opt
+  _cancel_opt
+  local def=$([[ "$AUDIO_ONLY" -eq 1 ]] && echo 2 || echo 1)
+  read_choice "$def" 1 2 || return 1
+  case "$REPLY" in
+    1) AUDIO_ONLY=0 ;;
+    2) AUDIO_ONLY=1 ;;
+  esac
+}
+
+step_quality() {
+  printf "%s:\n" "$M_ASK_QUALITY"
+  _opt 1 "480p"; _opt 2 "720p"; _opt 3 "1080p"
+  _opt 4 "1440p (2K)"; _opt 5 "2160p (4K)"; _opt 6 "best"
+  _back_opt; _cancel_opt
+  local def=3
+  case "$QUALITY" in
+    480) def=1 ;; 720) def=2 ;; 1080) def=3 ;;
+    1440) def=4 ;; 2160) def=5 ;; best) def=6 ;;
+  esac
+  read_choice "$def" 1 2 3 4 5 6 || return 1
+  case "$REPLY" in
+    1) QUALITY="480" ;; 2) QUALITY="720" ;; 3) QUALITY="1080" ;;
+    4) QUALITY="1440" ;; 5) QUALITY="2160" ;; 6) QUALITY="best" ;;
+  esac
+}
+
+step_container() {
+  printf "%s:\n" "$M_ASK_VFORMAT"
+  _opt 1 "mp4"; _opt 2 "mkv"; _opt 3 "webm"
+  _back_opt; _cancel_opt
+  local def=1
+  case "$VIDEO_FORMAT" in mkv) def=2 ;; webm) def=3 ;; esac
+  read_choice "$def" 1 2 3 || return 1
+  case "$REPLY" in
+    1) VIDEO_FORMAT="mp4" ;; 2) VIDEO_FORMAT="mkv" ;; 3) VIDEO_FORMAT="webm" ;;
+  esac
+}
+
+step_aformat() {
+  printf "%s:\n" "$M_ASK_AFORMAT"
+  _opt 1 "mp3"; _opt 2 "m4a"; _opt 3 "opus"; _opt 4 "wav"
+  _back_opt; _cancel_opt
+  local def=1
+  case "$AUDIO_FORMAT" in m4a) def=2 ;; opus) def=3 ;; wav) def=4 ;; esac
+  read_choice "$def" 1 2 3 4 || return 1
+  case "$REPLY" in
+    1) AUDIO_FORMAT="mp3" ;; 2) AUDIO_FORMAT="m4a" ;;
+    3) AUDIO_FORMAT="opus" ;; 4) AUDIO_FORMAT="wav" ;;
+  esac
+}
+
+step_output() {
+  local default_out
+  if [[ "$AUDIO_ONLY" -eq 1 ]]; then default_out="$(xdg_dir MUSIC Music)"
+  else default_out="$(xdg_dir VIDEOS Videos)"; fi
+  local current="${OUTPUT:-$default_out}"
+  printf "$M_ASK_OUTPUT" "$current"
+  printf "%s(%sb%s=%s, %sc%s=%s)%s " "$DIM" "$YELLOW" "$DIM$RESET$DIM" "$M_BACK" "$RED" "$DIM$RESET$DIM" "$M_CANCEL" "$RESET"
+  local o
+  read -r o
+  case "$o" in
+    b|B) return 1 ;;
+    c|C) cancel_wizard ;;
+  esac
+  OUTPUT="${o:-$current}"
+}
+
+step_cookies() {
+  printf "%s\n" "$M_ASK_COOKIES"
+  _opt 1 "$M_NO_COOKIES"
+  _opt 2 "brave"; _opt 3 "firefox"; _opt 4 "chrome"
+  _opt 5 "chromium"; _opt 6 "edge"; _opt 7 "opera"
+  _back_opt; _cancel_opt
+  local def=1
+  case "$COOKIES_BROWSER" in
+    brave) def=2 ;; firefox) def=3 ;; chrome) def=4 ;;
+    chromium) def=5 ;; edge) def=6 ;; opera) def=7 ;;
+  esac
+  read_choice "$def" 1 2 3 4 5 6 7 || return 1
+  case "$REPLY" in
+    1) COOKIES_BROWSER="" ;;
+    2) COOKIES_BROWSER="brave" ;; 3) COOKIES_BROWSER="firefox" ;;
+    4) COOKIES_BROWSER="chrome" ;; 5) COOKIES_BROWSER="chromium" ;;
+    6) COOKIES_BROWSER="edge" ;; 7) COOKIES_BROWSER="opera" ;;
+  esac
+}
+
+if [[ "$should_wizard" -eq 1 ]]; then
+  printf "%s%s%s\n" "${BOLD}${CYAN}" "$M_WIZARD" "$RESET"
+
+  wizard_step="url"
+  while [[ -n "$wizard_step" && "$wizard_step" != "done" ]]; do
+    print_wizard_summary
+    current="$wizard_step"
+    if step_"$current"; then
+      _wizard_history+=("$current")
+      case "$current" in
+        url)        wizard_step="type" ;;
+        type)       wizard_step=$([[ "$AUDIO_ONLY" -eq 1 ]] && echo "aformat" || echo "quality") ;;
+        quality)    wizard_step="container" ;;
+        container)  wizard_step="output" ;;
+        aformat)    wizard_step="output" ;;
+        output)     wizard_step="cookies" ;;
+        cookies)    wizard_step="done" ;;
+      esac
+    else
+      # back: pop history; if empty, just retry current step
+      if [[ ${#_wizard_history[@]} -gt 0 ]]; then
+        wizard_step="${_wizard_history[-1]}"
+        unset '_wizard_history[-1]'
+      fi
+    fi
+  done
+fi
+
+# Direct mode without URL: try clipboard
+if [[ ${#URLS[@]} -eq 0 ]]; then
+  clip_url=$(read_clipboard || true)
+  if [[ -n "$clip_url" ]]; then
+    printf "%s%s%s %s\n" "$DIM" "$M_FROM_CLIP" "$RESET" "$clip_url"
+    URLS+=("$clip_url")
+  fi
+fi
+
+[[ ${#URLS[@]} -eq 0 ]] && die "$M_URL_REQUIRED"
+
+# ---------------------------------------------------------------------------
+# Default output
+# ---------------------------------------------------------------------------
+if [[ -z "$OUTPUT" ]]; then
+  if [[ "$AUDIO_ONLY" -eq 1 ]]; then OUTPUT="$(xdg_dir MUSIC Music)"
+  else OUTPUT="$(xdg_dir VIDEOS Videos)"; fi
+fi
+mkdir -p "$OUTPUT"
+
+# ---------------------------------------------------------------------------
+# List formats → exit
+# ---------------------------------------------------------------------------
+if [[ "$LIST_FORMATS" -eq 1 ]]; then
+  exec yt-dlp -F "${URLS[0]}"
+fi
+
+# ---------------------------------------------------------------------------
+# Build yt-dlp args (populates global ytdlp_args array)
+#   $1 = pmode ("yes"/"no")  → whether yt-dlp should treat URL as playlist
+# Uses globals: OUTPUT, COOKIES_BROWSER, SUBS, SUB_LANGS, AUDIO_ONLY,
+# AUDIO_FORMAT, VIDEO_FORMAT, QUALITY, PLAYLIST_ITEMS.
+# ---------------------------------------------------------------------------
+build_ytdlp_args() {
+  local pmode="$1"
+  ytdlp_args=(--no-warnings --progress)
+
+  # Output template differs for playlists to avoid filename collisions
+  if [[ "$pmode" == "yes" ]]; then
+    ytdlp_args+=(-o "$OUTPUT/%(playlist_index)02d - %(title)s [%(id)s].%(ext)s")
+    ytdlp_args+=(--yes-playlist)
+    [[ -n "$PLAYLIST_ITEMS" ]] && ytdlp_args+=(--playlist-items "$PLAYLIST_ITEMS")
+  else
+    ytdlp_args+=(-o "$OUTPUT/%(title)s.%(ext)s")
+    ytdlp_args+=(--no-playlist)
+  fi
+
+  [[ -n "$COOKIES_BROWSER" ]] && ytdlp_args+=(--cookies-from-browser "$COOKIES_BROWSER")
+
+  if [[ "$SUBS" -eq 1 ]]; then
+    ytdlp_args+=(
+      --write-subs
+      --write-auto-subs
+      --sub-langs "$SUB_LANGS"
+      --embed-subs
+      --convert-subs srt
+    )
+  fi
+
+  if [[ "$AUDIO_ONLY" -eq 1 ]]; then
+    ytdlp_args+=(
+      -x
+      --audio-format "$AUDIO_FORMAT"
+      --audio-quality 0
+      --embed-thumbnail
+      --add-metadata
+    )
+  else
+    # Format selector falls through to plain "best" so image entries in carousels
+    # still download (they have no video stream).
+    local fmt
+    if [[ "$QUALITY" == "best" ]]; then
+      fmt="bv*+ba/b/best"
+    else
+      fmt="bv*[height<=${QUALITY}]+ba/b[height<=${QUALITY}]/b/best"
+    fi
+    ytdlp_args+=(
+      -f "$fmt"
+      --merge-output-format "$VIDEO_FORMAT"
+      --embed-metadata
+    )
+  fi
+}
+
+# Show single-item preview (title/uploader/duration/size). Returns 0 on continue, 1 on cancel.
+show_single_preview() {
+  local url="$1"
+  info "$M_FETCHING"
+  local meta
+  meta=$(yt-dlp --no-warnings --no-playlist \
+    ${COOKIES_BROWSER:+--cookies-from-browser "$COOKIES_BROWSER"} \
+    --print "%(title)s|||%(uploader)s|||%(duration)s|||%(filesize_approx)s" \
+    --skip-download "$url" 2>/dev/null | head -n1 || true)
+  if [[ -n "$meta" ]]; then
+    local title uploader duration size
+    title=$(printf "%s" "$meta"    | awk -F'\\|\\|\\|' '{print $1}')
+    uploader=$(printf "%s" "$meta" | awk -F'\\|\\|\\|' '{print $2}')
+    duration=$(printf "%s" "$meta" | awk -F'\\|\\|\\|' '{print $3}')
+    size=$(printf "%s" "$meta"     | awk -F'\\|\\|\\|' '{print $4}')
+    printf "\n%s%s%s\n" "$BOLD" "$M_PREVIEW" "$RESET"
+    [[ -n "$title" ]]    && printf "  %s: %s\n" "$M_P_TITLE" "$title"
+    [[ -n "$uploader" && "$uploader" != "NA" ]] && printf "  %s: %s\n" "$M_P_UPLOADER" "$uploader"
+    [[ -n "$duration" ]] && printf "  %s: %s\n" "$M_P_DURATION" "$(fmt_duration "$duration")"
+    [[ -n "$size" ]]     && printf "  %s: %s\n" "$M_P_SIZE" "$(fmt_bytes "$size")"
+    printf "\n"
+  fi
+  ask_yn "$M_ASK_CONFIRM" "y"
+}
+
+# ---------------------------------------------------------------------------
+# Process each URL
+# ---------------------------------------------------------------------------
+for URL in "${URLS[@]}"; do
+  PLAYLIST_ITEMS=""  # reset per URL
+  pmode="$PLAYLIST_MODE"
+
+  # Auto-detect playlist behavior when not forced via -p / -P
+  if [[ -z "$pmode" ]]; then
+    if [[ "$NO_CONFIRM" -eq 1 ]]; then
+      pmode="no"
+    elif is_playlist_url "$URL"; then
+      # Probe and let the user pick items. If it isn't really a multi-entry
+      # playlist (probe found 0 or 1 entries), silently fall back to single mode.
+      prompt_playlist_selection "$URL"
+      case "$_PROMPT_PLAYLIST_RESULT" in
+        playlist) pmode="yes" ;;
+        cancel)   warn "$M_CANCELLED"; continue ;;
+        *)        pmode="no" ;;
+      esac
+    else
+      pmode="no"
+    fi
+  fi
+
+  # Preview + confirmation only for single-item downloads
+  if [[ "$NO_CONFIRM" -eq 0 && "$pmode" == "no" ]]; then
+    if ! show_single_preview "$URL"; then
+      warn "$M_CANCELLED"; continue
+    fi
+  fi
+
+  build_ytdlp_args "$pmode"
+  info "$M_DOWNLOADING"
+  printf "${DIM}  URL: %s${RESET}\n" "$URL"
+  printf "${DIM}  → %s${RESET}\n\n" "$OUTPUT"
+
+  if yt-dlp "${ytdlp_args[@]}" "$URL"; then
+    ok "$M_DONE"
+    ts=$(date -Iseconds)
+    type_label=$([[ "$AUDIO_ONLY" -eq 1 ]] && echo "audio" || echo "video")
+    printf "%s\t%s\t%s\t%s\n" "$ts" "$type_label" "$URL" "$OUTPUT" >> "$HISTORY_FILE"
+  else
+    die "$M_FAILED"
+  fi
+done
+
+# ---------------------------------------------------------------------------
+# Print equivalent direct-mode command (so the user can repeat without wizard)
+# ---------------------------------------------------------------------------
+print_equivalent_command() {
+  local cmd="download-media"
+  local default_out
+  if [[ "$AUDIO_ONLY" -eq 1 ]]; then default_out="$(xdg_dir MUSIC Music)"
+  else default_out="$(xdg_dir VIDEOS Videos)"; fi
+
+  if [[ "$AUDIO_ONLY" -eq 1 ]]; then
+    cmd+=" -a"
+    [[ "$AUDIO_FORMAT" != "mp3" ]] && cmd+=" -f $AUDIO_FORMAT"
+  else
+    [[ "$QUALITY"      != "1080" ]] && cmd+=" -q $QUALITY"
+    [[ "$VIDEO_FORMAT" != "mp4"  ]] && cmd+=" --video-format $VIDEO_FORMAT"
+  fi
+  [[ "$OUTPUT" != "$default_out" ]] && cmd+=" -o \"$OUTPUT\""
+  [[ -n "$COOKIES_BROWSER"       ]] && cmd+=" --cookies $COOKIES_BROWSER"
+  if [[ "$SUBS" -eq 1 ]]; then
+    if [[ "$SUB_LANGS" != "es,en" ]]; then cmd+=" --sub-langs $SUB_LANGS"
+    else cmd+=" -s"; fi
+  fi
+  [[ "$PLAYLIST_MODE" == "yes" ]] && cmd+=" -p"
+  [[ "$PLAYLIST_MODE" == "no"  ]] && cmd+=" -P"
+  for u in "${URLS[@]}"; do cmd+=" \"$u\""; done
+
+  printf "\n%s%s%s\n  %s%s%s\n" "$BOLD$CYAN" "$M_EQUIV_CMD" "$RESET" "$DIM" "$cmd" "$RESET"
+}
+
+print_equivalent_command
