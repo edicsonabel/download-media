@@ -71,7 +71,7 @@ The wizard walks through: URL → video/audio → quality and container (or audi
 download-media -a <url>                   # audio mp3 → ~/Music
 download-media -q 720 -o . <url>          # 720p in current folder
 download-media -a -f opus <url>           # opus audio
-download-media --video-format mkv <url>   # mkv container
+download-media --video-format mkv <url>   # mkv container (keeps VP9/AV1, up to 4K)
 download-media -s --sub-langs en <url>    # English subtitles embedded
 download-media --cookies firefox <url>    # use Firefox cookies
 download-media url1 url2 url3             # multiple URLs in one run
@@ -88,7 +88,7 @@ download-media -P <url>                   # force single video (ignore playlist)
 -a, --audio                Audio only (mp3 by default)
 -q, --quality <N>          360 | 480 | 720 | 1080 | 1440 | 2160 | best
 -f, --format <fmt>         mp3 | m4a | opus | wav
-    --video-format <fmt>   mp4 | mkv | webm
+    --video-format <fmt>   mp4 (H.264, plays everywhere) | mkv | webm
 -o, --output <dir>         Output folder
 -l, --list                 List available formats and exit
 -p, --playlist             Force full playlist

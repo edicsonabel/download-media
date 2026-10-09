@@ -18,7 +18,8 @@ def test_default_video_options() -> None:
 
     assert ydl["noplaylist"] is True
     assert "playlist_index" not in ydl["outtmpl"]
-    assert ydl["format"] == "bv*[height<=1080]+ba/b[height<=1080]/b/best"
+    assert ydl["format"] == "bv*[height<=?1080]+ba/b[height<=?1080]/b/best"
+    assert ydl["format_sort"] == ["vcodec:h264", "acodec:aac"]
     assert ydl["merge_output_format"] == "mp4"
     assert "cookiesfrombrowser" not in ydl
 
@@ -60,3 +61,15 @@ def test_subs_enables_subtitle_options() -> None:
     assert ydl["writesubtitles"] is True
     assert ydl["embedsubtitles"] is True
     assert ydl["subtitleslangs"] == ["en", "fr", "es"]
+
+
+def test_non_mp4_container_keeps_default_codec_order() -> None:
+    opts = DownloadOptions(urls=["http://x"], video_format="mkv")
+    ydl = build_ydl_opts(opts, Path("/tmp/out"))
+    assert "format_sort" not in ydl
+
+
+def test_audio_only_skips_h264_preference() -> None:
+    opts = DownloadOptions(urls=["http://x"], audio_only=True)
+    ydl = build_ydl_opts(opts, Path("/tmp/out"))
+    assert "format_sort" not in ydl

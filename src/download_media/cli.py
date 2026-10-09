@@ -68,7 +68,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--video-format", choices=VIDEO_FORMATS, default=DEFAULT_VIDEO_FORMAT,
-        dest="video_format", help=f"Video container (default: {DEFAULT_VIDEO_FORMAT}).",
+        dest="video_format",
+        help=f"Video container (default: {DEFAULT_VIDEO_FORMAT}). "
+        "mp4 prefers H.264/AAC so it plays on WhatsApp, iPhone and TVs.",
     )
 
     p.add_argument("-o", "--output", type=Path, help="Output folder (default: ~/Videos or ~/Music).")
@@ -245,6 +247,9 @@ def _download_one(url: str, opts: DownloadOptions) -> bool:
         return False
 
     effective = replace(opts, playlist_mode=pmode, playlist_items=items)
+
+    if not opts.audio_only and opts.video_format == "mp4" and opts.quality in ("1440", "2160"):
+        warn(t("mp4_h264_cap", opts.quality))
 
     info(t("downloading"))
     print(f"{C.DIM}  URL: {url}{C.RESET}")

@@ -222,7 +222,7 @@ def step_quality(opts: DownloadOptions) -> None:
 def step_container(opts: DownloadOptions) -> None:
     print(f"{t('ask_vformat')}:")
     for i, fmt in enumerate(VIDEO_FORMATS, 1):
-        _opt(str(i), fmt)
+        _opt(str(i), f"{fmt:<5} {C.DIM}— {t('vformat_desc_' + fmt)}{C.RESET}")
     _back_opt()
     _cancel_opt()
     default = (

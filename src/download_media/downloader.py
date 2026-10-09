@@ -76,7 +76,13 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
             fmt = "bv*+ba/b/best"
         else:
             q = opts.quality
-            fmt = f"bv*[height<={q}]+ba/b[height<={q}]/b/best"
+            # `<=?` keeps formats with unknown height — Instagram's progressive
+            # H.264 files don't report one, and the filter would drop them.
+            fmt = f"bv*[height<=?{q}]+ba/b[height<=?{q}]/b/best"
+        if opts.video_format == "mp4":
+            # mp4 means "plays everywhere": WhatsApp, iOS and most TVs reject
+            # VP9/AV1 even inside an mp4 container.
+            ydl["format_sort"] = ["vcodec:h264", "acodec:aac"]
         ydl.update(
             {
                 "format": fmt,
