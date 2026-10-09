@@ -225,14 +225,18 @@ def _resolve_playlist_for_direct_mode(
     return "no", None
 
 
-def _download_one(url: str, opts: DownloadOptions) -> bool:
-    """Run the full per-URL pipeline. Returns True on success."""
+def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
+    """Run the full per-URL pipeline.
+
+    Returns ``(ok, cookies_dropped)``: whether it succeeded, and whether that
+    took retrying without the requested browser cookies.
+    """
     # Wizard mode already resolved playlist + items in opts.
     if opts.playlist_mode == "auto":
         pl = _resolve_playlist_for_direct_mode(url, opts)
         if pl is None:
             warn(t("cancelled"))
-            return False
+            return False, False
         pmode, items = pl
     else:
         pmode = opts.playlist_mode
@@ -244,7 +248,7 @@ def _download_one(url: str, opts: DownloadOptions) -> bool:
     )
     if direct_single and not _show_preview(url, opts):
         warn(t("cancelled"))
-        return False
+        return False, False
 
     effective = replace(opts, playlist_mode=pmode, playlist_items=items)
 
@@ -258,14 +262,14 @@ def _download_one(url: str, opts: DownloadOptions) -> bool:
     from yt_dlp.utils import DownloadError
 
     try:
-        rc = _download_with_cookie_fallback(url, effective)
+        rc, cookies_dropped = _download_with_cookie_fallback(url, effective)
     except DownloadError as exc:
         # yt-dlp already printed the underlying error to stderr; we add a one-line
         # friendly summary so the user knows the program is exiting cleanly, not
         # crashing.
         warn(t("failed", url))
         _hint_for_download_error(str(exc), opts)
-        return False
+        return False, False
     except KeyboardInterrupt:
         warn(t("cancelled"))
         raise
@@ -276,18 +280,20 @@ def _download_one(url: str, opts: DownloadOptions) -> bool:
     # by yt-dlp itself.
     if rc != 0 and pmode != "yes":
         warn(t("failed", url))
-        return False
+        return False, False
     ok(t("done"))
     history.append(
         url,
         "audio" if opts.audio_only else "video",
         effective.resolve_output(),
     )
-    return True
+    return True, cookies_dropped
 
 
-def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> int:
+def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> tuple[int, bool]:
     """Download ``url``; if browser cookies were used and it fails, retry once without them.
+
+    Returns yt-dlp's return code and whether the cookies were dropped.
 
     A partially decrypted cookie jar (keyring issues with Brave/Chrome) can break
     extractors that work fine anonymously — Instagram answers with an empty API
@@ -297,7 +303,7 @@ def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> int:
     from yt_dlp.utils import DownloadError
 
     try:
-        return download(url, opts)
+        return download(url, opts), False
     except DownloadError as exc:
         if not opts.cookies_browser:
             raise
@@ -305,7 +311,7 @@ def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> int:
 
     warn(t("cookies_retry", opts.cookies_browser))
     try:
-        return download(url, replace(opts, cookies_browser=None))
+        return download(url, replace(opts, cookies_browser=None)), True
     except DownloadError:
         raise first_error from None
 
@@ -352,15 +358,19 @@ def main(argv: list[str] | None = None) -> int:
     if opts.list_formats:
         return list_formats(opts.urls[0], opts)
 
-    exit_code = 0
-    for url in opts.urls:
-        if not _download_one(url, opts):
-            exit_code = 1
+    results = [_download_one(url, opts) for url in opts.urls]
+    exit_code = 0 if all(ok for ok, _ in results) else 1
+
+    # If every URL only worked once the cookies were dropped, repeating the
+    # command with --cookies would just fail and retry again.
+    shown = opts
+    if opts.cookies_browser and all(ok and dropped for ok, dropped in results):
+        shown = replace(opts, cookies_browser=None)
 
     # Equivalent command hint (so the user can repeat without the wizard)
     print()
     print(f"{C.BOLD}{C.CYAN}{t('equiv_cmd')}{C.RESET}")
-    print(f"  {C.DIM}{equivalent.build(opts)}{C.RESET}")
+    print(f"  {C.DIM}{equivalent.build(shown)}{C.RESET}")
     return exit_code
 
 

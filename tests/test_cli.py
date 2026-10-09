@@ -76,10 +76,8 @@ def test_cookie_fallback_retries_without_cookies(monkeypatch) -> None:
 
     calls: list = []
     monkeypatch.setattr(cli, "download", _fake_download(True, False, calls))
-    assert (
-        cli._download_with_cookie_fallback("http://x", parse(["--cookies", "brave", "http://x"]))
-        == 0
-    )
+    opts = parse(["--cookies", "brave", "http://x"])
+    assert cli._download_with_cookie_fallback("http://x", opts) == (0, True)
     assert calls == ["brave", None]
 
 
@@ -107,3 +105,40 @@ def test_cookie_fallback_skipped_without_cookies(monkeypatch) -> None:
     with pytest.raises(DownloadError):
         cli._download_with_cookie_fallback("http://x", parse(["http://x"]))
     assert calls == [None]
+
+
+def test_cookie_fallback_reports_cookies_kept_when_they_work(monkeypatch) -> None:
+    from download_media import cli
+
+    calls: list = []
+    monkeypatch.setattr(cli, "download", _fake_download(False, False, calls))
+    opts = parse(["--cookies", "brave", "http://x"])
+    assert cli._download_with_cookie_fallback("http://x", opts) == (0, False)
+    assert calls == ["brave"]
+
+
+def _run_main(monkeypatch, capsys, argv: list[str], results: list[tuple[bool, bool]]) -> str:
+    from download_media import cli
+
+    outcomes = iter(results)
+    monkeypatch.setattr(cli, "_download_one", lambda url, opts: next(outcomes))
+    cli.main(argv)
+    return capsys.readouterr().out.strip().splitlines()[-1]
+
+
+def test_equivalent_drops_cookies_when_every_url_needed_the_retry(monkeypatch, capsys) -> None:
+    line = _run_main(
+        monkeypatch, capsys, ["-y", "--cookies", "brave", "a", "b"], [(True, True)] * 2
+    )
+    assert "--cookies" not in line
+
+
+def test_equivalent_keeps_cookies_when_some_url_used_them(monkeypatch, capsys) -> None:
+    results = [(True, True), (True, False)]
+    line = _run_main(monkeypatch, capsys, ["-y", "--cookies", "brave", "a", "b"], results)
+    assert "--cookies brave" in line
+
+
+def test_equivalent_keeps_cookies_when_a_download_failed(monkeypatch, capsys) -> None:
+    line = _run_main(monkeypatch, capsys, ["-y", "--cookies", "brave", "a"], [(False, False)])
+    assert "--cookies brave" in line
