@@ -8,10 +8,12 @@ to extracted metadata.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
 from yt_dlp import YoutubeDL
+from yt_dlp.postprocessor.common import PostProcessor
 
 from .config import DownloadOptions
 
@@ -36,7 +38,8 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
         # abort the rest of the batch.
         ydl["ignoreerrors"] = True
     else:
-        ydl["outtmpl"] = str(output_dir / "%(title)s.%(ext)s")
+        # The suffix is only filled in by _AvoidNameClash when needed.
+        ydl["outtmpl"] = str(output_dir / "%(title)s%(_name_suffix|)s.%(ext)s")
         ydl["noplaylist"] = True
 
     if opts.cookies_browser:
@@ -94,12 +97,48 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
     return ydl
 
 
+def _source_url(path: Path) -> str | None:
+    """URL that FFmpegMetadata stored in a file we downloaded earlier, if any."""
+    try:
+        cmd = ["ffprobe", "-v", "error", "-show_entries", "format_tags=purl,comment"]
+        cmd += ["-of", "default=nw=1:nk=1", str(path)]
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return next((line for line in out.splitlines() if "://" in line), None)
+
+
+class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
+    """Append ``[id]`` to the filename when another video already took the name.
+
+    Titles aren't unique (every Instagram post by a user is "Video by <user>"),
+    and yt-dlp treats an existing file as "already downloaded" — silently
+    skipping the new video and re-tagging the old file with its metadata.
+    """
+
+    def __init__(self, final_ext: str | None) -> None:
+        super().__init__()
+        # Audio extraction changes the extension after download.
+        self._final_ext = final_ext
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        path = Path(self._downloader.prepare_filename(info))
+        if self._final_ext:
+            path = path.with_suffix(f".{self._final_ext}")
+        if path.exists() and _source_url(path) != info.get("webpage_url"):
+            info["_name_suffix"] = f" [{info.get('id')}]"
+        return [], info
+
+
 def download(url: str, opts: DownloadOptions) -> int:
     """Download a single URL. Returns 0 on success, non-zero otherwise."""
     output_dir = opts.resolve_output()
     output_dir.mkdir(parents=True, exist_ok=True)
     ydl_opts = build_ydl_opts(opts, output_dir)
     with YoutubeDL(ydl_opts) as ydl:
+        if opts.playlist_mode != "yes":
+            final_ext = opts.audio_format if opts.audio_only else None
+            ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
         return int(ydl.download([url]))
 
 
