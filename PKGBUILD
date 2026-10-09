@@ -1,6 +1,6 @@
 # Maintainer: Edicson Abel <edicsonabelinfo@gmail.com>
 pkgname=download-media
-pkgver=0.0.2
+pkgver=0.1.0
 pkgrel=1
 pkgdesc="Interactive yt-dlp wrapper with probe-first wizard, clipboard, carousel item picker, history, and cookies support"
 arch=('any')
