@@ -50,3 +50,12 @@ def test_wizard_forced_with_interactive_even_with_intent_flag() -> None:
 def test_yes_overrides_interactive() -> None:
     args = _parse(["-i", "-y", "http://x"])
     assert not should_run_wizard(args, ["-i", "-y", "http://x"])
+
+
+def test_cookies_step_skipped_once_already_asked() -> None:
+    from download_media.probe import ContentKind, Probe
+    from download_media.wizard import _build_post_probe_plan
+
+    video = Probe(url="http://x", site="instagram", content_kind=ContentKind.SINGLE_VIDEO)
+    assert "cookies" in _build_post_probe_plan(video, cookies_asked=False)
+    assert "cookies" not in _build_post_probe_plan(video, cookies_asked=True)

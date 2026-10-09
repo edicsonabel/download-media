@@ -368,7 +368,7 @@ def _print_detection(p: Probe) -> None:
 # Plan builder + state machine
 # ---------------------------------------------------------------------------
 def _build_post_probe_plan(
-    probe_result: Probe, has_cookies_pre: bool
+    probe_result: Probe, cookies_asked: bool
 ) -> list[str]:
     """Return ordered list of step names for the post-probe phase."""
     steps: list[str] = []
@@ -381,7 +381,7 @@ def _build_post_probe_plan(
     # opts.audio_only at run-time.
     steps.extend(["quality", "container", "aformat"])
     steps.append("output")
-    if not has_cookies_pre:
+    if not cookies_asked:
         steps.append("cookies")
     return steps
 
@@ -459,7 +459,7 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
 
     # ---- Phase 1.5: pre-emptive cookies for sites that always need them ----
     site = detect_site(opts.urls[0])
-    has_cookies_pre = False
+    cookies_asked = False
     if site_likely_needs_cookies(site) and not opts.cookies_browser:
         info(f"  {t('auth_needed_pre')}")
         try:
@@ -473,7 +473,7 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
                 step_cookies(opts)
             except _Cancel:
                 return None
-        has_cookies_pre = bool(opts.cookies_browser)
+        cookies_asked = True
 
     # ---- Phase 2: probe with auth retry ----
     info(t("probing"))
@@ -484,10 +484,10 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
             step_cookies(opts)
         except _Cancel:
             return None
+        cookies_asked = True
         # step_cookies mutates opts.cookies_browser; mypy's narrowing inside
         # this branch can't see that, so we use an unrelated read path.
         if _cookies_set(opts):
-            has_cookies_pre = True
             info(t("probing"))
             probe_result = probe(opts.urls[0], opts.cookies_browser)
 
@@ -517,7 +517,7 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
         opts.playlist_mode = "no"
 
     # ---- Phase 3: post-probe state machine ----
-    plan = _build_post_probe_plan(probe_result, has_cookies_pre)
+    plan = _build_post_probe_plan(probe_result, cookies_asked)
     if not _walk_plan(plan, opts, probe_result.items):
         return None
     return opts
