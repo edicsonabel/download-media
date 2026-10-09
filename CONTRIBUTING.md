@@ -32,7 +32,7 @@ download-media -o tmp/ "https://youtu.be/dQw4w9WgXcQ"
 
 ## Project layout
 
-See [`CLAUDE.md`](./CLAUDE.md#layout) for the directory tree and what each file does.
+See [`AGENTS.md`](./AGENTS.md#layout) for the directory tree and what each file does.
 
 ## Conventions
 
@@ -55,7 +55,7 @@ in lower case, imperative, ≤ 72 chars. Body explains the *why* (not the
 *what* — the diff already shows that), wrapped at ~80 chars.
 
 Allowed types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `build`,
-`ci`, `style`, `chore`. See [`CLAUDE.md`](./CLAUDE.md#commit-conventions)
+`ci`, `style`, `chore`. See [`AGENTS.md`](./AGENTS.md#commit-conventions)
 for when to use each.
 
 Optional scope: `feat(wizard):`, `fix(probe):`, `ci(aur):`, `docs(readme):`.
@@ -159,5 +159,5 @@ For security issues, see [SECURITY.md](./SECURITY.md) instead — please don't o
 
 - Branch from `main`.
 - Keep PRs focused on one topic.
-- Update `README.md`, `man/download-media.1`, completions, and `CLAUDE.md` if your change affects user-visible behavior or project conventions.
+- Update `README.md`, `man/download-media.1`, completions, and `AGENTS.md` if your change affects user-visible behavior or project conventions.
 - A maintainer will review and merge.
