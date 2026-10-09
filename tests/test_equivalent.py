@@ -53,9 +53,20 @@ def test_subs_with_custom_langs_uses_long_form() -> None:
 
 def test_playlist_modes_emit_short_flags() -> None:
     yes = build(DownloadOptions(urls=["https://x"], playlist_mode="yes"))
-    no = build(DownloadOptions(urls=["https://x"], playlist_mode="no"))
+    no = build(DownloadOptions(urls=["https://x/watch?v=1&list=2"], playlist_mode="no"))
     assert " -p " in yes or yes.endswith(" -p")
-    assert " -P " in no or " -P " in no + " "
+    assert " -P " in no
+
+
+def test_no_playlist_flag_omitted_for_plain_urls() -> None:
+    cmd = build(DownloadOptions(urls=["https://youtube.com/watch?v=1"], playlist_mode="no"))
+    assert "-P" not in cmd
+
+
+def test_no_playlist_flag_kept_for_instagram_posts() -> None:
+    # Could be a carousel: without -P, direct mode would ask "single or all?".
+    cmd = build(DownloadOptions(urls=["https://www.instagram.com/p/X/"], playlist_mode="no"))
+    assert " -P " in cmd
 
 
 def test_urls_are_quoted_when_special_chars_present() -> None:

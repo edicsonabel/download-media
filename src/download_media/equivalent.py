@@ -18,6 +18,7 @@ from .config import (
     DownloadOptions,
     xdg_dir,
 )
+from .selection import is_playlist_url
 
 
 def build(opts: DownloadOptions) -> str:
@@ -49,7 +50,9 @@ def build(opts: DownloadOptions) -> str:
 
     if opts.playlist_mode == "yes":
         parts.append("-p")
-    elif opts.playlist_mode == "no":
+    elif opts.playlist_mode == "no" and any(is_playlist_url(u) for u in opts.urls):
+        # Only URLs that look like playlists/carousels trigger the "single or
+        # all?" question in direct mode; anywhere else -P is just noise.
         parts.append("-P")
 
     for url in opts.urls:
