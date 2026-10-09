@@ -182,6 +182,10 @@ fix(wizard): bug           # body would have to explain everything
 
 One commit per logical change. No multi-purpose mega-commits.
 
+Commits and PRs are authored by the human you're working with, only. Never add
+AI attribution: no `Co-authored-by:` trailer for an assistant, no
+"Generated with ..." line, no session links.
+
 ## Versioning
 
 SemVer starting from **0.0.1** (patch). Increments:
