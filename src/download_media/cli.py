@@ -253,7 +253,7 @@ def _download_one(url: str, opts: DownloadOptions) -> bool:
     from yt_dlp.utils import DownloadError
 
     try:
-        rc = download(url, effective)
+        rc = _download_with_cookie_fallback(url, effective)
     except DownloadError as exc:
         # yt-dlp already printed the underlying error to stderr; we add a one-line
         # friendly summary so the user knows the program is exiting cleanly, not
@@ -279,6 +279,30 @@ def _download_one(url: str, opts: DownloadOptions) -> bool:
         effective.resolve_output(),
     )
     return True
+
+
+def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> int:
+    """Download ``url``; if browser cookies were used and it fails, retry once without them.
+
+    A partially decrypted cookie jar (keyring issues with Brave/Chrome) can break
+    extractors that work fine anonymously — Instagram answers with an empty API
+    response instead of a login error. If the retry also fails, the original
+    error is re-raised since it's the one tied to what the user asked for.
+    """
+    from yt_dlp.utils import DownloadError
+
+    try:
+        return download(url, opts)
+    except DownloadError as exc:
+        if not opts.cookies_browser:
+            raise
+        first_error = exc
+
+    warn(t("cookies_retry", opts.cookies_browser))
+    try:
+        return download(url, replace(opts, cookies_browser=None))
+    except DownloadError:
+        raise first_error from None
 
 
 def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
