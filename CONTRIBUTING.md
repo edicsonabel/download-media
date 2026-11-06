@@ -91,11 +91,12 @@ fix(wizard): bug           # body would carry all the meaning
 
 **Never bump the version while iterating.** The version stays fixed until a release is published. Bump it as part of the same commit that creates the release tag.
 
-The version lives in three files that must stay in sync:
+The version lives in four files that must stay in sync:
 
-1. `bin/download-media` → `VERSION="x.y.z"`
-2. `man/download-media.1` → `.TH ... "x.y.z" ...`
+1. `src/download_media/__init__.py` → `__version__ = "x.y.z"`
+2. `pyproject.toml` → `version = "x.y.z"`
 3. `PKGBUILD` → `pkgver=x.y.z`
+4. `docs/index.html` → the `vx.y.z` label in the hero
 
 ## Testing changes
 

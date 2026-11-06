@@ -37,7 +37,7 @@ Report the version, the gate result and any `xfail` or skipped test. The human d
 Only after the human approves. In this order:
 
 ```bash
-# 1. Bump the 3 places listed in AGENTS.md
+# 1. Bump the 4 places listed in AGENTS.md
 scripts/pre-release.sh --no-live            # version sync is part of the gate
 git commit -am "build: release <version>"
 git tag v<version>
@@ -54,7 +54,16 @@ gh run list --workflow deploy-aur.yml --limit 1
 gh run watch <run-id> --exit-status
 ```
 
-Then confirm the AUR serves the new version: `https://aur.archlinux.org/rpc/v5/info/download-media`. Update `.ai/specs/PLAN.md` for what shipped. Commit: `docs(plan): mark <version> as shipped`.
+Then confirm the AUR serves the new version: `https://aur.archlinux.org/rpc/v5/info/download-media`.
+
+Confirm the landing page shows it too. The bump changes `docs/index.html`, so the push of `main` redeploys Pages:
+
+```bash
+gh run list --workflow deploy-pages.yml --limit 1
+curl -s https://edicsonabel.github.io/download-media/ | grep -F "v<version> ·"
+```
+
+Update `.ai/specs/PLAN.md` for what shipped. Commit: `docs(plan): mark <version> as shipped`.
 
 ## Rules
 

@@ -254,10 +254,11 @@ SemVer starting from **0.0.1** (patch). Increments:
 release is actually published. Bump it as part of the same commit that creates
 the git tag and the GitHub release.
 
-The version lives in **3 places** that must be kept in sync:
+The version lives in **4 places** that must be kept in sync:
 1. `src/download_media/__init__.py` → `__version__ = "x.y.z"`
 2. `pyproject.toml` → `version = "x.y.z"`
 3. `PKGBUILD` → `pkgver=x.y.z`
+4. `docs/index.html` → the `vx.y.z` label in the hero (pushing it redeploys Pages)
 
 ## Distribution (AUR)
 
@@ -271,6 +272,10 @@ PKGBUILD, regenerates `.SRCINFO`, and pushes both to
 `ssh://aur@aur.archlinux.org/download-media.git`. The AUR repo only holds
 `PKGBUILD` and `.SRCINFO`. The workflow can also be run manually
 (`workflow_dispatch`) with an explicit version.
+
+Every release also updates GitHub Pages: the bump changes `docs/index.html`, so
+pushing `main` triggers `deploy-pages.yml`. `tests/test_packaging.py` fails the
+gate if the landing page shows a different version.
 
 ## Future-change reminders
 
