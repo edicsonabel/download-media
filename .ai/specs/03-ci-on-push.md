@@ -69,7 +69,7 @@ Merge the nested `if` that `SIM102` flags. **The parentheses are required:** `an
         warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
 ```
 
-There's no `else` on that chain, so behavior doesn't change. `ruff format` leaves this form alone. No new test is needed: `test_hint_suggests_cookies_for_auth_errors` already fails on the unparenthesized version (proved by applying it: 1 failed, 320 passed).
+There's no `else` on that chain, so behavior doesn't change. `ruff format` leaves this form alone. `test_hint_suggests_cookies_for_auth_errors` fails on the unparenthesized version, but it only exercises `"Login required"`. The mutation check found other forms it misses, so the test-engineer added `test_every_auth_error_hints_cookies_only_without_them`.
 
 ### 2. `pyproject.toml` (pending D1)
 
@@ -176,7 +176,7 @@ Wizard, direct, `-y`, `-p`, `-P`, `-l`, carousel, playlist, rerun and partial or
 - [ ] The gate can fail: adding `def test_red() -> None: assert 1 == 2` in a throwaway copy makes it exit non-zero **at the tests step**. Don't use `assert False`: ruff rejects it (`B011`), and the run stops at lint without reaching the tests
 - [ ] `podman run --rm -v "$PWD:/repo:ro,Z" -w /repo docker.io/rhysd/actionlint:latest .github/workflows/ci.yml` exits 0
 - [ ] `grep -nE 'pull_request_target|secrets\.|tags:' .github/workflows/ci.yml` finds nothing
-- [ ] `git diff main -- tests .github/workflows/deploy-aur.yml .github/workflows/deploy-pages.yml` is empty: `test_hint_suggests_cookies_for_auth_errors` passes unmodified, and the publishing workflows are untouched
+- [ ] `git diff main -- .github/workflows/deploy-aur.yml .github/workflows/deploy-pages.yml` is empty, and `git diff main -- tests` removes no line: `test_hint_suggests_cookies_for_auth_errors` passes unmodified, tests may only be added, and the publishing workflows are untouched
 - [ ] `AGENTS.md` lists `ci.yml` in the layout tree
 - [ ] (Depends on D3) `gh run list --workflow ci.yml --branch main --limit 1` shows `success` for the pushed commit
 
