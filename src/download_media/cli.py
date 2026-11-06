@@ -324,9 +324,10 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
             "  → install python-secretstorage so cookies from Brave/Chrome can be decrypted:"
         )
         warn("      sudo pacman -S python-secretstorage")
-    elif "sign in to confirm you" in msg or "login required" in msg or "private" in msg:
-        if not opts.cookies_browser:
-            warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
+    elif (
+        "sign in to confirm you" in msg or "login required" in msg or "private" in msg
+    ) and not opts.cookies_browser:
+        warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
     if opts.cookies_browser and uses_keyring(opts.cookies_browser):
         warn(t("cookies_keyring_hint", browser_of(opts.cookies_browser)))
 
