@@ -81,7 +81,8 @@ Record the answer in `history` with `agent: "human"` before moving on.
 5. **A role that returns no REPORT** puts the item in `blocked` with the note "no report".
 6. **Three rounds of `changes_requested`** on one item → `awaiting_human`. Something is wrong with the spec.
 7. **`notes` with follow-up work** go to the planner at the end of the run, so they aren't lost.
-8. **No `git push`** outside the release pipeline.
+8. **No `git push`** outside the release pipeline, unless the human authorizes one for an item.
+9. **Commit `state.json`** at every ⏸, at the end of a run and before launching a role that works in the main worktree: `chore(pipeline): <item> → <stage>`. It's the one file a clean-tree check ignores, since this role keeps writing it on `main`.
 
 ## Output (`/pipeline`)
 
