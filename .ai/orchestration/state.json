@@ -1,18 +1,22 @@
 {
   "version": 1,
-  "updated": "2026-11-06T12:20:21-04:00",
+  "updated": "2026-11-06T12:37:36-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
       "title": "Run the gate on every push and PR",
-      "stage": "development",
-      "status": "in_progress",
-      "next_agent": "developer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/03-ci-on-push.md",
       "branch": "feature/ci-on-push",
       "worktree": ".worktrees/feature-ci-on-push",
       "commits": [
-        "4cf974b"
+        "4cf974b",
+        "be1ea8e",
+        "88f3ede",
+        "408a314",
+        "935db70"
       ],
       "review": null,
       "history": [
@@ -29,6 +33,19 @@
           "result": "approved",
           "at": "2026-11-06T12:20:21-04:00",
           "note": "D1, D2 and D3 option A. Pipeline change approved: state.json is committed by the orchestrator. Planner follow-ups at end of run: Python 3.10 e2e failures, Node 20 actions in deploy workflows, branch protection."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-06T12:25:19-04:00"
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-06T12:37:36-04:00",
+          "note": "Mutation check 13/13. Spec criterion 7 amended to allow added tests. Planner follow-up: nothing protects set -e in scripts/pre-release.sh."
         }
       ]
     }
