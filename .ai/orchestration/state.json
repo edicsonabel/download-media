@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T17:55:20-04:00",
+  "updated": "2026-11-06T18:55:53-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -144,9 +144,9 @@
     "fix/equivalent-direct": {
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
       "worktree": ".worktrees/fix-equivalent-direct",
@@ -154,11 +154,15 @@
         "32b7e39",
         "8cc3d30",
         "09cde6c",
-        "21c81e2"
+        "21c81e2",
+        "997b721"
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "equivalent.py:52 printed --playlist-items value starting with - can't be parsed back on Python 3.10-3.13 (simulated)",
+          "equivalent.py:48 printed --sub-langs value starting with - exits 2 on replay (measured)"
+        ]
       },
       "history": [
         {
@@ -188,6 +192,13 @@
           "result": "done",
           "at": "2026-11-06T17:55:20-04:00",
           "note": "Gate passes, 380 tests, 98.04% coverage. Planner follow-ups: -a -f opus repeat writes a duplicate file; a leading dash in --sub-langs breaks the replay; README promises completions and a manpage the PKGBUILD doesn't install. Human should hear: --play is now ambiguous; the not-saved guard applies to every run."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-06T18:55:53-04:00",
+          "note": "Round 1. 84 cases added, 460 passed, 4 xfailed. Mutation 35/36, survivor C12 is equivalent. Findings: two dash-value replays go back to the developer. Opus duplicate on rerun is pre-existing, stays xfail for the planner, along with probe ignoreerrors, hardcoded [no soportado], --playlist-items 2,9 hiding item 9, no_supported_items saying Cancelling on a failure, and -i with --playlist-items."
         }
       ]
     }
