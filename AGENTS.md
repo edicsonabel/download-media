@@ -17,7 +17,8 @@ Arch Linux (AUR).
 - **Runtime deps:** `yt-dlp` (used as a library — `from yt_dlp import
   YoutubeDL`, never shelled out), `ffmpeg` (audio extraction + merging quality
   streams), `secretstorage` (decrypting Chromium-family browser cookies on
-  Linux).
+  Linux), `curl_cffi` (browser impersonation — without it yt-dlp skips
+  Instagram's logged-out path and public posts fail).
 - **Optional deps:** `xdg-user-dirs` (localized `Videos`/`Music` folders),
   `wl-clipboard` (Wayland) or `xclip`/`xsel` (X11) for clipboard URL detection.
 - **Build backend:** `hatchling` via `pyproject.toml`.
@@ -39,23 +40,29 @@ download type).
 ├── AGENTS.md                      # this file
 ├── CLAUDE.md                      # pointer to AGENTS.md
 ├── CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, LICENSE (MIT)
+├── .ai/                           # agent system: roles, specs, roadmap, pipeline state
 ├── .github/workflows/
-│   ├── deploy-aur.yml             # tag push → patch PKGBUILD, push to AUR
+│   ├── deploy-aur.yml             # tag push → tests, patch PKGBUILD, push to AUR
 │   └── deploy-pages.yml           # main push → publish docs/ to GitHub Pages
 ├── docs/index.html                # project landing page (GitHub Pages)
+├── scripts/
+│   ├── pre-release.sh             # release gate: lint, types, tests, live tests
+│   └── ai-link.py                 # symlinks .ai/ into .claude/ and .opencode/
 ├── src/download_media/
 │   ├── cli.py                     # argparse, mode dispatch, per-URL pipeline
 │   ├── wizard.py                  # probe-first interactive wizard
 │   ├── probe.py                   # "what is at this URL?" (site, kind, items, auth)
 │   ├── downloader.py              # DownloadOptions → yt-dlp options dict
 │   ├── config.py                  # defaults, DownloadOptions, xdg_dir(), state paths
+│   ├── cookies.py                 # --cookies BROWSER[+KEYRING] spec, keyring detection
 │   ├── equivalent.py              # equivalent direct-mode command after a run
 │   ├── selection.py               # item selection parser ("1-3,5")
 │   ├── history.py                 # append-only TSV download log
 │   ├── clipboard.py               # Wayland/X11 clipboard URL detection
 │   ├── i18n.py                    # es/en runtime messages
 │   └── ui.py                      # colors, prompts, formatters
-├── tests/                         # pytest suite (no network)
+├── tests/                         # pytest suite (loopback only)
+│   └── live/                      # real network and cookies, opt-in
 ├── legacy/                        # old Bash prototype — reference only, not built or tested
 └── tmp/                           # scratch folder for test downloads (contents gitignored)
 ```
@@ -105,6 +112,12 @@ download type).
   preselected defaults in each prompt).
 - **`-y`:** skip the wizard and all confirmations (scripting mode).
 
+Multi-entry URLs: items with no formats (Instagram images) are skipped by a
+`match_filter`, not by `ignoreerrors`, so a single-mode failure still raises and
+reaches the cookie fallback. yt-dlp downloads carousels even with `noplaylist`,
+so single mode names their items with `[id]`. A run only counts as done if
+something was saved; `-p` must not report success on a total failure.
+
 After every run (cancelled or successful) the equivalent direct-mode command
 is printed (`equivalent.py`), so the user can repeat the operation without the
 wizard. It omits flags whose values match the defaults.
@@ -117,10 +130,13 @@ python -m venv .venv
 .venv/bin/pip install -e '.[dev]'
 
 # Verification — all must pass before committing
-.venv/bin/pytest -q              # tests (no network access)
+.venv/bin/pytest -q              # tests (no network, loopback only; needs ffmpeg)
 .venv/bin/ruff check src tests   # lint
 .venv/bin/ruff format src tests  # format
 .venv/bin/mypy                   # strict type check
+
+# Release gate (see Testing)
+DM_LIVE_IG_CAROUSEL='<public post>' DM_LIVE_BROWSER=brave scripts/pre-release.sh
 
 # Run the current checkout
 .venv/bin/download-media --help  # locale-dependent rendering
@@ -134,6 +150,46 @@ makepkg -f --skipchecksums
 sudo pacman -U download-media-*.pkg.tar.zst
 namcap PKGBUILD
 ```
+
+## Testing
+
+Three layers, all required before a release:
+
+- **Unit** (`tests/test_*.py`): pure logic and scripted wizard walks.
+- **End-to-end** (`tests/test_e2e.py`): `cli.main` with the real yt-dlp and
+  ffmpeg, against the `fake_site` fixture (fake extractor, loopback server). Use
+  it for anything that depends on how yt-dlp behaves: mocks can't see that.
+- **Live** (`tests/live/`, marker `live`, deselected by default): real sites, the
+  real keyring, real cookies. Configured through `DM_LIVE_*` variables; never
+  hardcode personal URLs.
+
+Every bug fix adds a test that fails without the fix. The autouse `isolated_env`
+fixture keeps tests away from the real history log and browser flag files.
+
+## Agent system
+
+Work goes through a pipeline of agents: an orchestrator launches specialized
+roles (spec → implementation → tests → review → integration), each item in its
+own git worktree, with human approval at the key points. A planner keeps the
+roadmap, and a separate pipeline handles releases.
+
+- How it works: `.ai/README.md` and `.ai/orchestration/WORKFLOW.md`
+- Roadmap: `.ai/specs/PLAN.md`
+- Commands: `/roadmap`, `/feature`, `/fix`, `/orchestrate`, `/pipeline`, `/release`
+- Setup after cloning: `python scripts/ai-link.py`
+
+If you are launched as one of those roles, your definition is in
+`.ai/roles/<role>.md`, and it overrides this file on anything role-specific.
+
+Every reply to the user in the main session starts with a label saying who
+speaks, in the language of the conversation:
+
+- `**[Orchestrator]**` when moving the pipeline.
+- `**[Orchestrator · <role> report]**` when summarizing what a role delivered.
+- `**[Assistant]**` for anything outside the pipeline.
+
+Roles never talk to the user directly: they return their REPORT to the main
+session, which summarizes it.
 
 ## Commit conventions
 
@@ -204,11 +260,12 @@ The version lives in **3 places** that must be kept in sync:
 
 ## Distribution (AUR)
 
-Flow: commit the version bump → tag `vX.Y.Z` → push the tag → create the
-GitHub release.
+Flow: run `scripts/pre-release.sh` → commit the version bump → tag `vX.Y.Z` →
+push the tag → create the GitHub release.
 
-Pushing a `v*` tag triggers `.github/workflows/deploy-aur.yml`, which waits
-for the GitHub release tarball, patches `pkgver` and `sha256sums` in the
+Pushing a `v*` tag triggers `.github/workflows/deploy-aur.yml`, which runs
+`scripts/pre-release.sh --no-live`, then waits for the GitHub release tarball,
+patches `pkgver` and `sha256sums` in the
 PKGBUILD, regenerates `.SRCINFO`, and pushes both to
 `ssh://aur@aur.archlinux.org/download-media.git`. The AUR repo only holds
 `PKGBUILD` and `.SRCINFO`. The workflow can also be run manually

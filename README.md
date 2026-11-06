@@ -12,7 +12,8 @@ Supports **1800+ sites** through yt-dlp: YouTube, Twitter/X, Instagram, TikTok, 
 - **Preview + confirmation** — shows title, channel, duration, and approximate size before downloading.
 - **Playlist detection** — asks whether to download just the single video or the whole playlist.
 - **Subtitles** — `-s` to embed them, `--sub-langs es,en,fr` to pick languages.
-- **Browser cookies** — `--cookies firefox` (or `brave`, `chrome`, etc.) for login-walled, age-restricted, or private content.
+- **Browser cookies** — `--cookies firefox` (or `brave`, `chrome`, etc.) for login-walled, age-restricted, or private content. A Chromium browser's `--password-store` is detected from its flags file (`~/.config/brave-flags.conf`, ...); if yours is set elsewhere, name the keyring: `--cookies brave+gnomekeyring`.
+- **Carousels** — images yt-dlp can't fetch are skipped, the videos are kept, and the run reports how many items were saved.
 - **History** — every successful download is logged at `~/.local/state/download-media/history.log`.
 - **Localized output folders** — respects your XDG user dirs (`Vídeos`, `Música`, `Movies`, custom paths on other disks, etc.).
 - **Bilingual UI (es/en)** — chosen automatically from `$LANG`.
@@ -50,6 +51,7 @@ sudo pacman -R download-media
 |-------------------|-----------|-----------------------------------------------|
 | `yt-dlp`          | required  | Actual download engine                        |
 | `ffmpeg`          | required  | Quality merging + audio extraction            |
+| `python-curl_cffi` | required | Browser impersonation; Instagram needs it without cookies |
 | `xdg-user-dirs`   | optional  | Resolve localized `Videos`/`Music` folders    |
 | `wl-clipboard`    | optional  | Clipboard URL detection on Wayland            |
 | `xclip` or `xsel` | optional  | Clipboard URL detection on X11                |
@@ -96,6 +98,7 @@ download-media -P <url>                   # force single video (ignore playlist)
 -s, --subs                 Download subtitles (default: es,en)
     --sub-langs <langs>    Comma-separated subtitle languages
     --cookies <browser>    firefox | chrome | chromium | brave | edge | opera | vivaldi | safari
+                           Optional keyring: brave+gnomekeyring (also basictext, kwallet, kwallet5, kwallet6)
 -i, --interactive          Force wizard mode
 -y, --yes                  Skip all confirmations
 -v, --version              Show version
