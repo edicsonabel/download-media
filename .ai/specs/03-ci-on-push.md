@@ -1,6 +1,6 @@
 # 03 — Run the gate on every push and PR
 
-Status: approved
+Status: done
 Item: `feature/ci-on-push`
 
 ## Problem
@@ -170,15 +170,15 @@ Wizard, direct, `-y`, `-p`, `-P`, `-l`, carousel, playlist, rerun and partial or
 
 ## Acceptance criteria
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] The gate exits 0 on a fresh install: fresh clone of the branch, `ubuntu:24.04`, non-root user, `apt-get install python3 python3-venv ffmpeg git`, `python3 -m venv .venv`, `.venv/bin/pip install -e '.[dev]'`, then `scripts/pre-release.sh --no-live`
-- [ ] In that same run, `.venv/bin/ruff --version` reports 0.17.4 or newer
-- [ ] The gate can fail: adding `def test_red() -> None: assert 1 == 2` in a throwaway copy makes it exit non-zero **at the tests step**. Don't use `assert False`: ruff rejects it (`B011`), and the run stops at lint without reaching the tests
-- [ ] `podman run --rm -v "$PWD:/repo:ro,Z" -w /repo docker.io/rhysd/actionlint:latest .github/workflows/ci.yml` exits 0
-- [ ] `grep -nE 'pull_request_target|secrets\.|tags:' .github/workflows/ci.yml` finds nothing
-- [ ] `git diff main -- .github/workflows/deploy-aur.yml .github/workflows/deploy-pages.yml` is empty, and `git diff main -- tests` removes no line: `test_hint_suggests_cookies_for_auth_errors` passes unmodified, tests may only be added, and the publishing workflows are untouched
-- [ ] `AGENTS.md` lists `ci.yml` in the layout tree
-- [ ] (Depends on D3) `gh run list --workflow ci.yml --branch main --limit 1` shows `success` for the pushed commit
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] The gate exits 0 on a fresh install: fresh clone of the branch, `ubuntu:24.04`, non-root user, `apt-get install python3 python3-venv ffmpeg git`, `python3 -m venv .venv`, `.venv/bin/pip install -e '.[dev]'`, then `scripts/pre-release.sh --no-live`
+- [x] In that same run, `.venv/bin/ruff --version` reports 0.17.4 or newer
+- [x] The gate can fail: adding `def test_red() -> None: assert 1 == 2` in a throwaway copy makes it exit non-zero **at the tests step**. Don't use `assert False`: ruff rejects it (`B011`), and the run stops at lint without reaching the tests
+- [x] `podman run --rm -v "$PWD:/repo:ro,Z" -w /repo docker.io/rhysd/actionlint:latest .github/workflows/ci.yml` exits 0
+- [x] `grep -nE 'pull_request_target|secrets\.|tags:' .github/workflows/ci.yml` finds nothing
+- [x] `git diff main -- .github/workflows/deploy-aur.yml .github/workflows/deploy-pages.yml` is empty, and `git diff main -- tests` removes no line: `test_hint_suggests_cookies_for_auth_errors` passes unmodified, tests may only be added, and the publishing workflows are untouched
+- [x] `AGENTS.md` lists `ci.yml` in the layout tree
+- [x] (Depends on D3) `gh run list --workflow ci.yml --branch main --limit 1` shows `success` for the pushed commit
 
 ## Live check
 
