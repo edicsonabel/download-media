@@ -13,7 +13,9 @@ authors = [{ name = "Edicson Abel" }]
 requires-python = ">=3.10"
 
 dependencies = [
-    "yt-dlp>=2024.10.0",
+    # curl_cffi lets yt-dlp impersonate a browser; without it Instagram's
+    # logged-out path is skipped entirely and public posts fail.
+    "yt-dlp[curl-cffi]>=2024.10.0",
     # Required to decrypt cookies from Chromium-family browsers (Brave, Chrome,
     # Chromium, Edge, Opera, Vivaldi) on Linux. yt-dlp itself doesn't declare
     # it but errors hard without it when --cookies brave/chrome/... is used.

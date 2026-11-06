@@ -11,6 +11,7 @@ depends=(
   'yt-dlp'
   'ffmpeg'
   'python-secretstorage'
+  'python-curl_cffi'
 )
 makedepends=(
   'python-build'
