@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T18:55:53-04:00",
+  "updated": "2026-11-06T19:02:10-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -144,9 +144,9 @@
     "fix/equivalent-direct": {
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
       "worktree": ".worktrees/fix-equivalent-direct",
@@ -155,7 +155,8 @@
         "8cc3d30",
         "09cde6c",
         "21c81e2",
-        "997b721"
+        "997b721",
+        "317c2d3"
       ],
       "review": {
         "approved": false,
@@ -199,6 +200,13 @@
           "result": "changes_requested",
           "at": "2026-11-06T18:55:53-04:00",
           "note": "Round 1. 84 cases added, 460 passed, 4 xfailed. Mutation 35/36, survivor C12 is equivalent. Findings: two dash-value replays go back to the developer. Opus duplicate on rerun is pre-existing, stays xfail for the planner, along with probe ignoreerrors, hardcoded [no soportado], --playlist-items 2,9 hiding item 9, no_supported_items saying Cancelling on a failure, and -i with --playlist-items."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-06T19:02:10-04:00",
+          "note": "Round 1 findings fixed with --flag=value for values starting with -. 477 passed, 1 xfailed (opus). Spec design lines 104-105 should mention the form at validation."
         }
       ]
     }
