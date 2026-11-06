@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T16:37:01-04:00",
+  "updated": "2026-11-06T16:45:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -84,14 +84,16 @@
     "release/0.2.0": {
       "type": "release",
       "title": "Release 0.2.0",
-      "stage": "publishing",
-      "status": "in_progress",
-      "next_agent": "release-manager",
+      "stage": "complete",
+      "status": "published",
+      "next_agent": null,
       "doc": null,
       "branch": null,
       "worktree": null,
       "commits": [
-        "b078bfc"
+        "b078bfc",
+        "51c8e45",
+        "5e9cc58"
       ],
       "review": null,
       "history": [
@@ -129,6 +131,13 @@
           "result": "approved",
           "at": "2026-11-06T16:37:01-04:00",
           "note": "gh must use the edicsonabel account. Active gh account switched to it. Same publishing plan."
+        },
+        {
+          "stage": "verification",
+          "agent": "release-manager",
+          "result": "published",
+          "at": "2026-11-06T16:45:13-04:00",
+          "note": "Tag v0.2.0 at 51c8e45. deploy-aur run 42290009457 success (test, deploy). CI run 42290009423 success. AUR RPC serves 0.2.0-1 after about 4.5 minutes of lag. AUR package not built or installed."
         }
       ]
     }
