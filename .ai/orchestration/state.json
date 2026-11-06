@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T17:28:05-04:00",
+  "updated": "2026-11-06T17:40:53-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -144,12 +144,12 @@
     "fix/equivalent-direct": {
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
-      "stage": "planning",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "development",
+      "status": "in_progress",
+      "next_agent": "developer",
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
-      "worktree": null,
+      "worktree": ".worktrees/fix-equivalent-direct",
       "commits": [
         "32b7e39"
       ],
@@ -171,6 +171,13 @@
           "result": "done",
           "at": "2026-11-06T17:28:05-04:00",
           "note": "Reproduced. Spec needs decisions D1-D5. Planner follow-ups at end of run: -l opens the wizard, -l lists only the first URL, wizard drops URLs after the first, ~ in a wizard folder creates a literal directory, --sub-langs doesn't imply -s, cancel exit codes differ, Ctrl-C escapes main, a folder starting with - breaks the printed -o."
+        },
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T17:40:53-04:00",
+          "note": "Spec approved with every recommended option: D1 A, D2 no, D3 A (--playlist-items in this item), D4 as recommended, D5 one command per mode."
         }
       ]
     }
