@@ -41,6 +41,19 @@ def run(
     return _run
 
 
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Default output folders under ``tmp_path``, for runs that can't use ``-o``.
+
+    ``-o`` is an intent flag, so the ``run`` fixture hides whether a command
+    stays out of the wizard on its own.
+    """
+    folder = tmp_path / "home"
+    folder.mkdir()
+    monkeypatch.setenv("HOME", str(folder))
+    return folder
+
+
 def test_single_video(run: Any, out: Path) -> None:
     code, output = run("-y", "https://fake.test/video")
     assert code == 0
@@ -120,6 +133,70 @@ def test_playlist_item_selection_is_respected(out: Path, fake_site: list[Any]) -
     result = download(CAROUSEL, opts)
     assert (result.saved, result.skipped, result.failed) == (1, 0, 0)
     assert names(out) == ["04 - Clip [v2].mp4"]
+
+
+def test_playlist_items_flag_skips_the_wizard(
+    home: Path, fake_site: list[Any], answers: Any
+) -> None:
+    answers()
+    assert cli.main(["--playlist-items", "2", CAROUSEL]) == 0
+    assert names(home / "Videos") == ["02 - Clip [v1].mp4"]
+
+
+def test_playlist_items_flag_can_pick_several(run: Any, out: Path) -> None:
+    code, _ = run("-y", "--playlist-items", "2,4", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4", "04 - Clip [v2].mp4"]
+
+
+def test_playlist_items_out_of_range_is_a_failure(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "9", CAROUSEL)
+    assert code == 1
+    assert names(out) == []
+    assert t("no_supported_items") in output
+    assert t("done") not in output
+    assert history_rows() == []
+
+
+def test_playlist_items_with_a_bad_spec_is_a_clean_failure(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "x", CAROUSEL)
+    assert code == 1
+    assert t("failed", CAROUSEL) in output
+    assert "Traceback" not in output
+    assert t("done") not in output
+    assert names(out) == []
+
+
+def test_playlist_items_on_an_image_saves_nothing_and_says_so(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "1", CAROUSEL)
+    assert code == 1
+    assert names(out) == []
+    assert t("no_supported_items") in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "url"),
+    [
+        ((), "https://fake.test/video"),
+        (("-a",), "https://fake.test/video"),
+        (("--video-format", "mkv"), "https://fake.test/video"),
+        (("-a",), CAROUSEL),
+        (("-a", "-p"), CAROUSEL),
+        (("--playlist-items", "2"), CAROUSEL),
+        (("-a", "--playlist-items", "2"), CAROUSEL),
+    ],
+)
+def test_repeating_a_run_is_still_a_success(
+    run: Any, out: Path, flags: tuple[str, ...], url: str
+) -> None:
+    # Files already on disk must count as saved: "nothing saved" means failure.
+    run("-y", *flags, url)
+    before = names(out)
+    code, output = run("-y", *flags, url)
+    assert code == 0
+    assert names(out) == before
+    assert t("no_supported_items") not in output
+    assert len(history_rows()) == 2
 
 
 @pytest.mark.parametrize("flags", [(), ("-p",)])
@@ -311,6 +388,16 @@ def test_wizard_cancelled_downloads_nothing(run: Any, out: Path, answers: Any) -
     assert code == 0
     assert t("cancelled") in output
     assert names(out) == []
+
+
+def test_wizard_selection_replaces_the_playlist_items_flag(
+    run: Any, out: Path, answers: Any
+) -> None:
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", "4", "", "", "", "", "")
+    code, _ = run("-i", "--playlist-items", "2", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["04 - Clip [v2].mp4"]
 
 
 def test_detected_keyring_reaches_wizard_probe(

@@ -95,6 +95,7 @@ download-media -P <url>                   # force single video (ignore playlist)
 -l, --list                 List available formats and exit
 -p, --playlist             Force full playlist
 -P, --no-playlist          Force single video only
+    --playlist-items <n>   Download only these playlist items, e.g. 1-3,5
 -s, --subs                 Download subtitles (default: es,en)
     --sub-langs <langs>    Comma-separated subtitle languages
     --cookies <browser>    firefox | chrome | chromium | brave | edge | opera | vivaldi | safari

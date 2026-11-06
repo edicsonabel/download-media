@@ -41,6 +41,7 @@ _INTENT_FLAGS: frozenset[str] = frozenset({
     "--sub-langs",
     "-p", "--playlist",
     "-P", "--no-playlist",
+    "--playlist-items",
     "--cookies",
 })
 
@@ -83,6 +84,8 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("-p", "--playlist", action="store_true", help="Force full playlist download.")
     pl.add_argument("-P", "--no-playlist", action="store_true", dest="no_playlist",
                     help="Force single-video download.")
+    pl.add_argument("--playlist-items", dest="playlist_items", metavar="ITEMS",
+                    help="Download only these playlist items, e.g. 1-3,5.")
 
     p.add_argument("-s", "--subs", action="store_true", help="Download subtitles.")
     p.add_argument(
@@ -109,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def options_from_args(args: argparse.Namespace) -> DownloadOptions:
     pmode: PlaylistMode = "auto"
-    if args.playlist:
+    if args.playlist or args.playlist_items is not None:
         pmode = "yes"
     elif args.no_playlist:
         pmode = "no"
@@ -124,6 +127,7 @@ def options_from_args(args: argparse.Namespace) -> DownloadOptions:
         subs=args.subs,
         sub_langs=args.sub_langs,
         playlist_mode=pmode,
+        playlist_items=args.playlist_items,
         no_confirm=args.no_confirm,
         list_formats=args.list_formats,
     )
@@ -274,7 +278,7 @@ def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
     except KeyboardInterrupt:
         warn(t("cancelled"))
         raise
-    if result.skipped and not result.saved:
+    if not result.saved:
         warn(t("no_supported_items"))
         return False, cookies_dropped
     if result.skipped or result.failed:

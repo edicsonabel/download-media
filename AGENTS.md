@@ -97,7 +97,7 @@ download type).
 
 - **Wizard (default):** runs when no URL is provided, or when a URL is provided
   without any "intent flags" (`-a`, `-q`, `-f`, `--video-format`, `-o`, `-s`,
-  `--sub-langs`, `-p`, `-P`, `--cookies`). It is probe-first:
+  `--sub-langs`, `-p`, `-P`, `--playlist-items`, `--cookies`). It is probe-first:
   1. URL (clipboard detected if available), plus cookies up front for sites
      that always need them.
   2. Probe the URL with yt-dlp; on an auth failure, ask for cookies and

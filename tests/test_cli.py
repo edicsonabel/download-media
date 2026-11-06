@@ -23,6 +23,32 @@ def test_minimal_args_produce_defaults() -> None:
     assert opts.playlist_mode == "auto"
 
 
+def test_playlist_items_implies_playlist_mode() -> None:
+    opts = parse(["--playlist-items", "2,4", "http://x"])
+    assert opts.playlist_mode == "yes"
+    assert opts.playlist_items == "2,4"
+
+
+def test_no_playlist_items_by_default() -> None:
+    assert parse(["-p", "http://x"]).playlist_items is None
+
+
+@pytest.mark.parametrize("argv", [["--playlist-items", "2"], ["--playlist-items=2"]])
+def test_playlist_items_is_an_intent_flag(argv: list[str]) -> None:
+    from download_media.cli import should_run_wizard
+
+    full = [*argv, "http://x"]
+    assert should_run_wizard(build_parser().parse_args(full), full) is False
+
+
+@pytest.mark.parametrize("flag", ["-p", "-P"])
+def test_playlist_items_excludes_the_other_playlist_flags(flag: str, capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        parse([flag, "--playlist-items", "2", "http://x"])
+    assert exc.value.code == 2
+    assert "--playlist-items" in capsys.readouterr().err
+
+
 def test_audio_flag_and_format() -> None:
     opts = parse(["-a", "-f", "opus", "http://x"])
     assert opts.audio_only is True
