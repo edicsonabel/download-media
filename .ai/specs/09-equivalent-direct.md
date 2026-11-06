@@ -1,6 +1,6 @@
 # 09 — Make the equivalent command repeat the run
 
-Status: draft
+Status: approved
 Item: `fix/equivalent-direct`
 
 ## Problem
@@ -223,6 +223,8 @@ Commits: `--playlist-items` and its guard are a `feat(cli):` of their own; the r
 Not needed. No extractor, format or network behavior changes: the change is which string gets printed and which URLs it lists. The one yt-dlp parameter involved already ships, and the replay criteria run the real yt-dlp and ffmpeg on `fake_site`.
 
 ## Open decisions
+
+All resolved by the human on 2026-11-06, each one on its recommended option: D1 A, D2 no, D3 A, D4 as recommended, D5 one command per mode.
 
 ### D1: what keeps the command direct
 
