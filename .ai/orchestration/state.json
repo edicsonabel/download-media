@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T17:40:53-04:00",
+  "updated": "2026-11-06T17:55:20-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -144,14 +144,17 @@
     "fix/equivalent-direct": {
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
       "worktree": ".worktrees/fix-equivalent-direct",
       "commits": [
-        "32b7e39"
+        "32b7e39",
+        "8cc3d30",
+        "09cde6c",
+        "21c81e2"
       ],
       "review": {
         "approved": false,
@@ -178,6 +181,13 @@
           "result": "approved",
           "at": "2026-11-06T17:40:53-04:00",
           "note": "Spec approved with every recommended option: D1 A, D2 no, D3 A (--playlist-items in this item), D4 as recommended, D5 one command per mode."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-06T17:55:20-04:00",
+          "note": "Gate passes, 380 tests, 98.04% coverage. Planner follow-ups: -a -f opus repeat writes a duplicate file; a leading dash in --sub-langs breaks the replay; README promises completions and a manpage the PKGBUILD doesn't install. Human should hear: --play is now ambiguous; the not-saved guard applies to every run."
         }
       ]
     }
