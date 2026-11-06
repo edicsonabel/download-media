@@ -14,7 +14,7 @@ Priority: `P1` broken or misleading today · `P2` clear value · `P3` nice to ha
 | --- | -------------------- | ----- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | --- | ---- | ------- |
 | 01  | `instagram-images`   | feat  | Save carousel images, if `yt-dlp` metadata exposes their URLs            | A real post lost 16 of 20 items; needs checking against the wrapper rule                | P2  | M    | backlog |
 | 02  | `i18n-leftovers`     | fix   | Move hardcoded text to `t()`: `cli.py` hints, `[no soportado]` in wizard | Breaks the es/en rule: English hints for Spanish users, and the reverse                 | P2  | S    | backlog |
-| 03  | `ci-on-push`         | ci    | Run `pre-release.sh --no-live` on every push and PR                      | Tests only run on tags today, so a failure shows up at release time                     | P2  | S    | done    |
+| 03  | `ci-on-push`         | ci    | Run `pre-release.sh --no-live` on every push and PR                      | Tests only run on tags today, so a failure shows up at release time                     | P2  | S    | shipped 0.2.0 |
 | 04  | `stale-docs`         | docs  | Update `CONTRIBUTING.md` and `docs/index.html`                           | They still describe the Bash prototype (`bin/download-media`, "Bash wrapper")           | P2  | S    | backlog |
 | 05  | `format-baseline`    | style | Format the 8 files `ruff format` flags, then enforce it in the gate      | `AGENTS.md` requires formatting and the gate can't check it yet                         | P3  | S    | backlog |
 | 06  | `wizard-ig-cookies`  | fix   | Stop asking for cookies up front on Instagram                            | With `curl_cffi`, public posts download without them                                    | P3  | S    | backlog |
@@ -31,6 +31,6 @@ Rows are added at the end. Finished rows stay: they are the record.
 
 ## Next release
 
-**0.2.0, before any new item.** Everything for it is already on `main`: the keyring, carousel, `-p` and `-l` fixes, `curl_cffi`, and `ci-on-push`. It is a minor bump because `AGENTS.md` counts new messages as minor: there are 4 new ones, and `--cookies` now takes `BROWSER[+KEYRING]`. Nothing is breaking.
+**0.2.0 shipped on 2026-11-06.** It carried the keyring, carousel, `-p` and `-l` fixes, `curl_cffi`, and `ci-on-push`. It was a minor bump because `AGENTS.md` counts new messages as minor: there were 4 new ones, and `--cookies` now takes `BROWSER[+KEYRING]`. Nothing was breaking.
 
-**After it:** `equivalent-direct` first, then `workflow-pins` and `i18n-leftovers`. That is 0.3.0, since `i18n-leftovers` adds messages.
+**Next:** `equivalent-direct` first, then `workflow-pins` and `i18n-leftovers`. That is 0.3.0, since `i18n-leftovers` adds messages.
