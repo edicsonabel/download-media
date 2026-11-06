@@ -119,9 +119,13 @@ reaches the cookie fallback. yt-dlp downloads carousels even with `noplaylist`,
 so single mode names their items with `[id]`. A run only counts as done if
 something was saved; `-p` must not report success on a total failure.
 
-After every run (cancelled or successful) the equivalent direct-mode command
-is printed (`equivalent.py`), so the user can repeat the operation without the
-wizard. It omits flags whose values match the defaults.
+After every run that reached the download, whether it worked or not, the
+equivalent direct-mode command is printed (`equivalent.py`), so the user can
+repeat it without the wizard or any prompt. It always carries `-y`, and
+otherwise omits flags whose values match the defaults. URLs that ended in
+different playlist modes get one command each. Nothing is printed when the run
+was cancelled before downloading: a cancelled wizard only holds half-made
+choices.
 
 ## Development
 

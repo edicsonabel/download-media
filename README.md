@@ -17,7 +17,7 @@ Supports **1800+ sites** through yt-dlp: YouTube, Twitter/X, Instagram, TikTok, 
 - **History** — every successful download is logged at `~/.local/state/download-media/history.log`.
 - **Localized output folders** — respects your XDG user dirs (`Vídeos`, `Música`, `Movies`, custom paths on other disks, etc.).
 - **Bilingual UI (es/en)** — chosen automatically from `$LANG`.
-- **Equivalent command hint** — after every wizard run, prints the exact direct-mode command that reproduces the same download.
+- **Equivalent command hint** — after every download, prints the exact direct-mode command that reproduces it.
 
 ## Installation
 
