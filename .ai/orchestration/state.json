@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "updated": "2026-11-06T12:43:11-04:00",
+  "updated": "2026-11-06T12:48:26-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
       "title": "Run the gate on every push and PR",
-      "stage": "qa_review",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "integration",
+      "status": "in_progress",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/03-ci-on-push.md",
       "branch": "feature/ci-on-push",
       "worktree": ".worktrees/feature-ci-on-push",
@@ -56,6 +56,13 @@
           "result": "approved",
           "at": "2026-11-06T12:43:11-04:00",
           "note": "Criteria 1-8 hold, no findings. Criterion 9 open until main is pushed. Planner follow-ups: equivalent command drops -y; elif in hint has a pre-existing test gap."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T12:48:26-04:00",
+          "note": "Merge approved. Push of main to origin after the merge also approved, for criterion 9."
         }
       ]
     }
