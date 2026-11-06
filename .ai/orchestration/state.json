@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T19:11:37-04:00",
+  "updated": "2026-11-06T19:26:06-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -145,8 +145,8 @@
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
       "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
       "worktree": ".worktrees/fix-equivalent-direct",
@@ -159,8 +159,12 @@
         "317c2d3"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor cli.py:285 --playlist-items 9 says No items are downloadable. Cancelling.",
+          "minor cli.py:289 --playlist-items 2,9 reports Done with item 9 dropped silently",
+          "minor downloader.py:62 --playlist-items 2 on a plain video saves NA - name and reports Done"
+        ]
       },
       "history": [
         {
@@ -211,6 +215,13 @@
           "result": "done",
           "at": "2026-11-06T19:11:37-04:00",
           "note": "Round 1 findings closed. 477 passed, 1 xfailed (opus). Mutation on the helper 9/9. Planner follow-up: values starting with = fail zsh expansion on replay; no useful value of either flag starts with =, so not sent back. Human will be told at the merge point."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-06T19:26:06-04:00",
+          "note": "Gate passes, 477 passed, 1 xfailed. Real command replay across wizard, direct, -y and --playlist-items. Three minor findings. Planner follow-ups: the three findings, subtitles never embedded (downloader.py:123 overwrites :85), wizard refuses generic video pages (probe.py:153), README promises completions and a manpage, CONTRIBUTING.md:128 line about the printed command, --help is English only. Release notes should mention --play abbreviations now exit 2."
         }
       ]
     }
