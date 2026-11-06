@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T12:54:51-04:00",
+  "updated": "2026-11-06T15:44:49-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -78,6 +78,27 @@
           "result": "validated",
           "at": "2026-11-06T12:54:51-04:00",
           "note": "All 9 criteria hold. First GitHub run 42255972802 succeeded on c64688d. Only the main-push event has been observed on GitHub."
+        }
+      ]
+    },
+    "release/0.2.0": {
+      "type": "release",
+      "title": "Release 0.2.0",
+      "stage": "preparation",
+      "status": "in_progress",
+      "next_agent": "release-manager",
+      "doc": null,
+      "branch": null,
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "preparation",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T15:44:49-04:00",
+          "note": "Human asked to start /release 0.2.0. Version is explicit: minor, per AGENTS.md (new messages, wider --cookies syntax). Publishing still needs its own approval."
         }
       ]
     }
