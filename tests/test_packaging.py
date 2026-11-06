@@ -15,13 +15,15 @@ from download_media.i18n import _MESSAGES
 ROOT = Path(__file__).resolve().parent.parent
 PKGBUILD = (ROOT / "PKGBUILD").read_text(encoding="utf-8")
 PYPROJECT = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+LANDING = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 
 
-def test_version_is_the_same_in_all_three_places() -> None:
+def test_version_is_the_same_in_all_four_places() -> None:
     pkgver = re.search(r"^pkgver=(.+)$", PKGBUILD, re.MULTILINE)
     assert pkgver is not None
     assert f'version = "{__version__}"' in PYPROJECT
     assert pkgver.group(1) == __version__
+    assert f">v{__version__} ·" in LANDING
 
 
 def test_pkgbuild_declares_runtime_dependencies() -> None:
