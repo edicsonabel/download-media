@@ -1,6 +1,6 @@
 # 03 — Run the gate on every push and PR
 
-Status: draft
+Status: approved
 Item: `feature/ci-on-push`
 
 ## Problem
@@ -186,7 +186,7 @@ No download check is needed: no download path changes. The equivalent here is th
 
 ## Open decisions
 
-The design above is written for the recommended option in each case. The human's answer can change it.
+Resolved on approval: the human chose option A in D1, D2 and D3.
 
 **D1. Pin `ruff` and `mypy`?** This is what made the gate pass locally and fail on a fresh install.
 
