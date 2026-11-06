@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "updated": "2026-11-06T12:37:36-04:00",
+  "updated": "2026-11-06T12:43:11-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
       "title": "Run the gate on every push and PR",
       "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/03-ci-on-push.md",
       "branch": "feature/ci-on-push",
       "worktree": ".worktrees/feature-ci-on-push",
@@ -18,7 +18,10 @@
         "408a314",
         "935db70"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -46,6 +49,13 @@
           "result": "done",
           "at": "2026-11-06T12:37:36-04:00",
           "note": "Mutation check 13/13. Spec criterion 7 amended to allow added tests. Planner follow-up: nothing protects set -e in scripts/pre-release.sh."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-06T12:43:11-04:00",
+          "note": "Criteria 1-8 hold, no findings. Criterion 9 open until main is pushed. Planner follow-ups: equivalent command drops -y; elif in hint has a pre-existing test gap."
         }
       ]
     }
