@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from download_media.cli import build_parser, options_from_args
 
 
@@ -239,6 +241,15 @@ def test_hint_for_missing_secretstorage(capsys) -> None:
 def test_hint_suggests_cookies_for_auth_errors(capsys) -> None:
     assert "--cookies <browser>" in _hint(capsys, "Login required", [])
     assert "--cookies <browser>" not in _hint(capsys, "Login required", ["--cookies", "firefox"])
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Sign in to confirm you're not a bot", "Login required", "This video is private"],
+)
+def test_every_auth_error_hints_cookies_only_without_them(capsys, message: str) -> None:
+    assert "--cookies <browser>" in _hint(capsys, message, [])
+    assert _hint(capsys, message, ["--cookies", "firefox"]) == ""
 
 
 def test_hint_stays_quiet_for_unrelated_errors(capsys) -> None:
