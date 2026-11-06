@@ -26,7 +26,7 @@ from .config import (
     PlaylistMode,
 )
 from .cookies import browser_of, parse_spec, uses_keyring, ydl_cookies
-from .downloader import build_ydl_opts, download, list_formats
+from .downloader import DownloadResult, build_ydl_opts, download, list_formats
 from .i18n import is_yes, t
 from .ui import C, die, fmt_bytes, fmt_duration, info, ok, warn
 
@@ -263,7 +263,7 @@ def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
     from yt_dlp.utils import DownloadError
 
     try:
-        rc, cookies_dropped = _download_with_cookie_fallback(url, effective)
+        result, cookies_dropped = _download_with_cookie_fallback(url, effective)
     except DownloadError as exc:
         # yt-dlp already printed the underlying error to stderr; we add a one-line
         # friendly summary so the user knows the program is exiting cleanly, not
@@ -274,14 +274,11 @@ def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
     except KeyboardInterrupt:
         warn(t("cancelled"))
         raise
-    # In playlist mode we set ignoreerrors=True so yt-dlp continues past
-    # un-extractable items (e.g. images in mixed carousels). It then returns a
-    # non-zero count even when the items the user actually wanted succeeded —
-    # treat that as success at the wrapper level. Per-item errors were printed
-    # by yt-dlp itself.
-    if rc != 0 and pmode != "yes":
-        warn(t("failed", url))
-        return False, False
+    if result.skipped and not result.saved:
+        warn(t("no_supported_items"))
+        return False, cookies_dropped
+    if result.skipped or result.failed:
+        warn(t("partial_result", result.saved, result.total, result.skipped, result.failed))
     ok(t("done"))
     history.append(
         url,
@@ -291,10 +288,12 @@ def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
     return True, cookies_dropped
 
 
-def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> tuple[int, bool]:
+def _download_with_cookie_fallback(
+    url: str, opts: DownloadOptions
+) -> tuple[DownloadResult, bool]:
     """Download ``url``; if browser cookies were used and it fails, retry once without them.
 
-    Returns yt-dlp's return code and whether the cookies were dropped.
+    Returns the download result and whether the cookies were dropped.
 
     A partially decrypted cookie jar (keyring issues with Brave/Chrome) can break
     extractors that work fine anonymously — Instagram answers with an empty API
@@ -359,7 +358,14 @@ def main(argv: list[str] | None = None) -> int:
         die(t("url_required"))
 
     if opts.list_formats:
-        return list_formats(opts.urls[0], opts)
+        from yt_dlp.utils import DownloadError
+
+        try:
+            return list_formats(opts.urls[0], opts)
+        except DownloadError as exc:
+            warn(t("failed", opts.urls[0]))
+            _hint_for_download_error(str(exc), opts)
+            return 1
 
     results = [_download_one(url, opts) for url in opts.urls]
     exit_code = 0 if all(ok for ok, _ in results) else 1

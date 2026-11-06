@@ -9,14 +9,43 @@ to extracted metadata.
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from yt_dlp import YoutubeDL
 from yt_dlp.postprocessor.common import PostProcessor
+from yt_dlp.utils import DownloadError
 
 from .config import DownloadOptions
 from .cookies import ydl_cookies
+from .i18n import t
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadResult:
+    """What one URL produced; multi-entry URLs can succeed only in part."""
+
+    saved: int = 0
+    skipped: int = 0
+    failed: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.saved + self.skipped + self.failed
+
+
+class _Ydl(YoutubeDL):  # type: ignore[misc]
+    """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.errors: list[str] = []
+        super().__init__(*args, **kwargs)
+
+    def report_error(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        self.errors.append(str(message))
+        super().report_error(message, *args, **kwargs)
 
 
 def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
@@ -123,6 +152,11 @@ class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
         self._final_ext = final_ext
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        # Carousel items share both title and webpage_url, so the check below
+        # can't tell them apart.
+        if info.get("playlist_index"):
+            info["_name_suffix"] = f" [{info.get('id')}]"
+            return [], info
         path = Path(self._downloader.prepare_filename(info))
         if self._final_ext:
             path = path.with_suffix(f".{self._final_ext}")
@@ -131,21 +165,54 @@ class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
         return [], info
 
 
-def download(url: str, opts: DownloadOptions) -> int:
-    """Download a single URL. Returns 0 on success, non-zero otherwise."""
+def _skip_items_without_media(skipped: list[str]) -> Callable[..., str | None]:
+    """``match_filter`` dropping carousel items yt-dlp has no formats for.
+
+    Instagram images come through as such items, and yt-dlp downloads carousels
+    even with ``noplaylist``. Without this the first image would abort a
+    single-mode run. yt-dlp also calls this with the playlist's own metadata
+    (no ``id``) and for lone URLs (no ``playlist_index``); those must pass, so a
+    lone URL with no formats still fails as an error.
+    """
+
+    def match_filter(info: Any, *, incomplete: Any = False) -> str | None:
+        item = info.get("id")
+        if not (incomplete and item and info.get("playlist_index")):
+            return None
+        if info.get("_type", "video") != "video" or info.get("formats") or info.get("url"):
+            return None
+        skipped.append(str(item))
+        return t("item_no_media", item)
+
+    return match_filter
+
+
+def download(url: str, opts: DownloadOptions) -> DownloadResult:
+    """Download a single URL. Raises ``DownloadError`` if nothing could be saved."""
     output_dir = opts.resolve_output()
     output_dir.mkdir(parents=True, exist_ok=True)
+    saved: list[str] = []
+    skipped: list[str] = []
     ydl_opts = build_ydl_opts(opts, output_dir)
-    with YoutubeDL(ydl_opts) as ydl:
+    ydl_opts["post_hooks"] = [saved.append]
+    ydl_opts["match_filter"] = _skip_items_without_media(skipped)
+    with _Ydl(ydl_opts) as ydl:
         if opts.playlist_mode != "yes":
             final_ext = opts.audio_format if opts.audio_only else None
             ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
-        return int(ydl.download([url]))
+        returncode = int(ydl.download([url]))
+    # ignoreerrors turns a total failure into a bare return code.
+    if returncode != 0 and not saved:
+        raise DownloadError("\n".join(ydl.errors) or t("failed", url))
+    return DownloadResult(saved=len(saved), skipped=len(skipped), failed=len(ydl.errors))
 
 
 def list_formats(url: str, opts: DownloadOptions) -> int:
     """Print available formats for a URL (equivalent to ``yt-dlp -F``)."""
-    ydl_opts: dict[str, Any] = {"listformats": True}
+    ydl_opts: dict[str, Any] = {
+        "listformats": True,
+        "match_filter": _skip_items_without_media([]),
+    }
     if opts.cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
     with YoutubeDL(ydl_opts) as ydl:
