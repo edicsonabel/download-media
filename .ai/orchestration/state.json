@@ -1,5 +1,36 @@
 {
   "version": 1,
-  "updated": null,
-  "items": {}
+  "updated": "2026-11-06T12:20:21-04:00",
+  "items": {
+    "feature/ci-on-push": {
+      "type": "feature",
+      "title": "Run the gate on every push and PR",
+      "stage": "development",
+      "status": "in_progress",
+      "next_agent": "developer",
+      "doc": ".ai/specs/03-ci-on-push.md",
+      "branch": "feature/ci-on-push",
+      "worktree": ".worktrees/feature-ci-on-push",
+      "commits": [
+        "4cf974b"
+      ],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-06T12:15:08-04:00",
+          "note": "Spec needs decisions D1-D3. Architect briefly corrupted core.filemode in .git/config and restored it."
+        },
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T12:20:21-04:00",
+          "note": "D1, D2 and D3 option A. Pipeline change approved: state.json is committed by the orchestrator. Planner follow-ups at end of run: Python 3.10 e2e failures, Node 20 actions in deploy workflows, branch protection."
+        }
+      ]
+    }
+  }
 }
