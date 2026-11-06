@@ -15,6 +15,8 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 
+from .cookies import ydl_cookies
+
 
 class ContentKind(str, Enum):
     SINGLE_VIDEO = "video"
@@ -197,7 +199,7 @@ def probe(url: str, cookies_browser: str | None = None) -> Probe:
         "logger": _SilentLogger(),
     }
     if cookies_browser:
-        ydl_opts["cookiesfrombrowser"] = (cookies_browser,)
+        ydl_opts["cookiesfrombrowser"] = ydl_cookies(cookies_browser)
 
     try:
         with YoutubeDL(ydl_opts) as ydl:

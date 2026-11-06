@@ -16,7 +16,6 @@ from . import __version__, equivalent, history, selection, wizard
 from .clipboard import read_clipboard
 from .config import (
     AUDIO_FORMATS,
-    BROWSERS,
     DEFAULT_AUDIO_FORMAT,
     DEFAULT_QUALITY,
     DEFAULT_SUB_LANGS,
@@ -26,6 +25,7 @@ from .config import (
     DownloadOptions,
     PlaylistMode,
 )
+from .cookies import browser_of, parse_spec, uses_keyring, ydl_cookies
 from .downloader import build_ydl_opts, download, list_formats
 from .i18n import is_yes, t
 from .ui import C, die, fmt_bytes, fmt_duration, info, ok, warn
@@ -91,8 +91,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     p.add_argument(
-        "--cookies", choices=BROWSERS, dest="cookies_browser",
-        help="Use cookies from this browser (firefox, brave, chrome, ...).",
+        "--cookies", type=parse_spec, dest="cookies_browser", metavar="BROWSER[+KEYRING]",
+        help="Use cookies from this browser (firefox, brave, chrome, ...). The keyring is "
+        "detected from the browser's flags file; force one with e.g. brave+gnomekeyring.",
     )
 
     p.add_argument(
@@ -168,7 +169,7 @@ def _show_preview(url: str, opts: DownloadOptions) -> bool:
         "skip_download": True,
     }
     if opts.cookies_browser:
-        ydl_opts["cookiesfrombrowser"] = (opts.cookies_browser,)
+        ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
     try:
         with YoutubeDL(ydl_opts) as ydl:
             data = ydl.extract_info(url, download=False)
@@ -327,6 +328,8 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
     elif "sign in to confirm you" in msg or "login required" in msg or "private" in msg:
         if not opts.cookies_browser:
             warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
+    if opts.cookies_browser and uses_keyring(opts.cookies_browser):
+        warn(t("cookies_keyring_hint", browser_of(opts.cookies_browser)))
 
 
 # ---------------------------------------------------------------------------

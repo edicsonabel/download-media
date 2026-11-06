@@ -27,6 +27,7 @@ from .config import (
     DownloadOptions,
     xdg_dir,
 )
+from .cookies import browser_of
 from .i18n import LANG, is_yes, t
 from .probe import (
     ContentKind,
@@ -183,14 +184,15 @@ def step_cookies(opts: DownloadOptions) -> None:
         _opt(str(i), browser)
     _back_opt()
     _cancel_opt()
-    if opts.cookies_browser and opts.cookies_browser in BROWSERS:
-        default = str(BROWSERS.index(opts.cookies_browser) + 2)
-    else:
-        default = "1"
+    current = browser_of(opts.cookies_browser) if opts.cookies_browser else None
+    default = str(BROWSERS.index(current) + 2) if current in BROWSERS else "1"
     valid = [str(i) for i in range(1, len(BROWSERS) + 2)]
     choice = _read_choice(default, valid)
     n = int(choice)
-    opts.cookies_browser = None if n == 1 else BROWSERS[n - 2]
+    if n == 1:
+        opts.cookies_browser = None
+    elif BROWSERS[n - 2] != current:  # Same browser keeps its explicit +keyring.
+        opts.cookies_browser = BROWSERS[n - 2]
 
 
 def step_type(opts: DownloadOptions) -> None:

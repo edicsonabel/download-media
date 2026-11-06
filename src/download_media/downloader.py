@@ -16,6 +16,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.postprocessor.common import PostProcessor
 
 from .config import DownloadOptions
+from .cookies import ydl_cookies
 
 
 def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
@@ -43,7 +44,7 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
         ydl["noplaylist"] = True
 
     if opts.cookies_browser:
-        ydl["cookiesfrombrowser"] = (opts.cookies_browser,)
+        ydl["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
 
     if opts.subs:
         ydl.update(
@@ -146,6 +147,6 @@ def list_formats(url: str, opts: DownloadOptions) -> int:
     """Print available formats for a URL (equivalent to ``yt-dlp -F``)."""
     ydl_opts: dict[str, Any] = {"listformats": True}
     if opts.cookies_browser:
-        ydl_opts["cookiesfrombrowser"] = (opts.cookies_browser,)
+        ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
     with YoutubeDL(ydl_opts) as ydl:
         return int(ydl.download([url]))
