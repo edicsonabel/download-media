@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T15:58:45-04:00",
+  "updated": "2026-11-06T16:00:25-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -85,8 +85,8 @@
       "type": "release",
       "title": "Release 0.2.0",
       "stage": "publishing",
-      "status": "in_progress",
-      "next_agent": "release-manager",
+      "status": "blocked",
+      "next_agent": "human",
       "doc": null,
       "branch": null,
       "worktree": null,
@@ -115,6 +115,13 @@
           "result": "approved",
           "at": "2026-11-06T15:58:45-04:00",
           "note": "Publishing 0.2.0 approved: bump, tag, push of main and tag, GitHub release, AUR check."
+        },
+        {
+          "stage": "publishing",
+          "agent": "release-manager",
+          "result": "blocked",
+          "at": "2026-11-06T16:00:25-04:00",
+          "note": "Stopped before step 1, nothing published. Active gh account has read-only access to the repo, so gh release create would fail after the tag triggered the AUR deploy. Needs a human decision on the gh account. Planner follow-ups: check gh write access at the start of publishing; version sync is only checked by tests/test_packaging.py; no GitHub release exists for any earlier tag."
         }
       ]
     }
