@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
+import os
 import shlex
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from download_media import cli
-from download_media.config import AUDIO_FORMATS, history_file
+from download_media import cli, i18n
+from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.i18n import t
 
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
+EMPTY = "https://fake.test/empty"
+PRIVATE = "https://fake.test/private"
+VIDEO = "https://fake.test/video"
+VIDEO_B = "https://fake.test/video-b"
+BOTH_ITEMS = ["02 - Clip [v1].mp4", "04 - Clip [v2].mp4"]
 
 
 def names(folder: Path) -> list[str]:
@@ -705,3 +713,636 @@ def test_shell_metacharacters_survive_a_replay(
     code, _ = replay(line)
     assert code == 0
     assert names(folder) == ["Clip.mp4"]
+
+
+@pytest.mark.parametrize(
+    "flags", [(), ("-p",), ("--playlist-items", "1")], ids=["auto", "playlist", "items"]
+)
+def test_empty_playlist_is_a_failure(run: Any, out: Path, flags: tuple[str, ...]) -> None:
+    code, output = run("-y", *flags, EMPTY)
+    assert code == 1
+    assert names(out) == []
+    assert t("no_supported_items") in output
+    assert t("done") not in output
+    assert history_rows() == []
+    assert len(commands(output)) == 1
+
+
+def test_empty_playlist_after_the_preview_is_a_failure(run: Any, out: Path, answers: Any) -> None:
+    answers("")
+    code, output = run(EMPTY)
+    assert code == 1
+    assert names(out) == []
+    assert t("done") not in output
+    assert history_rows() == []
+
+
+def test_empty_playlist_in_the_wizard_is_a_failure(run: Any, out: Path, answers: Any) -> None:
+    # URL, type, quality, container, folder, cookies, then the preview: an empty
+    # playlist probes as unknown content, so the mode stays open until cli.py.
+    answers("", "", "", "", "", "", "")
+    code, output = run("-i", EMPTY)
+    assert code == 1
+    assert names(out) == []
+    assert t("no_supported_items") in output
+    assert t("done") not in output
+    assert history_rows() == []
+
+
+def test_empty_playlist_fails_the_run_but_keeps_the_rest(run: Any, out: Path) -> None:
+    code, output = run("-y", VIDEO, EMPTY)
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    assert output.count(t("done")) == 1
+    assert len(history_rows()) == 1
+    [line] = commands(output)
+    assert shlex.split(line)[-2:] == [VIDEO, EMPTY]
+
+
+@pytest.mark.parametrize(
+    ("flags", "urls"),
+    [
+        ((), ("https://fake.test/merged",)),
+        (("--video-format", "mkv"), ("https://fake.test/merged",)),
+        (("-a",), ("https://fake.test/merged",)),
+        (("-s",), (VIDEO,)),
+        (("-P",), (LIST_URL,)),
+        ((), (VIDEO, VIDEO_B)),
+        (("-a",), (VIDEO, VIDEO_B)),
+        (("-p",), ("https://fake.test/broken-item",)),
+        (("--playlist-items", "2-4"), (CAROUSEL,)),
+        (("--cookies", "brave"), ("https://fake.test/rejects-cookies",)),
+        (("--cookies", "brave", "-p"), ("https://fake.test/rejects-cookies-carousel",)),
+        (("--cookies", "firefox"), ("https://fake.test/needs-cookies",)),
+    ],
+)
+def test_rerun_over_existing_files_is_not_a_false_failure(
+    run: Any, out: Path, flags: tuple[str, ...], urls: tuple[str, ...]
+) -> None:
+    first, _ = run("-y", *flags, *urls)
+    assert first == 0
+    before = names(out)
+    assert before
+    code, output = run("-y", *flags, *urls)
+    assert code == 0
+    assert names(out) == before
+    assert t("no_supported_items") not in output
+    assert output.count(t("done")) == len(urls)
+    assert len(history_rows()) == 2 * len(urls)
+
+
+@pytest.mark.parametrize(
+    "audio_format",
+    [
+        pytest.param(
+            audio_format,
+            marks=pytest.mark.xfail(
+                strict=True,
+                raises=AssertionError,
+                reason="_source_url reads ffprobe's format tags, but ogg keeps them on the stream: "
+                "the rerun takes the old file for another video and saves 'Clip [v1].opus'.",
+            ),
+        )
+        if audio_format == "opus"
+        else audio_format
+        for audio_format in AUDIO_FORMATS
+    ],
+)
+def test_audio_rerun_is_not_a_false_failure(run: Any, out: Path, audio_format: str) -> None:
+    run("-y", "-a", "-f", audio_format, "https://fake.test/video")
+    code, output = run("-y", "-a", "-f", audio_format, "https://fake.test/video")
+    assert code == 0
+    assert names(out) == [f"Clip.{audio_format}"]
+    assert t("no_supported_items") not in output
+
+
+def test_wizard_rerun_is_not_a_false_failure(
+    run: Any, replay: Any, out: Path, answers: Any
+) -> None:
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", "", "", "", "", "", "")
+    _, output = run("-i", CAROUSEL)
+    [line] = commands(output)
+    code, again_output = replay(line)
+    assert code == 0
+    assert names(out) == BOTH_ITEMS
+    assert t("no_supported_items") not in again_output
+    assert len(history_rows()) == 2
+
+
+def test_cookie_retry_that_finds_nothing_is_a_failure(run: Any, out: Path) -> None:
+    url = "https://fake.test/rejects-cookies-carousel"
+    code, output = run("-y", "--cookies", "brave", "--playlist-items", "9", url)
+    assert code == 1
+    assert t("cookies_retry", "brave") in output
+    assert t("no_supported_items") in output
+    assert t("done") not in output
+    assert names(out) == []
+    assert history_rows() == []
+    # Nothing shows the cookies were the problem, so the command keeps them.
+    [line] = commands(output)
+    assert "--cookies" in shlex.split(line)
+
+
+def test_empty_playlist_with_cookies_is_a_failure(run: Any, out: Path) -> None:
+    code, output = run("-y", "--cookies", "firefox", EMPTY)
+    assert code == 1
+    assert t("done") not in output
+    assert names(out) == []
+
+
+def test_selection_survives_the_cookie_retry(run: Any, replay: Any, out: Path, again: Path) -> None:
+    url = "https://fake.test/rejects-cookies-carousel"
+    code, output = run("-y", "--cookies", "brave", "--playlist-items", "2", url)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert "--cookies" not in argv
+    assert argv[argv.index("--playlist-items") + 1] == "2"
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+@pytest.mark.parametrize("spec", ["0", "1,,2", "::0", "2,x", " "])
+def test_bad_item_specs_fail_cleanly(run: Any, out: Path, spec: str) -> None:
+    code, output = run("-y", "--playlist-items", spec, CAROUSEL)
+    assert code == 1
+    assert "Traceback" not in output
+    assert t("done") not in output
+    assert names(out) == []
+    assert history_rows() == []
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == spec
+
+
+@pytest.mark.parametrize(
+    ("spec", "saved"),
+    [
+        ("2", ["02 - Clip [v1].mp4"]),
+        ("2,4", BOTH_ITEMS),
+        ("4,2", BOTH_ITEMS),
+        ("2-4", BOTH_ITEMS),
+        ("2:4", BOTH_ITEMS),
+        ("2::2", BOTH_ITEMS),
+        ("1-2,4", BOTH_ITEMS),
+        ("-1", ["04 - Clip [v2].mp4"]),
+    ],
+)
+def test_item_specs_repeat_elsewhere_and_in_the_same_folder(
+    run: Any, replay: Any, out: Path, again: Path, spec: str, saved: list[str]
+) -> None:
+    code, output = run("-y", "--playlist-items", spec, CAROUSEL)
+    assert code == 0
+    assert names(out) == saved
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == spec
+
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == saved
+
+    code, _ = replay(line)
+    assert code == 0
+    assert names(out) == saved
+
+
+@pytest.mark.parametrize(
+    ("reply", "printed", "saved"),
+    [
+        ("2-4", "2,4", BOTH_ITEMS),
+        ("1-2", "2", ["02 - Clip [v1].mp4"]),
+        ("4, 2", "2,4", BOTH_ITEMS),
+        ("1-4", "2,4", BOTH_ITEMS),
+    ],
+)
+def test_wizard_ranges_repeat_without_their_unsupported_items(
+    run: Any,
+    replay: Any,
+    out: Path,
+    again: Path,
+    answers: Any,
+    reply: str,
+    printed: str,
+    saved: list[str],
+) -> None:
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", reply, "", "", "", "", "")
+    code, output = run("-i", CAROUSEL)
+    assert code == 0
+    assert names(out) == saved
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == printed
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == saved
+    code, _ = replay(line)
+    assert code == 0
+    assert names(out) == saved
+
+
+def test_wizard_carousel_on_defaults_prints_only_the_selection(
+    home: Path,
+    fake_site: list[Any],
+    capfd: pytest.CaptureFixture[str],
+    answers: Any,
+    replay: Any,
+) -> None:
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", "", "", "", "", "", "")
+    assert cli.main([CAROUSEL]) == 0
+    [line] = commands(capfd.readouterr().out)
+    assert line == f"download-media -y --playlist-items 2,4 {CAROUSEL}"
+    code, _ = replay(line)
+    assert code == 0
+    assert names(home / "Videos") == BOTH_ITEMS
+
+
+def test_wizard_audio_selection_repeats(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    # URL, item selection, type, audio format, folder, cookies.
+    answers("", "4", "2", "", "", "")
+    code, output = run("-i", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["04 - Clip [v2].mp3"]
+    [line] = commands(output)
+    assert "-a" in shlex.split(line)
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_wizard_browser_choice_repeats(
+    run: Any, replay: Any, again: Path, fake_site: list[Any], answers: Any
+) -> None:
+    # URL, type, quality, container, folder, cookies, then the preview.
+    answers("", "", "", "", "", "2", "")
+    code, output = run("-i", "https://fake.test/needs-cookies")
+    assert code == 0
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--cookies") + 1] == BROWSERS[0]
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == ["Clip.mp4"]
+
+
+def test_wizard_partial_failure_repeats_the_same_partial_result(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", "", "", "", "", "", "")
+    code, output = run("-i", "https://fake.test/broken-item")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    [line] = commands(output)
+    code, replayed = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out) == ["01 - Clip [v1].mp4"]
+    assert t("partial_result", 1, 2, 0, 1) in replayed
+
+
+def test_wizard_total_failure_prints_the_command(run: Any, out: Path, answers: Any) -> None:
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", "", "", "", "", "", "")
+    code, output = run("-i", "https://fake.test/all-broken")
+    assert code == 1
+    assert names(out) == []
+    assert t("done") not in output
+    [line] = commands(output)
+    assert "https://fake.test/all-broken" in shlex.split(line)
+
+
+def test_wizard_all_replaces_the_playlist_items_flag(run: Any, out: Path, answers: Any) -> None:
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", "all", "", "", "", "", "")
+    code, output = run("-i", "--playlist-items", "2", CAROUSEL)
+    assert code == 0
+    assert names(out) == BOTH_ITEMS
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert "-p" in argv
+    assert "--playlist-items" not in argv
+
+
+def test_items_flag_is_dropped_when_the_wizard_finds_a_single_video(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    # URL, type, quality, container, folder, cookies.
+    answers("", "", "", "", "", "")
+    code, output = run("-i", "--playlist-items", "2", VIDEO)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    [line] = commands(output)
+    assert "--playlist-items" not in shlex.split(line)
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == ["Clip.mp4"]
+
+
+def test_items_flag_survives_a_failed_wizard_probe(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    url = "https://fake.test/rejects-cookies-carousel"
+    # URL, type, quality, container, folder, cookies: no item step without a probe.
+    answers("", "", "", "", "", "")
+    code, output = run("-i", "--cookies", "brave", "--playlist-items", "2", url)
+    assert code == 0
+    assert t("probe_falling_back") in output
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    [line] = commands(output)
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_cancelled_wizard_with_the_items_flag_prints_nothing(run: Any, answers: Any) -> None:
+    answers("", "c")
+    code, output = run("-i", "--playlist-items", "2", CAROUSEL)
+    assert code == 0
+    assert t("equiv_cmd") not in output
+
+
+def test_interactive_with_yes_prints_like_yes(run: Any, answers: Any) -> None:
+    answers()
+    code, output = run("-i", "-y", VIDEO)
+    assert code == 0
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert "-y" in argv
+    assert "-i" not in argv
+
+
+@pytest.mark.parametrize(
+    ("replies", "flag"),
+    [(("2",), "-p"), (("1", ""), "-P")],
+    ids=["all", "single"],
+)
+def test_failed_url_keeps_the_mode_it_resolved_to(
+    run: Any, answers: Any, replies: tuple[str, ...], flag: str
+) -> None:
+    url = f"{PRIVATE}?list=1"
+    answers(*replies)
+    code, output = run(url)
+    assert code == 1
+    assert t("failed", url) in output
+    [line] = commands(output)
+    assert flag in shlex.split(line)
+
+
+def test_failed_url_under_yes_keeps_the_single_mode(run: Any) -> None:
+    code, output = run("-y", f"{PRIVATE}?list=1")
+    assert code == 1
+    [line] = commands(output)
+    assert "-P" in shlex.split(line)
+
+
+def test_url_with_nothing_saved_keeps_the_mode_it_resolved_to(run: Any, answers: Any) -> None:
+    answers("2")
+    code, output = run("https://fake.test/only-images?list=1")
+    assert code == 1
+    assert t("no_supported_items") in output
+    [line] = commands(output)
+    assert "-p" in shlex.split(line)
+
+
+def test_failed_declined_and_saved_urls_in_one_run(run: Any, out: Path, answers: Any) -> None:
+    answers("", "n", "")
+    code, output = run(PRIVATE, VIDEO_B, VIDEO)
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    assert t("failed", PRIVATE) in output
+    assert t("cancelled") in output
+    assert output.count(t("done")) == 1
+    assert len(history_rows()) == 1
+    assert output.count(t("equiv_cmd")) == 1
+    [line] = commands(output)
+    assert shlex.split(line)[-2:] == [PRIVATE, VIDEO]
+
+
+def test_failed_url_in_another_mode_gets_its_own_command(run: Any, out: Path, answers: Any) -> None:
+    url = f"{PRIVATE}?list=1"
+    answers("2", "")
+    code, output = run(url, VIDEO)
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    assert output.count(t("equiv_cmd")) == 1
+    first, second = (shlex.split(line) for line in commands(output))
+    assert "-p" in first
+    assert first[-1] == url
+    assert "-p" not in second
+    assert second[-1] == VIDEO
+
+
+def test_every_url_declined_prints_nothing(run: Any, out: Path, answers: Any) -> None:
+    answers("n", EOFError)
+    code, output = run(VIDEO, LIST_URL)
+    assert code == 1
+    assert names(out) == []
+    assert t("equiv_cmd") not in output
+    assert commands(output) == []
+
+
+def test_question_cancelled_on_one_url_keeps_the_next(run: Any, out: Path, answers: Any) -> None:
+    answers(EOFError, "")
+    code, output = run(LIST_URL, VIDEO)
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    [line] = commands(output)
+    assert shlex.split(line)[-1] == VIDEO
+    assert LIST_URL not in shlex.split(line)
+
+
+def test_cookie_drop_ignores_a_declined_url(
+    run: Any, replay: Any, again: Path, answers: Any
+) -> None:
+    url = "https://fake.test/rejects-cookies"
+    answers("n", "")
+    code, output = run("--cookies", "brave", VIDEO, url)
+    assert code == 1
+    assert t("cookies_retry", "brave") in output
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert "--cookies" not in argv
+    assert VIDEO not in argv
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == ["Clip.mp4"]
+
+
+def test_cookies_stay_when_a_reached_url_failed(run: Any) -> None:
+    code, output = run("-y", "--cookies", "brave", "https://fake.test/rejects-cookies", PRIVATE)
+    assert code == 1
+    [line] = commands(output)
+    assert "--cookies" in shlex.split(line)
+
+
+def test_cookies_stay_when_a_reached_url_needed_them(run: Any) -> None:
+    urls = ("https://fake.test/rejects-cookies", "https://fake.test/needs-cookies")
+    code, output = run("-y", "--cookies", "brave", *urls)
+    assert code == 0
+    [line] = commands(output)
+    assert "--cookies" in shlex.split(line)
+
+
+def test_cookie_drop_applies_to_every_mode(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    urls = (
+        "https://fake.test/rejects-cookies-carousel?list=1",
+        "https://fake.test/rejects-cookies",
+    )
+    answers("2", "")
+    code, output = run("--cookies", "brave", *urls)
+    assert code == 0
+    lines = commands(output)
+    assert len(lines) == 2
+    for line in lines:
+        assert "--cookies" not in shlex.split(line)
+        code, _ = replay(line, again)
+        assert code == 0
+    assert names(again) == names(out)
+
+
+def test_cookies_stay_in_every_mode_when_one_url_needed_them(run: Any, answers: Any) -> None:
+    answers("2", "")
+    urls = ("https://fake.test/rejects-cookies?list=1", "https://fake.test/needs-cookies")
+    code, output = run("--cookies", "brave", *urls)
+    assert code == 0
+    lines = commands(output)
+    assert len(lines) == 2
+    assert all("--cookies" in shlex.split(line) for line in lines)
+
+
+def test_four_urls_in_two_modes_keep_their_order(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    other = "https://fake.test/broken-item?list=1"
+    answers("2", "", "2", "")
+    code, output = run(LIST_URL, VIDEO, other, VIDEO_B)
+    assert code == 0
+    assert output.count(t("equiv_cmd")) == 1
+    first, second = commands(output)
+    assert "-p" in shlex.split(first)
+    assert shlex.split(first)[-2:] == [LIST_URL, other]
+    assert shlex.split(second)[-2:] == [VIDEO, VIDEO_B]
+    assert "-p" not in shlex.split(second)
+    for line in (first, second):
+        code, _ = replay(line, again)
+        assert code == 0
+    assert names(again) == names(out)
+
+
+def test_first_mode_seen_prints_first_whichever_it_is(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    answers("", "2", "")
+    code, output = run(VIDEO, LIST_URL, VIDEO_B)
+    assert code == 0
+    assert output.count(t("equiv_cmd")) == 1
+    first, second = (shlex.split(line) for line in commands(output))
+    assert first[-2:] == [VIDEO, VIDEO_B]
+    assert "-p" not in first
+    assert second[-1] == LIST_URL
+    assert "-p" in second
+
+
+def test_single_answer_next_to_a_plain_url_shares_one_flagged_command(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    other = "https://fake.test/broken-item?list=1"
+    answers("1", "", "", "2")
+    code, output = run(LIST_URL, VIDEO_B, other)
+    assert code == 0
+    first, second = commands(output)
+    assert "-P" in shlex.split(first)
+    assert shlex.split(first)[-2:] == [LIST_URL, VIDEO_B]
+    assert "-p" in shlex.split(second)
+    for line in (first, second):
+        code, _ = replay(line, again)
+        assert code == 0
+    assert names(again) == names(out)
+
+
+@pytest.mark.parametrize(
+    ("lang", "header", "nothing", "done"),
+    [
+        (
+            "es",
+            "Comando equivalente para repetir esta descarga:",
+            "Ningún item es descargable.",
+            "Listo.",
+        ),
+        (
+            "en",
+            "Equivalent command to repeat this download:",
+            "No items are downloadable.",
+            "Done.",
+        ),
+    ],
+)
+def test_what_the_user_reads_in_both_languages(
+    run: Any,
+    answers: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    lang: str,
+    header: str,
+    nothing: str,
+    done: str,
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output = run("-y", "--playlist-items", "9", CAROUSEL)
+    assert code == 1
+    assert nothing in output
+    assert done not in output
+    assert output.count(header) == 1
+
+    answers("2", "")
+    code, output = run(LIST_URL, VIDEO)
+    assert code == 0
+    assert output.count(header) == 1
+    assert len(commands(output)) == 2
+
+
+@pytest.mark.parametrize(
+    ("lang", "header"),
+    [
+        ("es_ES.UTF-8", "Comando equivalente para repetir esta descarga:"),
+        ("en_US.UTF-8", "Equivalent command to repeat this download:"),
+    ],
+)
+def test_real_process_repeats_a_wizard_run_with_stdin_closed(
+    media_url: str, tmp_path: Path, lang: str, header: str
+) -> None:
+    # The reproduction in the spec: no fake extractor, no fake input().
+    def process(argv: list[str], home: Path, stdin: Any) -> subprocess.CompletedProcess[str]:
+        home.mkdir()
+        env = {**os.environ, "HOME": str(home), "LANG": lang}
+        program = "import sys; from download_media.cli import main; sys.exit(main())"
+        return subprocess.run(
+            [sys.executable, "-c", program, *argv],
+            env=env,
+            input=stdin,
+            stdin=None if stdin else subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    url = f"{media_url}/tiny.mp4"
+    first = process([url], tmp_path / "first", "\n" * 8)
+    assert first.returncode == 0, first.stderr
+    assert header in first.stdout
+    [line] = commands(first.stdout)
+    assert line == f"download-media -y {url}"
+    assert names(tmp_path / "first" / "Videos") == ["tiny.mp4"]
+
+    second = process(shlex.split(line)[1:], tmp_path / "second", None)
+    assert second.returncode == 0, second.stderr
+    assert names(tmp_path / "second" / "Videos") == ["tiny.mp4"]

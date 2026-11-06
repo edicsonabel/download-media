@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -100,6 +102,49 @@ def test_free_text_items_stay_one_value() -> None:
     opts = parse_back(cmd)
     assert opts.urls == ["https://x"]
     assert opts.playlist_items == "1, 3"
+
+
+@pytest.mark.parametrize("items", ["1:3", "::2", "1-3,5", "2,4"])
+def test_item_specs_need_no_quotes_and_stay_intact(items: str) -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], playlist_mode="yes", playlist_items=items))
+    assert parse_back(cmd).playlist_items == items
+
+
+def test_shell_metacharacters_in_items_stay_one_value() -> None:
+    items = "1;rm $x'"
+    cmd = build(DownloadOptions(urls=["https://x"], playlist_mode="yes", playlist_items=items))
+    opts = parse_back(cmd)
+    assert opts.urls == ["https://x"]
+    assert opts.playlist_items == items
+
+
+def test_empty_items_on_the_command_line_mean_the_whole_playlist() -> None:
+    args = build_parser().parse_args(["--playlist-items", "", "https://x"])
+    assert build(options_from_args(args)) == "download-media -y -p https://x"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=SystemExit,
+    reason="A value starting with - is printed as its own token, and argparse takes it for a "
+    "flag: exit 2 on replay. Python 3.14 lets '-2:' through, 3.10-3.13 don't.",
+)
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"playlist_mode": "yes", "playlist_items": "-2:"},
+        {"playlist_mode": "yes", "playlist_items": "-5::2"},
+        {"subs": True, "sub_langs": "-live_chat"},
+    ],
+    ids=["items-tail", "items-step", "sub-langs"],
+)
+def test_values_starting_with_a_dash_can_be_parsed_back(fields: dict[str, Any]) -> None:
+    argv = shlex.split(build(DownloadOptions(urls=["https://x"], **fields)))[1:]
+    parser = build_parser()
+    # What argparse uses before 3.14, and CI runs 3.12.
+    parser._negative_number_matcher = re.compile(r"^-\d+$|^-\d*\.\d+$")
+    opts = options_from_args(parser.parse_args(argv))
+    assert all(getattr(opts, name) == value for name, value in fields.items())
 
 
 def test_items_are_ignored_outside_playlist_mode() -> None:

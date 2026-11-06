@@ -202,6 +202,25 @@ def test_equivalent_groups_urls_by_mode_in_first_seen_order(monkeypatch, capsys)
     ]
 
 
+def test_playlist_items_excludes_both_playlist_flags(capsys) -> None:
+    import pytest
+
+    for flag in ("-p", "-P"):
+        with pytest.raises(SystemExit) as exc:
+            parse([flag, "--playlist-items", "2", "http://x"])
+        assert exc.value.code == 2
+        assert "--playlist-items" in capsys.readouterr().err
+
+
+def test_playlist_items_equals_form_is_an_intent_flag() -> None:
+    from download_media import cli
+
+    argv = ["--playlist-items=2", "http://x"]
+    assert cli.should_run_wizard(cli.build_parser().parse_args(argv), argv) is False
+    assert parse(argv).playlist_items == "2"
+    assert parse(argv).playlist_mode == "yes"
+
+
 def test_cookies_accepts_keyring_spec() -> None:
     assert parse(["--cookies", "brave+gnomekeyring", "http://x"]).cookies_browser == (
         "brave+gnomekeyring"

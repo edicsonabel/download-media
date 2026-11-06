@@ -123,6 +123,19 @@ class FakeSiteIE(InfoExtractor):
             ],
         }
 
+    def _merged_video(self, item: str, page: str) -> dict[str, Any]:
+        """Separate video and audio streams, like most of YouTube: ffmpeg merges them."""
+        url = f"{self.media_url}/tiny.mp4"
+        return {
+            "id": item,
+            "title": "Clip",
+            "webpage_url": f"https://fake.test/{page}",
+            "formats": [
+                {"format_id": "v", "url": url, "ext": "mp4", "vcodec": "h264", "acodec": "none"},
+                {"format_id": "a", "url": url, "ext": "mp4", "vcodec": "none", "acodec": "aac"},
+            ],
+        }
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -141,7 +154,13 @@ class FakeSiteIE(InfoExtractor):
             return self._video("v2", page="video-b")
         if page == "image":
             return self._image("i1")
-        if page == "carousel":
+        if page == "merged":
+            return self._merged_video("v1", "merged")
+        if page == "empty":
+            return self.playlist_result([], "post", "Post")
+        if page == "rejects-cookies-carousel" and cookies:
+            raise ExtractorError("Failed to parse JSON", expected=True)
+        if page in ("carousel", "rejects-cookies-carousel"):
             entries = [
                 self._image("i1"),
                 self._video("v1"),
