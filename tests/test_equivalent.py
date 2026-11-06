@@ -2,20 +2,32 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
+import pytest
+
+from download_media.cli import build_parser, options_from_args, should_run_wizard
 from download_media.config import DownloadOptions
 from download_media.equivalent import build
 
 
-def test_minimal_video_emits_only_url() -> None:
+def parse_back(cmd: str) -> DownloadOptions:
+    argv = shlex.split(cmd)
+    assert argv[0] == "download-media"
+    args = build_parser().parse_args(argv[1:])
+    assert should_run_wizard(args, argv[1:]) is False
+    return options_from_args(args)
+
+
+def test_minimal_video_stays_direct() -> None:
     cmd = build(DownloadOptions(urls=["https://example.com/v"]))
-    assert cmd == "download-media https://example.com/v"
+    assert cmd == "download-media -y https://example.com/v"
 
 
 def test_audio_only_with_default_format() -> None:
     cmd = build(DownloadOptions(urls=["https://x"], audio_only=True))
-    assert cmd == "download-media -a https://x"
+    assert cmd == "download-media -y -a https://x"
 
 
 def test_non_default_quality_emitted() -> None:
@@ -45,10 +57,21 @@ def test_subs_short_form_when_default_langs() -> None:
     assert "--sub-langs" not in cmd
 
 
-def test_subs_with_custom_langs_uses_long_form() -> None:
-    cmd = build(DownloadOptions(urls=["https://x"], subs=True, sub_langs="fr,de"))
-    assert "--sub-langs fr,de" in cmd
-    assert " -s " not in cmd
+def test_subs_with_custom_langs_stay_enabled() -> None:
+    opts = parse_back(build(DownloadOptions(urls=["https://x"], subs=True, sub_langs="fr,de")))
+    assert opts.subs is True
+    assert opts.sub_langs == "fr,de"
+
+
+def test_sub_langs_with_a_space_stay_one_value() -> None:
+    opts = parse_back(build(DownloadOptions(urls=["https://x"], subs=True, sub_langs="fr, de")))
+    assert opts.urls == ["https://x"]
+    assert opts.sub_langs == "fr, de"
+
+
+def test_sub_langs_without_subs_are_not_emitted() -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], subs=False, sub_langs="fr,de"))
+    assert "--sub-langs" not in cmd
 
 
 def test_playlist_modes_emit_short_flags() -> None:
@@ -58,13 +81,39 @@ def test_playlist_modes_emit_short_flags() -> None:
     assert " -P " in no
 
 
+def test_selected_items_replace_the_playlist_flag() -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], playlist_mode="yes", playlist_items="2,4"))
+    assert cmd == "download-media -y --playlist-items 2,4 https://x"
+    opts = parse_back(cmd)
+    assert opts.playlist_mode == "yes"
+    assert opts.playlist_items == "2,4"
+
+
+@pytest.mark.parametrize("items", [None, ""])
+def test_no_selection_means_the_whole_playlist(items: str | None) -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], playlist_mode="yes", playlist_items=items))
+    assert cmd == "download-media -y -p https://x"
+
+
+def test_free_text_items_stay_one_value() -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], playlist_mode="yes", playlist_items="1, 3"))
+    opts = parse_back(cmd)
+    assert opts.urls == ["https://x"]
+    assert opts.playlist_items == "1, 3"
+
+
+def test_items_are_ignored_outside_playlist_mode() -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], playlist_mode="no", playlist_items="2"))
+    assert "--playlist-items" not in cmd
+
+
 def test_no_playlist_flag_omitted_for_plain_urls() -> None:
     cmd = build(DownloadOptions(urls=["https://youtube.com/watch?v=1"], playlist_mode="no"))
     assert "-P" not in cmd
 
 
 def test_no_playlist_flag_kept_for_instagram_posts() -> None:
-    # Could be a carousel: without -P, direct mode would ask "single or all?".
+    # Could be a carousel: -P records that this run took it as a single item.
     cmd = build(DownloadOptions(urls=["https://www.instagram.com/p/X/"], playlist_mode="no"))
     assert " -P " in cmd
 
@@ -73,6 +122,14 @@ def test_urls_are_quoted_when_special_chars_present() -> None:
     cmd = build(DownloadOptions(urls=["https://x?v=1&t=2"]))
     # shlex.quote wraps URL in single quotes due to ? and &
     assert "'https://x?v=1&t=2'" in cmd
+
+
+def test_shell_metacharacters_round_trip() -> None:
+    url = "https://x/a b?c=1&d='e'$f"
+    folder = Path("/tmp/it's a $dir & more")
+    opts = parse_back(build(DownloadOptions(urls=[url], output=folder)))
+    assert opts.urls == [url]
+    assert opts.output == folder
 
 
 def test_custom_output_path_emitted() -> None:

@@ -11,6 +11,7 @@ import argparse
 import sys
 from dataclasses import replace
 from pathlib import Path
+from typing import NamedTuple
 
 from . import __version__, equivalent, history, selection, wizard
 from .clipboard import read_clipboard
@@ -230,18 +231,20 @@ def _resolve_playlist_for_direct_mode(
     return "no", None
 
 
-def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
-    """Run the full per-URL pipeline.
+class _Outcome(NamedTuple):
+    ok: bool
+    cookies_dropped: bool  # It took retrying without the requested browser cookies.
+    mode: PlaylistMode | None  # None: cancelled before the download started.
 
-    Returns ``(ok, cookies_dropped)``: whether it succeeded, and whether that
-    took retrying without the requested browser cookies.
-    """
+
+def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
+    """Run the full per-URL pipeline."""
     # Wizard mode already resolved playlist + items in opts.
     if opts.playlist_mode == "auto":
         pl = _resolve_playlist_for_direct_mode(url, opts)
         if pl is None:
             warn(t("cancelled"))
-            return False, False
+            return _Outcome(False, False, None)
         pmode, items = pl
     else:
         pmode = opts.playlist_mode
@@ -253,7 +256,7 @@ def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
     )
     if direct_single and not _show_preview(url, opts):
         warn(t("cancelled"))
-        return False, False
+        return _Outcome(False, False, None)
 
     effective = replace(opts, playlist_mode=pmode, playlist_items=items)
 
@@ -274,13 +277,13 @@ def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
         # crashing.
         warn(t("failed", url))
         _hint_for_download_error(str(exc), opts)
-        return False, False
+        return _Outcome(False, False, pmode)
     except KeyboardInterrupt:
         warn(t("cancelled"))
         raise
     if not result.saved:
         warn(t("no_supported_items"))
-        return False, cookies_dropped
+        return _Outcome(False, cookies_dropped, pmode)
     if result.skipped or result.failed:
         warn(t("partial_result", result.saved, result.total, result.skipped, result.failed))
     ok(t("done"))
@@ -289,7 +292,7 @@ def _download_one(url: str, opts: DownloadOptions) -> tuple[bool, bool]:
         "audio" if opts.audio_only else "video",
         effective.resolve_output(),
     )
-    return True, cookies_dropped
+    return _Outcome(True, cookies_dropped, pmode)
 
 
 def _download_with_cookie_fallback(
@@ -336,6 +339,30 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
         warn(t("cookies_keyring_hint", browser_of(opts.cookies_browser)))
 
 
+def _print_equivalent(opts: DownloadOptions, outcomes: list[_Outcome]) -> None:
+    """Print how to repeat the URLs that reached the download, one command per mode."""
+    attempted: list[_Outcome] = []
+    by_mode: dict[PlaylistMode, list[str]] = {}
+    for url, outcome in zip(opts.urls, outcomes, strict=True):
+        if outcome.mode is not None:
+            attempted.append(outcome)
+            by_mode.setdefault(outcome.mode, []).append(url)
+    if not attempted:
+        return
+
+    # If every URL only worked once the cookies were dropped, repeating the
+    # command with --cookies would just fail and retry again.
+    shown = opts
+    if opts.cookies_browser and all(o.ok and o.cookies_dropped for o in attempted):
+        shown = replace(opts, cookies_browser=None)
+
+    print()
+    print(f"{C.BOLD}{C.CYAN}{t('equiv_cmd')}{C.RESET}")
+    for mode, urls in by_mode.items():
+        command = equivalent.build(replace(shown, urls=urls, playlist_mode=mode))
+        print(f"  {C.DIM}{command}{C.RESET}")
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -372,20 +399,9 @@ def main(argv: list[str] | None = None) -> int:
             _hint_for_download_error(str(exc), opts)
             return 1
 
-    results = [_download_one(url, opts) for url in opts.urls]
-    exit_code = 0 if all(ok for ok, _ in results) else 1
-
-    # If every URL only worked once the cookies were dropped, repeating the
-    # command with --cookies would just fail and retry again.
-    shown = opts
-    if opts.cookies_browser and all(ok and dropped for ok, dropped in results):
-        shown = replace(opts, cookies_browser=None)
-
-    # Equivalent command hint (so the user can repeat without the wizard)
-    print()
-    print(f"{C.BOLD}{C.CYAN}{t('equiv_cmd')}{C.RESET}")
-    print(f"  {C.DIM}{equivalent.build(shown)}{C.RESET}")
-    return exit_code
+    outcomes = [_download_one(url, opts) for url in opts.urls]
+    _print_equivalent(opts, outcomes)
+    return 0 if all(outcome.ok for outcome in outcomes) else 1
 
 
 # Re-export the build helper so tests / callers can introspect what we'd pass
