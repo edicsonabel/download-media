@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T16:45:13-04:00",
+  "updated": "2026-11-06T17:16:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -138,6 +138,30 @@
           "result": "published",
           "at": "2026-11-06T16:45:13-04:00",
           "note": "Tag v0.2.0 at 51c8e45. deploy-aur run 42290009457 success (test, deploy). CI run 42290009423 success. AUR RPC serves 0.2.0-1 after about 4.5 minutes of lag. AUR package not built or installed."
+        }
+      ]
+    },
+    "fix/equivalent-direct": {
+      "type": "fix",
+      "title": "Equivalent command must repeat the run instead of reopening the wizard",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/09-equivalent-direct.md",
+      "branch": "fix/equivalent-direct",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T17:16:48-04:00",
+          "note": "Human asked to start /fix equivalent-direct."
         }
       ]
     }
