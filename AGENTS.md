@@ -42,6 +42,7 @@ download type).
 ├── CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, LICENSE (MIT)
 ├── .ai/                           # agent system: roles, specs, roadmap, pipeline state
 ├── .github/workflows/
+│   ├── ci.yml                     # main push and PRs → the gate, no live tests
 │   ├── deploy-aur.yml             # tag push → tests, patch PKGBUILD, push to AUR
 │   └── deploy-pages.yml           # main push → publish docs/ to GitHub Pages
 ├── docs/index.html                # project landing page (GitHub Pages)
