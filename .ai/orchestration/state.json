@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "updated": "2026-11-06T12:48:26-04:00",
+  "updated": "2026-11-06T12:49:30-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
       "title": "Run the gate on every push and PR",
-      "stage": "integration",
-      "status": "in_progress",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/03-ci-on-push.md",
       "branch": "feature/ci-on-push",
       "worktree": ".worktrees/feature-ci-on-push",
@@ -16,7 +16,8 @@
         "be1ea8e",
         "88f3ede",
         "408a314",
-        "935db70"
+        "935db70",
+        "897458e"
       ],
       "review": {
         "approved": true,
@@ -63,6 +64,12 @@
           "result": "approved",
           "at": "2026-11-06T12:48:26-04:00",
           "note": "Merge approved. Push of main to origin after the merge also approved, for criterion 9."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-06T12:49:30-04:00"
         }
       ]
     }
