@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T19:02:10-04:00",
+  "updated": "2026-11-06T19:11:37-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -144,9 +144,9 @@
     "fix/equivalent-direct": {
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
       "worktree": ".worktrees/fix-equivalent-direct",
@@ -160,10 +160,7 @@
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "equivalent.py:52 printed --playlist-items value starting with - can't be parsed back on Python 3.10-3.13 (simulated)",
-          "equivalent.py:48 printed --sub-langs value starting with - exits 2 on replay (measured)"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -207,6 +204,13 @@
           "result": "done",
           "at": "2026-11-06T19:02:10-04:00",
           "note": "Round 1 findings fixed with --flag=value for values starting with -. 477 passed, 1 xfailed (opus). Spec design lines 104-105 should mention the form at validation."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-06T19:11:37-04:00",
+          "note": "Round 1 findings closed. 477 passed, 1 xfailed (opus). Mutation on the helper 9/9. Planner follow-up: values starting with = fail zsh expansion on replay; no useful value of either flag starts with =, so not sent back. Human will be told at the merge point."
         }
       ]
     }
