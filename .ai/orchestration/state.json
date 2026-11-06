@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T19:26:06-04:00",
+  "updated": "2026-11-06T19:59:59-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -144,9 +144,9 @@
     "fix/equivalent-direct": {
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
-      "stage": "qa_review",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
       "worktree": ".worktrees/fix-equivalent-direct",
@@ -222,6 +222,13 @@
           "result": "approved",
           "at": "2026-11-06T19:26:06-04:00",
           "note": "Gate passes, 477 passed, 1 xfailed. Real command replay across wizard, direct, -y and --playlist-items. Three minor findings. Planner follow-ups: the three findings, subtitles never embedded (downloader.py:123 overwrites :85), wizard refuses generic video pages (probe.py:153), README promises completions and a manpage, CONTRIBUTING.md:128 line about the printed command, --help is English only. Release notes should mention --play abbreviations now exit 2."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T19:59:59-04:00",
+          "note": "Merge approved. One push of main after the merge also approved, for CI on 3.12 and validation."
         }
       ]
     }
