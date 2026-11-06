@@ -21,6 +21,12 @@ from .config import (
 from .selection import is_playlist_url
 
 
+def _free_text(flag: str, value: str) -> list[str]:
+    quoted = shlex.quote(value)
+    # As its own token, argparse can take a value starting with - for a flag.
+    return [f"{flag}={quoted}"] if value.startswith("-") else [flag, quoted]
+
+
 def build(opts: DownloadOptions) -> str:
     parts: list[str] = ["download-media", "-y"]
 
@@ -45,11 +51,11 @@ def build(opts: DownloadOptions) -> str:
     if opts.subs:
         parts.append("-s")  # --sub-langs alone doesn't enable subtitles.
         if opts.sub_langs != DEFAULT_SUB_LANGS:
-            parts.extend(["--sub-langs", shlex.quote(opts.sub_langs)])
+            parts.extend(_free_text("--sub-langs", opts.sub_langs))
 
     if opts.playlist_mode == "yes":
         if opts.playlist_items:
-            parts.extend(["--playlist-items", shlex.quote(opts.playlist_items)])
+            parts.extend(_free_text("--playlist-items", opts.playlist_items))
         else:
             parts.append("-p")
     elif opts.playlist_mode == "no" and any(is_playlist_url(u) for u in opts.urls):

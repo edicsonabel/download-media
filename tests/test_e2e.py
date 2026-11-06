@@ -888,7 +888,6 @@ def test_bad_item_specs_fail_cleanly(run: Any, out: Path, spec: str) -> None:
         ("2:4", BOTH_ITEMS),
         ("2::2", BOTH_ITEMS),
         ("1-2,4", BOTH_ITEMS),
-        ("-1", ["04 - Clip [v2].mp4"]),
     ],
 )
 def test_item_specs_repeat_elsewhere_and_in_the_same_folder(
@@ -908,6 +907,44 @@ def test_item_specs_repeat_elsewhere_and_in_the_same_folder(
     code, _ = replay(line)
     assert code == 0
     assert names(out) == saved
+
+
+@pytest.mark.parametrize(
+    ("spec", "saved"),
+    [
+        ("-1", ["04 - Clip [v2].mp4"]),
+        ("-2:", ["04 - Clip [v2].mp4"]),
+        ("-3::2", BOTH_ITEMS),
+    ],
+)
+def test_item_specs_starting_with_a_dash_repeat(
+    run: Any, replay: Any, out: Path, again: Path, spec: str, saved: list[str]
+) -> None:
+    # The = form on the way in too: before 3.14 argparse rejects a separate -2:.
+    code, output = run("-y", f"--playlist-items={spec}", CAROUSEL)
+    assert code == 0
+    assert names(out) == saved
+    [line] = commands(output)
+    assert f"--playlist-items={spec}" in shlex.split(line)
+
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == saved
+
+
+def test_sub_langs_starting_with_a_dash_repeat(
+    run: Any, replay: Any, out: Path, again: Path
+) -> None:
+    code, output = run("-y", "-s", "--sub-langs=-live_chat", VIDEO)
+    assert code == 0
+    saved = names(out)
+    assert saved
+    [line] = commands(output)
+    assert "--sub-langs=-live_chat" in shlex.split(line)
+
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == saved
 
 
 @pytest.mark.parametrize(

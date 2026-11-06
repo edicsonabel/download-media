@@ -123,12 +123,6 @@ def test_empty_items_on_the_command_line_mean_the_whole_playlist() -> None:
     assert build(options_from_args(args)) == "download-media -y -p https://x"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=SystemExit,
-    reason="A value starting with - is printed as its own token, and argparse takes it for a "
-    "flag: exit 2 on replay. Python 3.14 lets '-2:' through, 3.10-3.13 don't.",
-)
 @pytest.mark.parametrize(
     "fields",
     [
@@ -145,6 +139,32 @@ def test_values_starting_with_a_dash_can_be_parsed_back(fields: dict[str, Any]) 
     parser._negative_number_matcher = re.compile(r"^-\d+$|^-\d*\.\d+$")
     opts = options_from_args(parser.parse_args(argv))
     assert all(getattr(opts, name) == value for name, value in fields.items())
+
+
+@pytest.mark.parametrize(
+    ("fields", "printed"),
+    [
+        ({"subs": True, "sub_langs": "-x, y"}, "-s --sub-langs='-x, y'"),
+        ({"subs": True, "sub_langs": "-live_chat"}, "-s --sub-langs=-live_chat"),
+        ({"playlist_mode": "yes", "playlist_items": "-2:"}, "--playlist-items=-2:"),
+        ({"subs": True, "sub_langs": "fr, de"}, "-s --sub-langs 'fr, de'"),
+        ({"playlist_mode": "yes", "playlist_items": "1:3"}, "--playlist-items 1:3"),
+    ],
+    ids=["dash-quoted", "dash-langs", "dash-items", "plain-langs", "plain-items"],
+)
+def test_only_values_starting_with_a_dash_use_the_equals_form(
+    fields: dict[str, Any], printed: str
+) -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], **fields))
+    assert cmd == f"download-media -y {printed} https://x"
+
+
+@pytest.mark.parametrize("value", ["-y", "-s", "--help", "-x=y", "-a b", "-;rm $x'"])
+def test_a_value_that_reads_like_a_flag_stays_a_value(value: str) -> None:
+    cmd = build(DownloadOptions(urls=["https://x"], subs=True, sub_langs=value))
+    opts = parse_back(cmd)
+    assert opts.urls == ["https://x"]
+    assert opts.sub_langs == value
 
 
 def test_items_are_ignored_outside_playlist_mode() -> None:
