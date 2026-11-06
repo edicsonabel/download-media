@@ -18,7 +18,7 @@ Bring to `main` an item approved by QA and by the human, leaving `main` working.
 # In the main worktree
 git status                       # must be clean
 git checkout main
-git merge --no-ff <branch> -m "merge: <id>"
+git merge --no-ff <branch> -m "chore(pipeline): merge <id>"
 scripts/pre-release.sh --no-live
 git log --oneline -5
 ```
