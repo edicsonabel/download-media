@@ -61,3 +61,7 @@ def test_parse_selection_valid(input_str: str, max_n: int, expected: list[int]) 
 )
 def test_parse_selection_invalid(input_str: str, max_n: int) -> None:
     assert parse_selection(input_str, max_n) is None
+
+
+def test_non_numeric_range_is_rejected() -> None:
+    assert parse_selection("a-b", 5) is None

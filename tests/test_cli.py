@@ -60,13 +60,15 @@ def test_output_path_kept_as_path() -> None:
 def _fake_download(fail_with_cookies: bool, fail_without: bool, calls: list):
     from yt_dlp.utils import DownloadError
 
+    from download_media.downloader import DownloadResult
+
     def fake(url, opts):
         calls.append(opts.cookies_browser)
         if opts.cookies_browser and fail_with_cookies:
             raise DownloadError("with cookies")
         if not opts.cookies_browser and fail_without:
             raise DownloadError("without cookies")
-        return 0
+        return DownloadResult(saved=1)
 
     return fake
 
@@ -77,7 +79,7 @@ def test_cookie_fallback_retries_without_cookies(monkeypatch) -> None:
     calls: list = []
     monkeypatch.setattr(cli, "download", _fake_download(True, False, calls))
     opts = parse(["--cookies", "brave", "http://x"])
-    assert cli._download_with_cookie_fallback("http://x", opts) == (0, True)
+    assert cli._download_with_cookie_fallback("http://x", opts)[1] is True
     assert calls == ["brave", None]
 
 
@@ -113,7 +115,7 @@ def test_cookie_fallback_reports_cookies_kept_when_they_work(monkeypatch) -> Non
     calls: list = []
     monkeypatch.setattr(cli, "download", _fake_download(False, False, calls))
     opts = parse(["--cookies", "brave", "http://x"])
-    assert cli._download_with_cookie_fallback("http://x", opts) == (0, False)
+    assert cli._download_with_cookie_fallback("http://x", opts)[1] is False
     assert calls == ["brave"]
 
 
@@ -142,3 +144,142 @@ def test_equivalent_keeps_cookies_when_some_url_used_them(monkeypatch, capsys) -
 def test_equivalent_keeps_cookies_when_a_download_failed(monkeypatch, capsys) -> None:
     line = _run_main(monkeypatch, capsys, ["-y", "--cookies", "brave", "a"], [(False, False)])
     assert "--cookies brave" in line
+
+
+def test_cookies_accepts_keyring_spec() -> None:
+    assert parse(["--cookies", "brave+gnomekeyring", "http://x"]).cookies_browser == (
+        "brave+gnomekeyring"
+    )
+
+
+def test_cookies_rejects_unknown_browser(capsys) -> None:
+    import pytest
+
+    with pytest.raises(SystemExit) as exc:
+        parse(["--cookies", "netscape", "http://x"])
+    assert exc.value.code == 2
+    assert "netscape" in capsys.readouterr().err
+
+
+def test_direct_mode_yes_stays_single_on_playlist_urls() -> None:
+    from download_media import cli
+
+    opts = parse(["-y", "https://site.test/playlist?list=1"])
+    assert cli._resolve_playlist_for_direct_mode(opts.urls[0], opts) == ("no", None)
+
+
+def test_direct_mode_plain_url_never_asks() -> None:
+    from download_media import cli
+
+    opts = parse(["-a", "https://site.test/video"])
+    assert cli._resolve_playlist_for_direct_mode(opts.urls[0], opts) == ("no", None)
+
+
+def test_direct_mode_forced_modes_never_ask() -> None:
+    from download_media import cli
+
+    opts = parse(["-p", "https://site.test/playlist"])
+    assert cli._resolve_playlist_for_direct_mode(opts.urls[0], opts) == ("yes", None)
+
+
+def test_direct_mode_playlist_question(answers) -> None:
+    from download_media import cli
+
+    opts = parse(["-a", "https://site.test/playlist"])
+    answers("2")
+    assert cli._resolve_playlist_for_direct_mode(opts.urls[0], opts) == ("yes", None)
+    answers("")
+    assert cli._resolve_playlist_for_direct_mode(opts.urls[0], opts) == ("no", None)
+    answers(EOFError)
+    assert cli._resolve_playlist_for_direct_mode(opts.urls[0], opts) is None
+
+
+def test_cancelling_playlist_question_stops_the_url(answers, capsys) -> None:
+    from download_media import cli
+
+    answers(EOFError)
+    assert cli._download_one("https://site.test/playlist", parse(["-a", "x"])) == (False, False)
+
+
+def test_high_quality_mp4_warns_about_h264_cap(monkeypatch, capsys, tmp_path) -> None:
+    from download_media import cli
+    from download_media.downloader import DownloadResult
+    from download_media.i18n import t
+
+    monkeypatch.setattr(cli, "download", lambda url, opts: DownloadResult(saved=1))
+    opts = parse(["-y", "-q", "2160", "-o", str(tmp_path), "http://x"])
+    assert cli._download_one("http://x", opts) == (True, False)
+    assert t("mp4_h264_cap", "2160") in capsys.readouterr().out
+
+
+def test_interrupt_propagates_after_cancel_message(monkeypatch, tmp_path) -> None:
+    import pytest
+
+    from download_media import cli
+
+    def interrupted(url, opts):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "download", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        cli._download_one("http://x", parse(["-y", "-o", str(tmp_path), "http://x"]))
+
+
+def _hint(capsys, message: str, argv: list[str]) -> str:
+    from download_media import cli
+
+    cli._hint_for_download_error(message, parse([*argv, "http://x"]))
+    return capsys.readouterr().out
+
+
+def test_hint_for_missing_secretstorage(capsys) -> None:
+    assert "python-secretstorage" in _hint(capsys, "SecretStorage not available", [])
+
+
+def test_hint_suggests_cookies_for_auth_errors(capsys) -> None:
+    assert "--cookies <browser>" in _hint(capsys, "Login required", [])
+    assert "--cookies <browser>" not in _hint(capsys, "Login required", ["--cookies", "firefox"])
+
+
+def test_hint_stays_quiet_for_unrelated_errors(capsys) -> None:
+    assert _hint(capsys, "HTTP Error 500", []) == ""
+
+
+def test_keyring_hint_only_when_it_can_help(capsys) -> None:
+    assert "+gnomekeyring" in _hint(capsys, "boom", ["--cookies", "brave"])
+    assert _hint(capsys, "boom", ["--cookies", "brave+kwallet6"]) == ""
+    assert _hint(capsys, "boom", ["--cookies", "firefox"]) == ""
+
+
+def test_main_without_url_uses_clipboard(monkeypatch, capsys) -> None:
+    from download_media import cli
+
+    urls: list[str] = []
+    monkeypatch.setattr(cli, "read_clipboard", lambda: "http://clip")
+    monkeypatch.setattr(cli, "_download_one", lambda url, opts: (urls.append(url), (True, False))[1])
+    assert cli.main(["-y"]) == 0
+    assert urls == ["http://clip"]
+
+
+def test_main_without_url_or_clipboard_dies(monkeypatch) -> None:
+    import pytest
+
+    from download_media import cli
+
+    monkeypatch.setattr(cli, "read_clipboard", lambda: None)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["-y"])
+    assert exc.value.code != 0
+
+
+def test_main_cancelled_wizard_exits_clean(monkeypatch, capsys) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    monkeypatch.setattr(cli.wizard, "run", lambda opts: None)
+    assert cli.main([]) == 0
+    assert t("cancelled") in capsys.readouterr().out
+
+
+def test_module_entry_point_is_importable() -> None:
+    import download_media.__main__  # noqa: F401

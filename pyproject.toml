@@ -49,6 +49,7 @@ download-media = "download_media.cli:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=7",
+    "pytest-cov>=5",
     "ruff>=0.6",
     "mypy>=1.8",
 ]
@@ -101,4 +102,5 @@ ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["-ra", "--strict-markers"]
+addopts = ["-ra", "--strict-markers", "-m", "not live"]
+markers = ["live: real network and browser cookies; run by scripts/pre-release.sh"]

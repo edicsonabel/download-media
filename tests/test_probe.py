@@ -109,3 +109,24 @@ def test_classify_single_image() -> None:
 
 def test_classify_single_unknown_when_empty() -> None:
     assert _classify_single({}) == ContentKind.UNKNOWN
+
+
+def test_probe_never_raises(monkeypatch) -> None:
+    from download_media import probe as probe_module
+
+    def explode(opts):
+        raise RuntimeError("Login required")
+
+    monkeypatch.setattr(probe_module, "YoutubeDL", explode)
+    result = probe_module.probe("http://x")
+    assert result.failed is True
+    assert result.needs_cookies is True
+    assert result.error_message == "Login required"
+
+
+def test_probe_handles_empty_extraction(fake_site, monkeypatch) -> None:
+    from download_media import probe as probe_module
+
+    # ignoreerrors turns a failed extraction into None.
+    result = probe_module.probe("https://fake.test/private")
+    assert result.failed is True

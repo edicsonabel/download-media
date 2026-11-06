@@ -123,3 +123,59 @@ def test_audio_checks_final_extension(tmp_path: Path, monkeypatch) -> None:
 def test_single_video_template_has_optional_suffix() -> None:
     ydl = build_ydl_opts(DownloadOptions(urls=["http://x"]), Path("/tmp/out"))
     assert ydl["outtmpl"].endswith("%(title)s%(_name_suffix|)s.%(ext)s")
+
+
+def test_carousel_items_always_get_their_id(tmp_path: Path) -> None:
+    from yt_dlp import YoutubeDL
+
+    from download_media import downloader
+
+    pp = downloader._AvoidNameClash(None)
+    pp.set_downloader(YoutubeDL({"outtmpl": str(tmp_path / "%(title)s.%(ext)s"), "quiet": True}))
+    info = {"id": "A", "title": "t", "ext": "mp4", "playlist_index": 3}
+    assert pp.run(info)[1]["_name_suffix"] == " [A]"
+
+
+def _filtered(**info) -> tuple[str | None, list[str]]:
+    from download_media.downloader import _skip_items_without_media
+
+    skipped: list[str] = []
+    return _skip_items_without_media(skipped)(info, incomplete=True), skipped
+
+
+def test_filter_skips_playlist_entry_without_media() -> None:
+    reason, skipped = _filtered(id="a", playlist_index=1, formats=[])
+    assert reason
+    assert skipped == ["a"]
+
+
+def test_filter_passes_playlist_metadata() -> None:
+    assert _filtered(playlist="Post", playlist_id="p") == (None, [])
+
+
+def test_filter_passes_lone_urls() -> None:
+    assert _filtered(id="a", formats=[]) == (None, [])
+
+
+def test_filter_passes_entries_with_media() -> None:
+    assert _filtered(id="a", playlist_index=1, formats=[{"url": "u"}]) == (None, [])
+    assert _filtered(id="a", playlist_index=1, url="u") == (None, [])
+
+
+def test_filter_passes_entries_resolved_later() -> None:
+    assert _filtered(id="a", playlist_index=1, _type="url") == (None, [])
+
+
+def test_filter_ignores_complete_entries() -> None:
+    from download_media.downloader import _skip_items_without_media
+
+    skipped: list[str] = []
+    match_filter = _skip_items_without_media(skipped)
+    assert match_filter({"id": "a", "playlist_index": 1}, incomplete=False) is None
+    assert skipped == []
+
+
+def test_result_total() -> None:
+    from download_media.downloader import DownloadResult
+
+    assert DownloadResult(saved=1, skipped=2, failed=3).total == 6
