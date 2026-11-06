@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T15:44:49-04:00",
+  "updated": "2026-11-06T15:47:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -85,12 +85,14 @@
       "type": "release",
       "title": "Release 0.2.0",
       "stage": "preparation",
-      "status": "in_progress",
-      "next_agent": "release-manager",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": null,
       "branch": null,
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "b078bfc"
+      ],
       "review": null,
       "history": [
         {
@@ -99,6 +101,13 @@
           "result": "approved",
           "at": "2026-11-06T15:44:49-04:00",
           "note": "Human asked to start /release 0.2.0. Version is explicit: minor, per AGENTS.md (new messages, wider --cookies syntax). Publishing still needs its own approval."
+        },
+        {
+          "stage": "preparation",
+          "agent": "release-manager",
+          "result": "done",
+          "at": "2026-11-06T15:47:48-04:00",
+          "note": "Full gate passed with live tests: 324 es, 324 en, 98.01% coverage, 9 live. Notes in .ai/releases/0.2.0.md. Planner follow-ups: reconcile the version rule in release-manager.md with AGENTS.md; test job in deploy-aur.yml has no timeout-minutes. Gate ran curl_cffi 0.17.0, Arch ships an older version inside the range yt-dlp accepts."
         }
       ]
     }
