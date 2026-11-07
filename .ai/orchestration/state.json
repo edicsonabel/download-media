@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T05:08:33-04:00",
+  "updated": "2026-11-07T05:17:36-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -368,12 +368,12 @@
     "fix/probe-auth": {
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
-      "worktree": ".worktrees/fix-probe-auth",
+      "worktree": null,
       "commits": [
         "65fbbcb",
         "7fd33c1",
@@ -387,7 +387,8 @@
         "ffd96a1",
         "c505a19",
         "e69dda4",
-        "0e523ad"
+        "0e523ad",
+        "99bcec7"
       ],
       "review": {
         "approved": true,
@@ -491,6 +492,37 @@
           "result": "blocked",
           "at": "2026-11-07T05:08:33-04:00",
           "note": "No report: the agent stalled with no writes for over 45 minutes and no process running, and didn't respond to a nudge. Stopped by the orchestrator, nothing lost, tree clean. Relaunched."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T05:17:36-04:00",
+          "note": "42 criteria map to tests, gate exit 0. Partial: live steps 2, 3 and the gated post not run; run them before /release. GitHub CI not run, nothing pushed."
+        }
+      ]
+    },
+    "fix/wizard-multi-url": {
+      "type": "fix",
+      "title": "Wizard drops every URL after the first",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/19-wizard-multi-url.md",
+      "branch": "fix/wizard-multi-url",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T05:17:36-04:00",
+          "note": "Next P1 in PLAN.md, started under the human's overnight delegation: 'Sigue trabajando y aceptando nuevos features. Decidan todo entre los roles'."
         }
       ]
     }
