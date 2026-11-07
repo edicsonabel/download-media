@@ -132,11 +132,12 @@ _AUTH_ERROR_HINTS = (
     "premium",
     "http error 401",
 )
-# The generic extractor's id is the URL's last segment, unquoted, so it can hold spaces. At
-# the floor it has no id at all, and "Unable to download webpage: " is the site's sentence.
+# The generic extractor's id is the URL's last segment, unquoted, so it can hold spaces or
+# ": ", which is why yt-dlp's own opening is looked for first. At the floor it has no id at
+# all, and "Unable to download webpage: " is the site's sentence.
 # A DownloadError adds "ERROR: ", and under -p it holds one error per line.
 _SITE_PREFIX = re.compile(
-    r"^(?:ERROR: )?(?:\[[^\]]+\] (?:\S+: |.*?: (?=Unable to |Failed to ))?)?", re.MULTILINE
+    r"^(?:ERROR: )?(?:\[[^\]]+\] (?:.*?: (?=Unable to |Failed to )|\S+: )?)?", re.MULTILINE
 )
 # These speak of the address, so anything else in them came from it, even a flag-like id.
 _NEVER_A_LOGIN = re.compile(r"HTTP Error (?:404|410|5\d\d)\b|is not a valid URL", re.IGNORECASE)

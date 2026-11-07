@@ -555,7 +555,7 @@ def test_words_from_the_id_or_the_address_ask_for_nothing(message: str) -> None:
         "[generic] 'private video' is not a valid URL",
         "[generic] '--cookies' is not a valid URL",
         "[generic] 'private-video' is not a valid URL. Set --default-search \"ytsearch\" (or run  "
-        "yt-dlp \"ytsearch:private-video\" ) to search YouTube",
+        'yt-dlp "ytsearch:private-video" ) to search YouTube',
         "Unsupported URL: ftp://media-server/private/page",
         "[generic] x: Unable to download webpage: "
         "HTTPSConnectionPool(host='login.example.com', port=443): Read timed out",
@@ -633,11 +633,6 @@ def test_short_reason_drops_an_id_and_nothing_else(message: str) -> None:
     assert _short_reason(message) == "Unable to download webpage: HTTP Error 404: Not Found"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_SITE_PREFIX tries \\S+: first, so 'private' outlives the id. Only the status rule "
-    "hides that, and it doesn't cover these",
-)
 @pytest.mark.parametrize(
     "ending",
     [
