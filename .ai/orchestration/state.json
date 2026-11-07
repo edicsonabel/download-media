@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T23:11:01-04:00",
+  "updated": "2026-11-06T23:19:35-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,9 +251,9 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "qa_review",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
@@ -328,6 +328,13 @@
           "result": "approved",
           "at": "2026-11-06T23:11:01-04:00",
           "note": "Gate passes, 803 passed, 2 xfailed. Live check passed without cookies: 20 items, 4 video, 16 image, same 4 files through the wizard and -y -p. Three minor test findings. Decisions for the human: renamed videos (leave as is) and video under audio/* (planner row for a type step). All 8 live files had only a video stream, not caused by this item. Branch has never run on CI; new fixtures need more ffmpeg encoders. Release notes: .ogg converts only when yt-dlp sets vcodec none. Planner: unsupported_count has no callers."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T23:19:35-04:00",
+          "note": "Human approved everything the roles recommend, and a push when done, then went to sleep. Covers: the bec654d rule, leave renamed videos as they are, planner row for the type step, fix the MIME test dependency before merging, merge, push. No release and no new items: not asked for."
         }
       ]
     }
