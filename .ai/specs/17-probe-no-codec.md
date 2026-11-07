@@ -1,6 +1,6 @@
 # 17 — Stop the probe mistaking media without codec info for images
 
-Status: draft
+Status: approved
 Item: `fix/probe-no-codec`
 
 ## Problem
@@ -298,6 +298,8 @@ printf '\n1\n\n\n\n\n\n' | .venv/bin/download-media -i -o tmp/probe-no-codec "$D
 The answers are URL, cookies (`1`, none), selection, type, quality, container, folder. On disk, the number of files in the first folder equals the `[video]` rows printed, and matches the second folder. Every image shows as `[image]` and none is saved. Run it alone: Instagram rate-limits by IP.
 
 ## Open decisions
+
+Resolved on approval: the human chose the recommended option in D1 (A), D2 (include), D3 (A) and D4 (ship, own row).
 
 ### D1: an entry that really is unknown
 
