@@ -19,6 +19,11 @@ def test_default_folders_resolve_under_tmp_path(tmp_path: Path) -> None:
     assert xdg_dir("MUSIC", "Music").is_relative_to(tmp_path)
 
 
+def test_relative_paths_resolve_under_tmp_path(tmp_path: Path) -> None:
+    assert Path.cwd().is_relative_to(tmp_path)
+    assert Path("2").resolve().is_relative_to(tmp_path)
+
+
 def test_exported_user_dirs_cannot_send_tests_to_the_real_folders(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

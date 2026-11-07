@@ -30,17 +30,27 @@ from download_media import probe as probe_module
 @pytest.fixture(autouse=True)
 def isolated_env(
     request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Keep tests away from the real history log, browser flag files and home folder."""
+) -> Iterator[None]:
+    """Keep tests away from the real history log, browser flag files, home and working folder."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     # Live tests exist to exercise the real browser setup.
-    if "live" not in request.keywords:
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        # xdg_dir() falls back to $HOME/Videos and $HOME/Music.
-        monkeypatch.setenv("HOME", str(tmp_path / "isolated-home"))
-        # Desktops export these, and some xdg-user-dir builds read them first.
-        for kind in ("VIDEOS", "MUSIC"):
-            monkeypatch.delenv(f"XDG_{kind}_DIR", raising=False)
+    if "live" in request.keywords:
+        yield
+        return
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    # xdg_dir() falls back to $HOME/Videos and $HOME/Music.
+    monkeypatch.setenv("HOME", str(tmp_path / "isolated-home"))
+    # Desktops export these, and some xdg-user-dir builds read them first.
+    for kind in ("VIDEOS", "MUSIC"):
+        monkeypatch.delenv(f"XDG_{kind}_DIR", raising=False)
+    # A scripted wizard answer that drifts by one step can become a relative folder:
+    # it lands here instead of the checkout, and the test fails instead of passing.
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    yield
+    stray = sorted(p.name for p in cwd.iterdir())
+    assert not stray, f"a test wrote to the working folder: {stray}"
 
 
 @pytest.fixture
