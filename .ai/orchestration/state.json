@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T09:56:34-04:00",
+  "updated": "2026-11-07T10:01:12-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,9 +707,9 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
       "worktree": ".worktrees/fix-playlist-items-fix",
@@ -722,7 +722,8 @@
         "fab0a23",
         "21c228f",
         "1f4c65f",
-        "31b8a0d"
+        "31b8a0d",
+        "dd454f1"
       ],
       "review": {
         "approved": true,
@@ -794,6 +795,13 @@
           "result": "approved",
           "at": "2026-11-07T09:56:34-04:00",
           "note": "Merge decided by the roles under the human's overnight delegation. Local main only, no push."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-07T10:01:12-04:00",
+          "note": "Merged as dd454f1, no conflicts. Gate exit 0, 1491 passed, 3 xfailed. Undo before any push: reset main to 6ef662b."
         }
       ]
     }
