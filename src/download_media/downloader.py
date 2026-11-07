@@ -241,6 +241,14 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
         # yt-dlp derives it from the class name; keep the [EmbedSubtitle] tag it prints.
         return "EmbedSubtitle"
 
+    def run_ffmpeg_multiple_files(
+        self, input_paths: list[str], out_path: str, opts: list[str], **kwargs: Any
+    ) -> Any:
+        # ffmpeg marks the first track default, so players would show the first --sub-langs
+        # language (es) unasked. mkv and webm obey this; the mp4 muxer ignores it.
+        opts = [*opts, "-disposition:s", "0"]
+        return super().run_ffmpeg_multiple_files(input_paths, out_path, opts, **kwargs)
+
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
         files = _subtitle_files(info)
         try:

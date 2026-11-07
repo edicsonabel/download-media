@@ -673,6 +673,8 @@ class FakeSiteIE(InfoExtractor):
             return self._subtitled(webm_video, "en.vtt")
         if page == "subs-webm-srt":
             return self._subtitled(webm_video, "en.srt")
+        if page == "subs-webm-two":
+            return self._subtitled(webm_video, "en.vtt", "es.vtt")
         if page == "subs-carousel":
             entries = [self._subtitled(self._video("s1"), "en.vtt"), self._video("s2")]
             return self.playlist_result(entries, "post", "Post")

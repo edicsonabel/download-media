@@ -4148,6 +4148,34 @@ def test_subs_are_embedded_in_a_webm(run: Any, out: Path) -> None:
     assert never_said("subs_not_embedded", output)
 
 
+def default_flags(path: Path) -> list[str]:
+    """The ``default`` disposition of each subtitle stream in ``path``, in order."""
+    probe = ["ffprobe", "-v", "error", "-select_streams", "s"]
+    probe += ["-show_entries", "stream_disposition=default", "-of", "csv=p=0"]
+    out = subprocess.run([*probe, str(path)], capture_output=True, text=True, timeout=15).stdout
+    return out.split()
+
+
+@pytest.mark.parametrize(
+    ("flags", "page", "video", "expected"),
+    [
+        # With the default es,en, a default track shows Spanish on English content unasked.
+        (("--video-format", "mkv"), "subs-merged", "Clip.mkv", ["0", "0"]),
+        (("--video-format", "webm"), "subs-webm-two", "Clip.webm", ["0", "0"]),
+        # The mp4 muxer always enables the first track; no ffmpeg option stops it.
+        ((), "subs", "Clip.mp4", ["1", "0"]),
+    ],
+    ids=["mkv", "webm", "mp4"],
+)
+def test_no_subtitle_track_is_marked_default_where_the_container_allows(
+    run: Any, out: Path, flags: tuple[str, ...], page: str, video: str, expected: list[str]
+) -> None:
+    code, _ = run("-y", "-s", *flags, f"https://fake.test/{page}")
+    assert code == 0
+    assert len(subtitle_streams(out / video)) == 2
+    assert default_flags(out / video) == expected
+
+
 def test_sub_langs_alone_turns_subtitles_on(run: Any, replay: Any, out: Path, again: Path) -> None:
     code, output = run("-y", "--sub-langs", "en", SUBS)
     assert code == 0
