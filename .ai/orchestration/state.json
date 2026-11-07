@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T05:54:48-04:00",
+  "updated": "2026-11-07T06:14:20-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -505,9 +505,9 @@
     "fix/wizard-multi-url": {
       "type": "fix",
       "title": "Wizard drops every URL after the first",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/19-wizard-multi-url.md",
       "branch": "fix/wizard-multi-url",
       "worktree": ".worktrees/fix-wizard-multi-url",
@@ -516,7 +516,9 @@
         "c30cd3b",
         "41df9b2",
         "82c99d4",
-        "2e58d6b"
+        "2e58d6b",
+        "58d8170",
+        "7981000"
       ],
       "review": {
         "approved": false,
@@ -550,6 +552,13 @@
           "result": "done",
           "at": "2026-11-07T05:54:48-04:00",
           "note": "HOME isolated in tests first; real ~/Vídeos and ~/Música had 0 new entries after the suite. Gate exit 0, 1177 passed, 2 xfailed, 98.34%. Planner: ruff format drift on main while AGENTS.md lists it as a check; README lists -l under direct mode."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T06:14:20-04:00",
+          "note": "No bugs. 48 cases, 1225 passed, 2 xfailed. Mutation 20/21, survivor equivalent. Also cleared exported XDG_VIDEOS_DIR and XDG_MUSIC_DIR in isolated_env: KDE exports them and the shell version of xdg-user-dir reads them before HOME. Planner: the same URL twice is downloaded twice."
         }
       ]
     }
