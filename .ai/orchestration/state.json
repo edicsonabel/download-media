@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T17:05:59-04:00",
+  "updated": "2026-11-07T17:19:38-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,9 +940,9 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
       "worktree": ".worktrees/fix-false-failure",
@@ -957,8 +957,10 @@
         "f8ef735"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor cli.py:298 untagged warning also prints on a rerun that wrote nothing"
+        ]
       },
       "history": [
         {
@@ -1023,6 +1025,13 @@
           "result": "approved",
           "at": "2026-11-07T17:05:59-04:00",
           "note": "Human: if QA approves, merge and push. Conditional on QA approval."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T17:19:38-04:00",
+          "note": "Gate exit 0, 1603 passed, 3 xfailed. One minor. Mutation 3/3. Merge and push pre-approved by the human."
         }
       ]
     }
