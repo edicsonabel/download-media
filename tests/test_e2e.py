@@ -2691,12 +2691,6 @@ def test_a_thumbnail_named_like_the_audio_never_deletes_it(
     assert t("no_cover", "audio-mp3-thumb (1).mp3") in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Bug: a thumbnail link whose extension yt-dlp deems unsafe (thumb.php?id=, a page) "
-    "raises _UnsafeExtensionError in _write_thumbnails, which isn't a RequestError: "
-    "process_info reports it and the cover fails the whole download, with nothing saved.",
-)
 @pytest.mark.parametrize(
     ("page", "flags"),
     [

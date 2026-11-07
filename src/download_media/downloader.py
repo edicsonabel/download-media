@@ -20,6 +20,7 @@ from yt_dlp.postprocessor.common import PostProcessor
 from yt_dlp.postprocessor.embedthumbnail import EmbedThumbnailPP
 from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP, FFmpegMetadataPP
 from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension, replace_extension
+from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
 from .cookies import ydl_cookies
@@ -83,11 +84,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     def _write_thumbnails(
         self, label: Any, info_dict: Any, filename: Any, thumb_filename_base: Any = None
     ) -> Any:
-        # yt-dlp only catches network errors here; a URL with no scheme (a relative og:image)
-        # raises before the media is fetched, and would lose the download over its cover.
+        # yt-dlp only catches network errors here; a URL with no scheme (a relative og:image),
+        # or an extension it won't write (thumb.php?id=), raises before the media is fetched,
+        # and would lose the download over its cover.
         try:
             written = super()._write_thumbnails(label, info_dict, filename, thumb_filename_base)
-        except RequestError:
+        except (RequestError, _UnsafeExtensionError):
             self.item_no_cover = True
             return []
         # All of them are this run's: overwrites is unset, so yt-dlp deletes a file already at
