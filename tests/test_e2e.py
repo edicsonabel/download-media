@@ -2849,6 +2849,13 @@ def test_a_real_404_named_after_a_login_asks_for_nothing(generic: Any, page: str
     assert t("probe_failed", "Unable to download webpage: HTTP Error 404: File not found") in output
 
 
+def test_direct_mode_does_not_blame_a_refused_connection_on_login(
+    home: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["-y", "http://127.0.0.1:1/login"]) == 1
+    assert GIVE_UP not in capfd.readouterr().out
+
+
 @pytest.mark.parametrize("page", ["404-login", "404-spaced"])
 def test_direct_mode_does_not_blame_a_404_on_login(run: Any, page: str) -> None:
     code, output = run("-y", f"https://fake.test/{page}")

@@ -604,6 +604,10 @@ def test_short_reason_drops_an_id_with_a_space() -> None:
     assert _short_reason(message) == "Unable to download webpage: HTTP Error 404: Not Found"
 
 
+def test_short_reason_drops_the_label_of_a_raised_error() -> None:
+    assert _short_reason("ERROR: [x] y: This post is gone") == "This post is gone"
+
+
 def test_short_reason_keeps_a_message_with_a_colon_and_no_id() -> None:
     assert _short_reason("[site] Video gone: removed by the owner") == (
         "Video gone: removed by the owner"

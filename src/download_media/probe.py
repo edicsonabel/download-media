@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from yt_dlp.utils import MEDIA_EXTENSIONS, float_or_none
+from yt_dlp.utils import MEDIA_EXTENSIONS, float_or_none, remove_terminal_sequences
 
 from .cookies import ydl_cookies
 from .downloader import _Ydl
@@ -134,7 +134,10 @@ _AUTH_ERROR_HINTS = (
 )
 # The generic extractor's id is the URL's last segment, unquoted, so it can hold spaces. At
 # the floor it has no id at all, and "Unable to download webpage: " is the site's sentence.
-_SITE_PREFIX = re.compile(r"^\[[^\]]+\] (?:\S+: |.*?: (?=Unable to |Failed to ))?")
+# A DownloadError adds "ERROR: ", and under -p it holds one error per line.
+_SITE_PREFIX = re.compile(
+    r"^(?:ERROR: )?(?:\[[^\]]+\] (?:\S+: |.*?: (?=Unable to |Failed to ))?)?", re.MULTILINE
+)
 # These speak of the address, so anything else in them came from it, even a flag-like id.
 _NEVER_A_LOGIN = re.compile(r"HTTP Error (?:404|410|5\d\d)\b|is not a valid URL", re.IGNORECASE)
 _ADDRESS = re.compile(r"\S+://\S+|[\w-]+(?:\.[\w-]+)+\S*")
@@ -145,7 +148,7 @@ _REASON_LENGTH = 200
 
 def _site_words(message: str) -> str:
     """What the site said: an id or an address can say "private" and mean nothing by it."""
-    lines = _SITE_PREFIX.sub("", message).splitlines()
+    lines = _SITE_PREFIX.sub("", remove_terminal_sequences(message)).splitlines()
     kept = [line for line in lines if not _NEVER_A_LOGIN.search(line)]
     return _ADDRESS.sub("", "\n".join(kept)).lower()
 
