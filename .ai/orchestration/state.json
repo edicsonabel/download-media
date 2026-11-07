@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T00:50:18-04:00",
+  "updated": "2026-11-07T01:25:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -368,12 +368,12 @@
     "fix/probe-auth": {
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
-      "stage": "planning",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "development",
+      "status": "in_progress",
+      "next_agent": "developer",
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
-      "worktree": null,
+      "worktree": ".worktrees/fix-probe-auth",
       "commits": [
         "65fbbcb"
       ],
@@ -395,6 +395,13 @@
           "result": "done",
           "at": "2026-11-07T00:50:18-04:00",
           "note": "Reproduced. ignore_no_formats_error can't be used: it hides age gates, private and geo errors. Spec needs decisions D1-D5. Live check needs DM_LIVE_IG_GATED, DM_LIVE_AGE_GATED, DM_LIVE_IG_IMAGE from the human. Planner follow-ups: CookieLoadError traceback with a browser not installed; b, Enter, b raises _Back at the up-front prompt; unrecoverable failures still walk the manual flow; summary omits early cookies; keyring hint after a missing browser."
+        },
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-07T01:25:48-04:00",
+          "note": "Spec approved with every recommended option: D1 override process_video_result, D2 share one definition with cli.py, D3 keep the picker, D4 ask for cookies on Instagram's anonymous rate limit, D5 accept two prompts until row 06."
         }
       ]
     }
