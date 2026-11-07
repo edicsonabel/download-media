@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T22:12:49-04:00",
+  "updated": "2026-11-06T22:30:27-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,16 +251,17 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
       "commits": [
         "fe91ce0",
         "5ec306b",
-        "d6b83a4"
+        "d6b83a4",
+        "bec654d"
       ],
       "review": {
         "approved": false,
@@ -303,6 +304,13 @@
           "result": "changes_requested",
           "at": "2026-11-06T22:12:49-04:00",
           "note": "Round 1. 107 cases added, 675 passed, 4 xfailed, mutation 24/24. One major finding, a gap in the approved rule table. Orchestrator direction: unknown vcodec on a container that can hold video reads as video, which keeps the file as main does. Human is told at the merge point; architect records the rule change at validation. Planner follow-ups: _media_kind uses or where yt-dlp uses is None, matters under probe-auth; Enter prompt says videos only but saves jpg and audio when there are no videos. New fixtures need libvpx, libvorbis and libtheora in CI's ffmpeg."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-06T22:30:27-04:00",
+          "note": "Finding fixed: asf, m4b, ogg, ogx, wma with an unknown vcodec read as video. 802 passed, 2 xfailed (D4, opus). Human decision at merge: seven extensions (oga, spx, mka, weba, m4r, f4a, f4b) still convert a renamed video. Architect records the rule change at validation. Planner follow-up: metadata step fails on extensions ffmpeg can't mux, reporting Download failed with the file saved."
         }
       ]
     }
