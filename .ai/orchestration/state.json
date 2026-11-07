@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T11:40:48-04:00",
+  "updated": "2026-11-07T11:43:29-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -816,9 +816,9 @@
     "fix/subs-as-documented": {
       "type": "fix",
       "title": "Subtitles behave as documented",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/21-subs-as-documented.md",
       "branch": "fix/subs-as-documented",
       "worktree": ".worktrees/fix-subs-as-documented",
@@ -897,6 +897,13 @@
           "result": "done",
           "at": "2026-11-07T11:40:48-04:00",
           "note": "No default subtitle track in mkv and webm (mp4 unchanged, 1,0), English warning reworded, README line. 1558 passed, 3 xfailed; floor passes."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T11:43:29-04:00",
+          "note": "Narrow confirmation on battery: 39 subtitle e2e passed, mutation 2/2, override limited to subtitle embedding. Full gate not run here."
         }
       ]
     }
