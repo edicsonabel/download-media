@@ -57,9 +57,10 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
 
     is_playlist = opts.playlist_mode == "yes"
     if is_playlist:
-        # Index + ID prefix prevents filename collisions across carousel items.
+        # Carousel items get an index prefix and an ID suffix (_AvoidNameClash) so
+        # they can't collide; a lone video has no index and keeps its plain name.
         ydl["outtmpl"] = str(
-            output_dir / "%(playlist_index)02d - %(title)s [%(id)s].%(ext)s"
+            output_dir / "%(playlist_index&{:02d} - |)s%(title)s%(_name_suffix|)s.%(ext)s"
         )
         ydl["noplaylist"] = False
         if opts.playlist_items:
@@ -197,9 +198,8 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     ydl_opts["post_hooks"] = [saved.append]
     ydl_opts["match_filter"] = _skip_items_without_media(skipped)
     with _Ydl(ydl_opts) as ydl:
-        if opts.playlist_mode != "yes":
-            final_ext = opts.audio_format if opts.audio_only else None
-            ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
+        final_ext = opts.audio_format if opts.audio_only else None
+        ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
         returncode = int(ydl.download([url]))
     # ignoreerrors turns a total failure into a bare return code.
     if returncode != 0 and not saved:

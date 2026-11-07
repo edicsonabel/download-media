@@ -237,6 +237,31 @@ def test_playlist_items_flag_can_pick_several(run: Any, out: Path) -> None:
     assert names(out) == ["02 - Clip [v1].mp4", "04 - Clip [v2].mp4"]
 
 
+@pytest.mark.parametrize("flags", [("-p",), ("--playlist-items", "2")])
+def test_a_plain_video_in_playlist_mode_keeps_its_single_mode_name(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, VIDEO)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert t("done") in output
+
+
+def test_plain_videos_in_playlist_mode_still_avoid_a_name_clash(run: Any, out: Path) -> None:
+    assert run("-y", "-p", VIDEO)[0] == 0
+    assert run("-y", "-p", VIDEO_B)[0] == 0
+    assert names(out) == ["Clip [v2].mp4", "Clip.mp4"]
+
+
+def test_whole_playlist_answer_on_a_plain_video_keeps_its_name(
+    run: Any, out: Path, answers: Any
+) -> None:
+    answers("2")
+    code, _ = run(f"{VIDEO}?list=1")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+
+
 def test_playlist_items_out_of_range_is_a_failure(run: Any, out: Path) -> None:
     code, output = run("-y", "--playlist-items", "9", CAROUSEL)
     assert code == 1
@@ -1607,7 +1632,7 @@ def test_wizard_keeps_saving_a_direct_image(generic: Any, home: Path) -> None:
     [
         ("poster", (), ("",), ["poster (1).mp4"]),
         ("poster", ("-y",), (), ["poster (1).mp4"]),
-        ("poster", ("-y", "-p"), (), ["NA - poster (1) [poster-1].mp4"]),
+        ("poster", ("-y", "-p"), (), ["poster (1).mp4"]),
         ("poster", ("-y", "-P"), (), ["poster (1).mp4"]),
         ("poster", ("-y", "-a"), (), ["poster (1).mp3"]),
         ("multi", (), ("",), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
@@ -1617,12 +1642,12 @@ def test_wizard_keeps_saving_a_direct_image(generic: Any, home: Path) -> None:
         ("multi", ("-y", "-a"), (), [f"multi ({i}) [multi-{i}].mp3" for i in range(1, 5)]),
         ("og-video", (), ("",), ["video.mp4"]),
         ("og-video", ("-y",), (), ["video.mp4"]),
-        ("og-video", ("-y", "-p"), (), ["NA - video [tiny].mp4"]),
+        ("og-video", ("-y", "-p"), (), ["video.mp4"]),
         ("og-video", ("-y", "-P"), (), ["video.mp4"]),
         ("og-video", ("-y", "-a"), (), ["video.mp3"]),
         ("audio", (), ("",), ["audio (1).m4a"]),
         ("audio", ("-y",), (), ["audio (1).m4a"]),
-        ("audio", ("-y", "-p"), (), ["NA - audio (1) [audio-1].m4a"]),
+        ("audio", ("-y", "-p"), (), ["audio (1).m4a"]),
         ("audio", ("-y", "-P"), (), ["audio (1).m4a"]),
         ("audio", ("-y", "-a"), (), ["audio (1).mp3"]),
     ],

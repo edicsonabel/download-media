@@ -43,6 +43,15 @@ def test_playlist_mode_changes_output_template() -> None:
     assert ydl["playlist_items"] == "1-3,5"
 
 
+def test_playlist_template_leaves_out_a_missing_index() -> None:
+    opts = DownloadOptions(urls=["http://x"], playlist_mode="yes")
+    tmpl = build_ydl_opts(opts, Path("/tmp/out"))["outtmpl"]
+
+    assert "%(playlist_index&{:02d} - |)s" in tmpl
+    assert "%(_name_suffix|)s" in tmpl
+    assert "%(playlist_index)02d" not in tmpl
+
+
 def test_quality_best_uses_open_format_selector() -> None:
     opts = DownloadOptions(urls=["http://x"], quality="best")
     ydl = build_ydl_opts(opts, Path("/tmp/out"))
