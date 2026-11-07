@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from yt_dlp.networking.exceptions import NoSupportingHandlers
 
 from download_media import cli, i18n
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
@@ -23,6 +24,10 @@ PRIVATE = "https://fake.test/private"
 VIDEO = "https://fake.test/video"
 VIDEO_B = "https://fake.test/video-b"
 BOTH_ITEMS = ["02 - Clip [v1].mp4", "04 - Clip [v2].mp4"]
+# URL, type, quality, container, folder, cookies.
+SINGLE_WALK = ("",) * 6
+# URL, item selection, type, quality, container, folder, cookies.
+PICKER_WALK = ("",) * 7
 
 
 def names(folder: Path) -> list[str]:
@@ -38,6 +43,22 @@ def commands(output: str) -> list[str]:
     """The equivalent commands a run printed."""
     lines = (line.strip() for line in output.splitlines())
     return [line for line in lines if line.startswith("download-media ")]
+
+
+def streams(path: Path) -> set[str]:
+    """The stream types ffprobe finds in ``path``."""
+    probe = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0"]
+    return set(subprocess.run([*probe, str(path)], capture_output=True, text=True).stdout.split())
+
+
+def detected(kind: str) -> str:
+    """The detection banner, since a bare "Video" also matches the output folder."""
+    return f"generic / {t(kind)}"
+
+
+def tag(kind: str) -> str:
+    """How the item picker labels an item."""
+    return f"[{t(kind).lower()}]"
 
 
 @pytest.fixture
@@ -71,9 +92,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture
-def replay(
-    fake_site: list[Any], capfd: pytest.CaptureFixture[str], answers: Any
-) -> Callable[..., tuple[int, str]]:
+def pasted(capfd: pytest.CaptureFixture[str], answers: Any) -> Callable[..., tuple[int, str]]:
     """Run a printed command as pasted, optionally into another folder.
 
     Nothing is scripted, so any prompt fails the test.
@@ -90,6 +109,30 @@ def replay(
         return code, captured.out + captured.err
 
     return _replay
+
+
+@pytest.fixture
+def replay(fake_site: list[Any], pasted: Any) -> Callable[..., tuple[int, str]]:
+    return pasted
+
+
+@pytest.fixture
+def generic(
+    media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> Callable[..., tuple[int, str]]:
+    """Run a loopback page through yt-dlp's real generic extractor.
+
+    ``fake_site`` loads only ``FakeSiteIE``, and ``-o`` would leave the wizard.
+    """
+
+    def _generic(page: str, *replies: str, flags: tuple[str, ...] = ()) -> tuple[int, str]:
+        prompts = answers(*replies)
+        code = cli.main([*flags, f"{media_url}/{page}"])
+        captured = capfd.readouterr()
+        assert len(prompts) == len(replies)  # A skipped step would go unnoticed.
+        return code, captured.out + captured.err
+
+    return _generic
 
 
 @pytest.fixture
@@ -1383,3 +1426,790 @@ def test_real_process_repeats_a_wizard_run_with_stdin_closed(
     second = process(shlex.split(line)[1:], tmp_path / "second", None)
     assert second.returncode == 0, second.stderr
     assert names(tmp_path / "second" / "Videos") == ["tiny.mp4"]
+
+
+MULTI = [f"0{i} - multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]
+
+
+def test_wizard_saves_every_video_without_codec_info(generic: Any, home: Path) -> None:
+    code, output = generic("multi.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == MULTI
+    assert output.count(tag("kind_video")) == 4
+    assert t("done") in output
+    assert t("no_supported_items") not in output
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("poster.html", "poster (1).mp4"),
+        ("og-video.html", "video.mp4"),
+        ("partial-codec.html", "partial-codec (1).mp4"),
+    ],
+)
+def test_wizard_reads_a_lone_video_without_codec_info_as_video(
+    generic: Any, home: Path, page: str, saved: str
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert names(home / "Videos") == [saved]
+    assert names(home / "Music") == []
+    assert detected("kind_video") in output
+    assert t("image_only_skipped") not in output
+
+
+def test_wizard_offers_entries_that_only_have_a_url(generic: Any, home: Path) -> None:
+    code, output = generic("og-videos.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == ["01 - video (1) [v1].mp4", "02 - video (2) [v2].mp4"]
+    assert output.count(tag("kind_video")) == 2
+
+
+def test_wizard_reads_audio_without_codec_info_as_audio(generic: Any, home: Path) -> None:
+    # URL, format, folder, cookies: no type step.
+    code, output = generic("audio.html", "", "", "", "")
+    assert code == 0
+    assert names(home / "Music") == ["audio (1).mp3"]
+    assert names(home / "Videos") == []
+    assert detected("kind_audio") in output
+
+
+def test_wizard_tags_audio_items_without_codec_info(generic: Any, home: Path) -> None:
+    code, output = generic("audios.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == [
+        "01 - audios (1) [audios-1].m4a",
+        "02 - audios (2) [audios-2].m4a",
+    ]
+    assert output.count(tag("kind_audio")) == 2
+
+
+@pytest.mark.parametrize(
+    ("reply", "saved"),
+    [
+        ("", ["01 - video-audio (1) [video-audio-1].mp4"]),
+        (
+            "all",
+            [
+                "01 - video-audio (1) [video-audio-1].mp4",
+                "02 - video-audio (2) [video-audio-2].m4a",
+            ],
+        ),
+    ],
+)
+def test_wizard_enter_on_video_and_audio_keeps_the_video(
+    generic: Any, home: Path, reply: str, saved: list[str]
+) -> None:
+    code, output = generic("video-audio.html", "", reply, "", "", "", "", "")
+    assert code == 0
+    assert names(home / "Videos") == saved
+    assert tag("kind_video") in output
+    assert tag("kind_audio") in output
+
+
+@pytest.mark.parametrize(
+    ("reply", "saved"),
+    [
+        ("", ["02 - jpg-video (2) [jpg-video-2].mp4"]),
+        ("all", ["01 - jpg-video (1) [jpg-video-1].jpg", "02 - jpg-video (2) [jpg-video-2].mp4"]),
+    ],
+)
+def test_wizard_leaves_a_jpg_out_of_the_videos_but_offers_it(
+    generic: Any, home: Path, reply: str, saved: list[str]
+) -> None:
+    code, output = generic("jpg-video.html", "", reply, "", "", "", "", "")
+    assert code == 0
+    assert names(home / "Videos") == saved
+    assert "[?]" in output
+    assert tag("kind_video") in output
+
+
+def test_wizard_on_a_missing_video_is_a_failure_not_an_image(
+    generic: Any, media_url: str, home: Path
+) -> None:
+    code, output = generic("gone.html", *SINGLE_WALK)
+    assert code == 1
+    assert t("failed", f"{media_url}/gone.html") in output
+    assert t("done") not in output
+    assert t("image_only_skipped") not in output
+    assert names(home / "Videos") == []
+
+
+def test_wizard_on_one_missing_video_of_two_saves_the_other(generic: Any, home: Path) -> None:
+    code, output = generic("half-gone.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == ["01 - half-gone (1) [half-gone-1].mp4"]
+    assert t("partial_result", 1, 2, 0, 1) in output
+
+
+def test_interactive_audio_flag_on_a_video_without_codec_info(generic: Any, home: Path) -> None:
+    # URL, type, format, folder, cookies.
+    code, _ = generic("poster.html", "", "", "", "", "", flags=("-i", "-a"))
+    assert code == 0
+    assert names(home / "Music") == ["poster (1).mp3"]
+
+
+@pytest.mark.parametrize(
+    ("page", "replies", "flags", "saved"),
+    [
+        ("poster.html", SINGLE_WALK, "-y", ["poster (1).mp4"]),
+        ("multi.html", PICKER_WALK, "-y --playlist-items 1,2,3,4", MULTI),
+    ],
+)
+def test_wizard_on_media_without_codec_info_repeats_without_a_prompt(
+    generic: Any,
+    pasted: Any,
+    media_url: str,
+    home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+    page: str,
+    replies: tuple[str, ...],
+    flags: str,
+    saved: list[str],
+) -> None:
+    _, output = generic(page, *replies)
+    [line] = commands(output)
+    assert line == f"download-media {flags} {media_url}/{page}"
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == saved
+
+
+def test_wizard_twice_on_a_video_without_codec_info(generic: Any, home: Path) -> None:
+    first, _ = generic("poster.html", *SINGLE_WALK)
+    second, output = generic("poster.html", *SINGLE_WALK)
+    assert (first, second) == (0, 0)
+    assert t("done") in output
+    assert names(home / "Videos") == ["poster (1).mp4"]
+    assert len(history_rows()) == 2
+
+
+def test_wizard_keeps_saving_a_direct_image(generic: Any, home: Path) -> None:
+    # An unknown kind leaves the playlist mode open, so the preview asks too.
+    code, output = generic("tiny.jpg", *SINGLE_WALK, "")
+    assert code == 0
+    assert names(home / "Videos") == ["tiny.jpg"]
+    assert detected("kind_unknown") in output
+
+
+@pytest.mark.parametrize(
+    ("page", "flags", "replies", "saved"),
+    [
+        ("poster", (), ("",), ["poster (1).mp4"]),
+        ("poster", ("-y",), (), ["poster (1).mp4"]),
+        ("poster", ("-y", "-p"), (), ["NA - poster (1) [poster-1].mp4"]),
+        ("poster", ("-y", "-P"), (), ["poster (1).mp4"]),
+        ("poster", ("-y", "-a"), (), ["poster (1).mp3"]),
+        ("multi", (), ("",), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
+        ("multi", ("-y",), (), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
+        ("multi", ("-y", "-p"), (), MULTI),
+        ("multi", ("-y", "-P"), (), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
+        ("multi", ("-y", "-a"), (), [f"multi ({i}) [multi-{i}].mp3" for i in range(1, 5)]),
+        ("og-video", (), ("",), ["video.mp4"]),
+        ("og-video", ("-y",), (), ["video.mp4"]),
+        ("og-video", ("-y", "-p"), (), ["NA - video [tiny].mp4"]),
+        ("og-video", ("-y", "-P"), (), ["video.mp4"]),
+        ("og-video", ("-y", "-a"), (), ["video.mp3"]),
+        ("audio", (), ("",), ["audio (1).m4a"]),
+        ("audio", ("-y",), (), ["audio (1).m4a"]),
+        ("audio", ("-y", "-p"), (), ["NA - audio (1) [audio-1].m4a"]),
+        ("audio", ("-y", "-P"), (), ["audio (1).m4a"]),
+        ("audio", ("-y", "-a"), (), ["audio (1).mp3"]),
+    ],
+)
+def test_direct_runs_on_media_without_codec_info_are_unchanged(
+    generic: Any,
+    out: Path,
+    page: str,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    saved: list[str],
+) -> None:
+    code, _ = generic(f"{page}.html", *replies, flags=("-o", str(out), *flags))
+    assert code == 0
+    assert names(out) == saved
+
+
+def test_wizard_on_images_and_a_video_without_codec_info(
+    run: Any, out: Path, again: Path, answers: Any
+) -> None:
+    url = "https://fake.test/bare-carousel"
+    answers(*PICKER_WALK)
+    code, output = run("-i", url)
+    assert code == 0
+    assert tag("kind_image") in output
+    assert tag("kind_video") in output
+    assert names(out) == ["02 - Clip [v1].mp4"]
+
+    code, _ = run("-y", "-p", "-o", str(again), url)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("url-only-carousel", ["01 - Clip [v1].mp4", "02 - Clip [v2].mp4"]),
+        ("jpg-carousel", ["01 - Clip [p1].jpg", "02 - Clip [p2].jpg"]),
+    ],
+)
+def test_wizard_saves_carousels_of_url_only_entries(
+    run: Any, out: Path, answers: Any, page: str, saved: list[str]
+) -> None:
+    answers(*PICKER_WALK)
+    code, _ = run("-i", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == saved
+
+
+def test_wizard_tags_known_audio_with_a_duration_as_audio(
+    run: Any, out: Path, answers: Any
+) -> None:
+    answers(*PICKER_WALK)
+    code, output = run("-i", "https://fake.test/audio-carousel")
+    assert code == 0
+    assert output.count(tag("kind_audio")) == 2
+    assert tag("kind_video") not in output
+
+
+def test_wizard_keeps_refusing_a_carousel_of_only_images(run: Any, out: Path, answers: Any) -> None:
+    answers("")
+    code, output = run("-i", "https://fake.test/only-images")
+    assert code == 0
+    assert t("no_supported_items") in output
+    assert t("equiv_cmd") not in output
+    assert names(out) == []
+
+
+def test_wizard_on_a_lone_image_still_fails_the_probe(run: Any, out: Path, answers: Any) -> None:
+    # The failed probe falls back to the manual steps, and the preview asks too.
+    answers(*SINGLE_WALK, "")
+    code, output = run("-i", "https://fake.test/image")
+    assert code == 1
+    assert t("probe_failed", "unknown") in output
+    assert names(out) == []
+
+
+def test_interactive_no_playlist_flag_still_shows_the_picker(generic: Any, home: Path) -> None:
+    code, output = generic("multi.html", *PICKER_WALK, flags=("-i", "-P"))
+    assert code == 0
+    assert output.count(tag("kind_video")) == 4
+    assert names(home / "Videos") == MULTI
+
+
+@pytest.mark.parametrize("page", ["poster", "multi", "og-video", "og-videos", "audio", "audios"])
+def test_listing_formats_directly_on_media_without_codec_info(
+    generic: Any, home: Path, page: str
+) -> None:
+    code, output = generic(f"{page}.html", flags=("-y", "-l"))
+    assert code == 0
+    assert "Available formats" in output
+    assert names(home) == []
+    assert history_rows() == []
+
+
+def test_listing_formats_alone_walks_the_wizard_instead_of_refusing(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("multi.html", *PICKER_WALK, flags=("-l",))
+    assert code == 0
+    assert t("no_supported_items") not in output
+    assert "Available formats" in output
+    assert names(home / "Videos") == []
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("webm.html", "webm (1).webm"),
+        ("hls.html", "hls (1).mp4"),
+        ("tiny.webm", "tiny.webm"),
+    ],
+)
+def test_wizard_reads_webm_and_hls_without_codec_info_as_video(
+    generic: Any, home: Path, page: str, saved: str
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert detected("kind_video") in output
+    assert names(home / "Videos") == [saved]
+    assert names(home / "Music") == []
+
+
+def test_wizard_saves_a_lone_jpg_in_a_video_tag(generic: Any, home: Path) -> None:
+    code, output = generic("jpg-alone.html", *SINGLE_WALK, "")
+    assert code == 0
+    assert detected("kind_unknown") in output
+    assert t("image_only_skipped") not in output
+    assert names(home / "Videos") == ["jpg-alone (1).jpg"]
+
+
+@pytest.mark.parametrize("page", ["tiny.jpg?w=100", "tiny.png"])
+def test_wizard_keeps_direct_images_unknown(generic: Any, home: Path, page: str) -> None:
+    code, output = generic(page, *SINGLE_WALK, "")
+    assert code == 0
+    assert detected("kind_unknown") in output
+    assert names(home / "Videos") == [page.partition("?")[0]]
+
+
+def test_wizard_labels_an_image_yt_dlp_does_not_list_as_video_and_saves_it(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("tiny.gif", *SINGLE_WALK)
+    assert code == 0
+    assert detected("kind_video") in output
+    assert names(home / "Videos") == ["tiny.gif"]
+
+
+def test_wizard_audio_type_on_a_direct_image_fails_honestly(
+    generic: Any, media_url: str, home: Path
+) -> None:
+    # URL, type, format, folder, cookies, and the unknown kind's confirmation.
+    code, output = generic("tiny.jpg", "", "2", "", "", "", "")
+    assert code == 1
+    assert t("failed", f"{media_url}/tiny.jpg") in output
+    assert t("done") not in output
+    assert history_rows() == []
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("multi.html", MULTI),
+        ("og-videos.html", ["01 - video (1) [v1].mp4", "02 - video (2) [v2].mp4"]),
+    ],
+)
+def test_wizard_twice_on_a_picker_without_codec_info(
+    generic: Any, home: Path, page: str, saved: list[str]
+) -> None:
+    for _ in range(2):
+        code, output = generic(page, *PICKER_WALK)
+        assert code == 0
+        assert t("done") in output
+        assert names(home / "Videos") == saved
+    assert len(history_rows()) == 2
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("tiny.m4a", "tiny.mp3"),
+        ("tiny.m4a?token=1", "tiny.mp3"),
+        ("tiny.ogg", "tiny.mp3"),
+        ("tiny.wav", "tiny.mp3"),
+        ("audio-ogg.html", "audio-ogg (1).mp3"),
+        ("audio-wav.html", "audio-wav (1).mp3"),
+        ("audio.html", "audio (1).mp3"),
+    ],
+)
+def test_wizard_converts_audio_without_codec_info_and_reruns(
+    generic: Any, home: Path, page: str, saved: str
+) -> None:
+    # URL, format, folder, cookies: no type step.
+    for _ in range(2):
+        code, output = generic(page, "", "", "", "")
+        assert code == 0
+        assert detected("kind_audio") in output
+        assert t("done") in output
+        assert names(home / "Music") == [saved]
+        assert names(home / "Videos") == []
+    assert len(history_rows()) == 2
+
+
+@pytest.mark.parametrize(
+    ("page", "choice", "saved"),
+    [
+        ("tiny.m4a", "2", "tiny.m4a"),
+        ("tiny.wav", "4", "tiny.wav"),
+        ("tiny.ogg", "2", "tiny.m4a"),
+        ("audio.html", "2", "audio (1).m4a"),
+    ],
+)
+def test_wizard_on_audio_without_codec_info_honours_the_format(
+    generic: Any, home: Path, page: str, choice: str, saved: str
+) -> None:
+    for _ in range(2):
+        code, output = generic(page, "", choice, "", "")
+        assert code == 0
+        assert t("done") in output
+        assert names(home / "Music") == [saved]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=NoSupportingHandlers,
+    reason="Known and accepted (D4 of spec 17, its own roadmap row): _write_thumbnails raises "
+    "NoSupportingHandlers on a relative og:image, and _download_one only catches DownloadError.",
+)
+def test_wizard_on_audio_with_a_relative_og_image_ends_without_a_traceback(
+    generic: Any, media_url: str, home: Path
+) -> None:
+    page = "audio-relative-og.html"
+    _, output = generic(page, "", "", "", "")
+    assert t("done") in output or t("failed", f"{media_url}/{page}") in output
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("video-ogg.html", "video-ogg (1).ogg"),
+        ("video-ogg-codecs.html", "video-ogg-codecs (1).ogv"),
+        ("og-video-ogg.html", "video.ogg"),
+        ("clip.asf", "clip.asf"),
+        ("video-m4b.html", "video-m4b (1).m4b"),
+        ("video-wma.html", "video-wma (1).wma"),
+    ],
+)
+def test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio(
+    generic: Any, home: Path, page: str, saved: str
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert detected("kind_video") in output
+    assert t("done") in output
+    assert names(home / "Music") == []
+    assert names(home / "Videos") == [saved]
+    assert "video" in streams(home / "Videos" / saved)
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"), [("video-ogx.html", "video-ogx (1).ogx"), ("theora.ogx", "theora.ogx")]
+)
+def test_wizard_keeps_an_ogx_and_reports_the_metadata_failure(
+    generic: Any, media_url: str, home: Path, page: str, saved: str
+) -> None:
+    # ffmpeg has no muxer for .ogx, so yt-dlp's metadata step fails after the
+    # download. The same happens with -y and on main: the file stays, video included.
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 1
+    assert detected("kind_video") in output
+    assert t("failed", f"{media_url}/{page}") in output
+    assert t("done") not in output
+    assert names(home / "Music") == []
+    assert names(home / "Videos") == [saved]
+    assert "video" in streams(home / "Videos" / saved)
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("video-tag-audio-ogg.html", "video-tag-audio-ogg (1).ogg"),
+        ("video-tag-audio-m4b.html", "video-tag-audio-m4b (1).m4b"),
+    ],
+)
+def test_wizard_keeps_audio_in_such_a_container_raw_when_nothing_says_it_is_audio(
+    generic: Any, home: Path, page: str, saved: str
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert detected("kind_video") in output
+    assert names(home / "Music") == []
+    assert names(home / "Videos") == [saved]
+
+
+def test_wizard_can_still_choose_audio_for_such_a_container(generic: Any, home: Path) -> None:
+    # URL, type, format, folder, cookies: reading as video brings the type step back.
+    code, _ = generic("video-tag-audio-ogg.html", "", "2", "", "", "")
+    assert code == 0
+    assert names(home / "Music") == ["video-tag-audio-ogg (1).mp3"]
+    assert names(home / "Videos") == []
+
+
+def test_yt_dlp_strips_video_from_m4a_so_reading_it_as_audio_loses_nothing(
+    generic: Any, home: Path
+) -> None:
+    # The reason .m4a isn't with the containers above. If yt-dlp stops doing this,
+    # an .m4a holding video would start losing it to the audio path.
+    code, _ = generic("video-m4a.html", flags=("-y",))
+    assert code == 0
+    assert streams(home / "Videos" / "video-m4a (1).m4a") == {"audio"}
+
+
+def test_wizard_trusts_an_audio_tag_on_such_a_container(generic: Any, home: Path) -> None:
+    # yt-dlp sets vcodec to 'none' for <audio>: the page, not the extension, says so.
+    code, output = generic("audio-theora-ogg.html", "", "", "", "")
+    assert code == 0
+    assert detected("kind_audio") in output
+    assert names(home / "Music") == ["audio-theora-ogg (1).mp3"]
+
+
+def test_wizard_tells_ogg_video_from_ogg_audio_on_one_page_and_repeats_it(
+    generic: Any, pasted: Any, media_url: str, home: Path, tmp_path: Path, monkeypatch: Any
+) -> None:
+    # Same extension on both items: only the vcodec yt-dlp sets for <audio> separates them.
+    code, output = generic("ogg-video-and-audio.html", *PICKER_WALK)
+    assert code == 0
+    assert tag("kind_video") in output
+    assert tag("kind_audio") in output
+    saved = "01 - ogg-video-and-audio (1) [ogg-video-and-audio-1].ogg"
+    assert names(home / "Videos") == [saved]
+    assert names(home / "Music") == []
+    assert "video" in streams(home / "Videos" / saved)
+
+    [line] = commands(output)
+    assert line == f"download-media -y --playlist-items 1 {media_url}/ogg-video-and-audio.html"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == [saved]
+    assert "video" in streams(elsewhere / "Videos" / saved)
+
+
+def test_wizard_on_a_generic_page_with_every_kind(
+    generic: Any, pasted: Any, media_url: str, home: Path, tmp_path: Path, monkeypatch: Any
+) -> None:
+    code, output = generic("everything.html", *PICKER_WALK)
+    assert code == 0
+    assert tag("kind_video") in output
+    assert tag("kind_audio") in output
+    assert "[?]" in output
+    assert names(home / "Videos") == ["01 - everything (1) [everything-1].mp4"]
+
+    [line] = commands(output)
+    assert line == f"download-media -y --playlist-items 1 {media_url}/everything.html"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == names(home / "Videos")
+
+
+def test_wizard_all_on_a_generic_page_with_every_kind_repeats_with_all_of_them(
+    generic: Any, pasted: Any, media_url: str, home: Path, tmp_path: Path, monkeypatch: Any
+) -> None:
+    code, output = generic("everything.html", "", "all", "", "", "", "", "")
+    assert code == 0
+    assert names(home / "Videos") == [
+        "01 - everything (1) [everything-1].mp4",
+        "02 - everything (2) [everything-2].jpg",
+        "03 - everything (3) [everything-3].m4a",
+    ]
+    [line] = commands(output)
+    assert line == f"download-media -y -p {media_url}/everything.html"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == names(home / "Videos")
+
+
+def test_wizard_enter_without_videos_takes_everything_offered(
+    generic: Any, media_url: str, home: Path
+) -> None:
+    code, output = generic("no-video.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == [
+        "01 - no-video (1) [no-video-1].jpg",
+        "02 - no-video (2) [no-video-2].m4a",
+    ]
+    assert commands(output) == [f"download-media -y --playlist-items 1,2 {media_url}/no-video.html"]
+
+
+def test_wizard_audio_type_on_every_audio_item_goes_to_music(generic: Any, home: Path) -> None:
+    # URL, item selection, type, format, folder, cookies.
+    code, output = generic("audios.html", "", "", "2", "", "", "")
+    assert code == 0
+    assert names(home / "Music") == [
+        "01 - audios (1) [audios-1].mp3",
+        "02 - audios (2) [audios-2].mp3",
+    ]
+    assert names(home / "Videos") == []
+    assert "-a" in shlex.split(commands(output)[0])
+
+
+def test_interactive_audio_flag_preselects_audio_on_a_picker(generic: Any, home: Path) -> None:
+    # URL, item selection, type, format, folder, cookies.
+    code, _ = generic("multi.html", "", "", "", "", "", "", flags=("-i", "-a"))
+    assert code == 0
+    assert names(home / "Music") == [f"0{i} - multi ({i}) [multi-{i}].mp3" for i in range(1, 5)]
+    assert names(home / "Videos") == []
+
+
+def test_interactive_video_flags_on_audio_without_codec_info_stay_audio(
+    generic: Any, media_url: str, home: Path
+) -> None:
+    code, output = generic("tiny.m4a", "", "", "", "", flags=("-i", "-q", "720"))
+    assert code == 0
+    assert names(home / "Music") == ["tiny.mp3"]
+    assert commands(output) == [f"download-media -y -a {media_url}/tiny.m4a"]
+
+
+@pytest.mark.parametrize(
+    ("page", "kind", "walk", "saved"),
+    [
+        ("ig-video", "kind_video", SINGLE_WALK, "Clip.mp4"),
+        ("storyboard-video", "kind_video", SINGLE_WALK, "Clip.mp4"),
+        ("thumbnail-video", "kind_video", SINGLE_WALK, "Clip.mp4"),
+        ("split-streams", "kind_video", SINGLE_WALK, "Clip.mp4"),
+        ("storyboard-audio", "kind_audio", ("",) * 4, "Clip.mp3"),
+        ("thumbnail-audio", "kind_audio", ("",) * 4, "Clip.mp3"),
+    ],
+)
+def test_wizard_on_real_shapes_with_partial_codec_info(
+    run: Any, out: Path, answers: Any, page: str, kind: str, walk: tuple[str, ...], saved: str
+) -> None:
+    prompts = answers(*walk)
+    code, output = run("-i", f"https://fake.test/{page}")
+    assert code == 0
+    assert f"generic / {t(kind)}" in output
+    assert t("image_only_skipped") not in output
+    assert names(out) == [saved]
+    assert len(prompts) == len(walk)
+
+
+def test_split_streams_with_unknown_codecs_are_merged(run: Any, out: Path, answers: Any) -> None:
+    answers(*SINGLE_WALK)
+    code, _ = run("-i", "https://fake.test/split-streams")
+    assert code == 0
+    assert streams(out / "Clip.mp4") == {"audio", "video"}
+
+
+@pytest.mark.parametrize("page", ["storyboard-only", "image-format", "ig-image"])
+def test_wizard_on_a_lone_format_without_streams_still_fails_the_probe(
+    run: Any, out: Path, answers: Any, page: str
+) -> None:
+    answers(*SINGLE_WALK, "")
+    code, output = run("-i", f"https://fake.test/{page}")
+    assert code == 1
+    assert t("probe_failed", "unknown") in output
+    assert t("done") not in output
+    assert names(out) == []
+
+
+def test_wizard_on_an_instagram_shaped_carousel(
+    run: Any, out: Path, again: Path, answers: Any
+) -> None:
+    url = "https://fake.test/ig-carousel"
+    answers(*PICKER_WALK)
+    code, output = run("-i", url)
+    assert code == 0
+    assert output.count(tag("kind_image")) == 2
+    assert output.count(tag("kind_video")) == 2
+    assert names(out) == ["02 - Clip [v1].mp4", "03 - Clip [v2].mp4"]
+
+    code, _ = run("-y", "-p", "-o", str(again), url)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_wizard_reads_the_extension_of_a_url_with_a_query_string(
+    run: Any, out: Path, answers: Any
+) -> None:
+    answers("", "all", "", "", "", "", "")
+    code, output = run("-i", "https://fake.test/query-carousel")
+    assert code == 0
+    assert tag("kind_audio") in output
+    assert "[?]" in output
+    assert tag("kind_video") in output
+    assert names(out) == ["01 - Clip [a1].m4a", "02 - Clip [p1].jpg", "03 - Clip [v1].mp4"]
+
+
+def test_items_yt_dlp_cannot_fetch_are_never_offered_and_never_saved(
+    run: Any, out: Path, again: Path, answers: Any
+) -> None:
+    url = "https://fake.test/undownloadable-carousel"
+    answers(*PICKER_WALK)
+    code, output = run("-i", url)
+    assert code == 0
+    assert output.count(tag("kind_image")) == 3
+    assert output.count(tag("kind_video")) == 1
+    assert names(out) == ["04 - Clip [v1].mp4"]
+
+    code, output = run("-y", "-p", "-o", str(again), url)
+    assert code == 0
+    assert names(again) == names(out)
+    assert t("partial_result", 1, 4, 0, 3) in output
+
+
+@pytest.mark.parametrize("cookies", [(), ("--cookies", "firefox")], ids=["without", "with"])
+def test_wizard_on_a_mixed_carousel_enter_and_replay(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any, cookies: tuple[str, ...]
+) -> None:
+    url = "https://fake.test/mixed-carousel"
+    answers(*PICKER_WALK)
+    code, output = run("-i", *cookies, url)
+    assert code == 0
+    assert tag("kind_image") in output
+    assert "[?]" in output
+    assert tag("kind_video") in output
+    assert tag("kind_audio") in output
+    assert names(out) == ["03 - Clip [v1].mp4"]
+
+    [line] = commands(output)
+    assert "--playlist-items 3" in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_wizard_all_on_a_mixed_carousel_skips_the_image_and_says_so(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    answers("", "all", "", "", "", "", "")
+    code, output = run("-i", "https://fake.test/mixed-carousel")
+    assert code == 0
+    saved = ["02 - Clip [p1].jpg", "03 - Clip [v1].mp4", "04 - Clip [a1].m4a"]
+    assert names(out) == saved
+    assert t("partial_result", 3, 4, 1, 0) in output
+
+    [line] = commands(output)
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == saved
+
+
+def test_wizard_enter_on_a_carousel_without_videos_keeps_what_is_offered(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    answers(*PICKER_WALK)
+    code, output = run("-i", "https://fake.test/no-video-carousel")
+    assert code == 0
+    assert names(out) == ["02 - Clip [p1].jpg", "03 - Clip [a1].m4a"]
+
+    [line] = commands(output)
+    assert "--playlist-items 2,3" in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+@pytest.mark.parametrize(
+    ("lang", "banner", "image", "unknown"),
+    [
+        ("es", "Carrusel/Playlist", "[imagen]", "Desconocido"),
+        ("en", "Carousel/Playlist", "[image]", "Unknown"),
+    ],
+)
+def test_what_the_user_reads_about_each_kind_in_both_languages(
+    run: Any,
+    answers: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    lang: str,
+    banner: str,
+    image: str,
+    unknown: str,
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    answers(*PICKER_WALK)
+    _, output = run("-i", "https://fake.test/mixed-carousel")
+    assert f"generic / {banner}" in output
+    assert image in output
+    assert "[?]" in output
+    assert "[video]" in output
+    assert "[audio]" in output
+
+    answers(*SINGLE_WALK, "")
+    _, output = run("-i", "https://fake.test/jpg")
+    assert f"generic / {unknown}" in output

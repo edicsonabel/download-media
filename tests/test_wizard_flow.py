@@ -233,6 +233,65 @@ def test_playlist_with_nothing_downloadable_cancels(walk: Any) -> None:
     assert walk(carousel(images), "") is None
 
 
+def test_playlist_of_only_unknown_items_is_offered(walk: Any) -> None:
+    items = [
+        ProbeItem(1, ContentKind.UNKNOWN, True, "a.jpg"),
+        ProbeItem(2, ContentKind.UNKNOWN, True, "b.jpg"),
+    ]
+    opts = walk(carousel(items), "", "", "", "", "", "", "")
+    assert opts.playlist_items == "1,2"
+
+
+def test_playlist_of_unsupported_unknown_items_is_refused(
+    walk: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert walk(carousel([ProbeItem(1, ContentKind.UNKNOWN, False, "a")]), "") is None
+    assert t("no_supported_items") in capsys.readouterr().out
+
+
+def test_one_unknown_item_among_images_is_enough_to_offer_the_playlist(walk: Any) -> None:
+    items = [
+        ProbeItem(1, ContentKind.SINGLE_IMAGE, False, "(image #1)"),
+        ProbeItem(2, ContentKind.UNKNOWN, True, "a.jpg"),
+    ]
+    opts = walk(carousel(items), "", "", "", "", "", "", "")
+    assert opts.playlist_items == "2"
+    assert opts.playlist_mode == "yes"
+
+
+MIXED = [
+    ProbeItem(1, ContentKind.SINGLE_IMAGE, False, "(image #1)"),
+    ProbeItem(2, ContentKind.UNKNOWN, True, "a.jpg"),
+    ProbeItem(3, ContentKind.SINGLE_VIDEO, True, "Clip"),
+    ProbeItem(4, ContentKind.SINGLE_AUDIO, True, "Track"),
+]
+
+
+@pytest.mark.parametrize(
+    "items,selected",
+    [(MIXED, "3"), ([MIXED[0], MIXED[1], MIXED[3]], "2,4"), ([MIXED[3]], "4")],
+    ids=["videos-win", "fallback-keeps-audio-and-unknown", "audio-alone"],
+)
+def test_enter_on_mixed_kinds(walk: Any, items: list[ProbeItem], selected: str) -> None:
+    opts = walk(carousel(items), "", "", "", "", "", "", "")
+    assert opts.playlist_items == selected
+
+
+def test_summary_and_preselection_on_a_playlist_of_unknown_items(
+    walk: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    items = [
+        ProbeItem(1, ContentKind.UNKNOWN, True, "a"),
+        ProbeItem(2, ContentKind.UNKNOWN, True, "b"),
+    ]
+    # URL, item selection, type (preselected), format, folder, cookies.
+    opts = walk(
+        carousel(items), "", "", "", "", "", "", opts=DownloadOptions(urls=[URL], audio_only=True)
+    )
+    assert opts.audio_only is True
+    assert "1,2" in capsys.readouterr().out
+
+
 def test_carousel_default_selects_videos(walk: Any) -> None:
     opts = walk(carousel(), "", "", "", "", "", "", "")
     assert opts.playlist_mode == "yes"

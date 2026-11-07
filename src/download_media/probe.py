@@ -14,6 +14,7 @@ from enum import Enum
 from typing import Any
 
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import MEDIA_EXTENSIONS
 
 from .cookies import ydl_cookies
 
@@ -60,14 +61,6 @@ class Probe:
     @property
     def is_playlist(self) -> bool:
         return self.content_kind == ContentKind.PLAYLIST
-
-    @property
-    def supported_video_count(self) -> int:
-        return sum(1 for i in self.items if i.kind == ContentKind.SINGLE_VIDEO and i.supported)
-
-    @property
-    def supported_audio_count(self) -> int:
-        return sum(1 for i in self.items if i.kind == ContentKind.SINGLE_AUDIO and i.supported)
 
     @property
     def unsupported_count(self) -> int:
@@ -136,6 +129,46 @@ def _is_auth_error(message: str) -> bool:
     return any(hint in msg for hint in _AUTH_ERROR_HINTS)
 
 
+# yt-dlp lists these as audio, yet they can hold a video it would keep. A wrong
+# "audio" converts and deletes that video; a wrong "video" only keeps the raw file.
+# .m4a isn't one: yt-dlp's metadata step already strips video from it.
+_AUDIO_LISTED_BUT_MAY_HOLD_VIDEO = frozenset({"asf", "m4b", "ogg", "ogx", "wma"})
+
+
+def _format_kind(fmt: dict[str, Any]) -> ContentKind:
+    """Read a format as yt-dlp does: ``'none'`` is absent, ``None`` is unknown."""
+    vcodec = fmt.get("vcodec")
+    if vcodec == "none":
+        no_audio = fmt.get("acodec") == "none"
+        return ContentKind.SINGLE_IMAGE if no_audio else ContentKind.SINGLE_AUDIO
+    if vcodec:
+        return ContentKind.SINGLE_VIDEO
+    # acodec can't decide here: yt-dlp may name it and still have video (or
+    # fill it in from the extension), while vcodec stays unknown.
+    ext = fmt.get("ext")
+    if ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO:
+        return ContentKind.SINGLE_AUDIO
+    if ext in MEDIA_EXTENSIONS.thumbnails:
+        return ContentKind.UNKNOWN  # Offered, never refused: a direct .jpg downloads.
+    return ContentKind.SINGLE_VIDEO
+
+
+_KINDS_BY_STRENGTH = (
+    ContentKind.SINGLE_VIDEO,
+    ContentKind.SINGLE_AUDIO,
+    ContentKind.UNKNOWN,
+    ContentKind.SINGLE_IMAGE,
+)
+
+
+def _media_kind(info: dict[str, Any]) -> ContentKind | None:
+    """What ``info`` holds, or None if there is nothing to fetch."""
+    # yt-dlp keeps no ``formats`` on a result that only has a ``url``.
+    formats = info.get("formats") or ([info] if info.get("url") else [])
+    kinds = {_format_kind(f) for f in formats}
+    return next((kind for kind in _KINDS_BY_STRENGTH if kind in kinds), None)
+
+
 def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
     """Classify one playlist entry as video / audio / image."""
     if entry is None:
@@ -149,38 +182,23 @@ def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
             title=f"(image #{idx})",
         )
     duration = entry.get("duration") or 0
-    formats = entry.get("formats") or []
-    has_video = any(
-        (f.get("vcodec") or "none") not in ("none", "") for f in formats
-    ) or duration > 0
-    has_audio = any((f.get("acodec") or "none") not in ("none", "") for f in formats)
-
-    if has_video:
-        kind = ContentKind.SINGLE_VIDEO
-    elif has_audio:
-        kind = ContentKind.SINGLE_AUDIO
-    else:
-        kind = ContentKind.SINGLE_IMAGE
+    kind = _media_kind(entry) or ContentKind.SINGLE_IMAGE
 
     title = str(entry.get("title") or entry.get("id") or f"Item {idx}")
     title = title.replace("\n", " ").replace("|", "/")[:80]
     return ProbeItem(
         index=idx,
         kind=kind,
-        supported=bool(formats),
+        supported=kind != ContentKind.SINGLE_IMAGE,
         title=title,
         duration=duration if duration > 0 else None,
     )
 
 
 def _classify_single(data: dict[str, Any]) -> ContentKind:
-    formats = data.get("formats") or []
-    has_video = any((f.get("vcodec") or "none") not in ("none", "") for f in formats)
-    has_audio = any((f.get("acodec") or "none") not in ("none", "") for f in formats)
-    if has_video:
-        return ContentKind.SINGLE_VIDEO
-    if has_audio:
-        return ContentKind.SINGLE_AUDIO
+    kind = _media_kind(data)
+    if kind is not None:
+        return kind
     if data.get("thumbnails"):
         return ContentKind.SINGLE_IMAGE
     return ContentKind.UNKNOWN
