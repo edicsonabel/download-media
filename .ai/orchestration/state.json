@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T23:44:53-04:00",
+  "updated": "2026-11-06T23:48:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,9 +251,9 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
@@ -263,7 +263,8 @@
         "d6b83a4",
         "bec654d",
         "875030f",
-        "0343274"
+        "0343274",
+        "16d2b5c"
       ],
       "review": {
         "approved": true,
@@ -346,6 +347,13 @@
           "result": "approved",
           "at": "2026-11-06T23:44:53-04:00",
           "note": "Re-check of 0343274: tests only, three minors closed, gate exit 0, 798 passed, 2 xfailed. Merge covered by the human's standing approval."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-06T23:48:13-04:00",
+          "note": "Merged as 16d2b5c, no conflicts. Gate exit 0, 798 passed, 2 xfailed."
         }
       ]
     }
