@@ -1,6 +1,6 @@
 # 18 — Make the probe see extraction errors
 
-Status: approved
+Status: done
 Item: `fix/probe-auth`
 
 ## Problem
@@ -185,9 +185,11 @@ Handled by other rows: the exit code of a wizard refusal, which a lone image now
 
 `cli.py` and `test_cli.py` change only under D2's recommended option. `downloader.py` doesn't change, and neither do flags, defaults or dependencies. Row 19 (`wizard-multi-url`) and row 27 (`audio-type-step`) also touch `wizard.py`, at other lines.
 
+`README.md` also changed, one sentence in `7fd33c1` saying the wizard explains a failed inspection and offers cookies on a login. It wasn't in this table. It's docs only and matches the behavior.
+
 ## Design
 
-Written for the recommended option of each decision. The prototype produced every "after" result here.
+Written for the recommended option of each decision. The prototype produced every "after" result here. The auth rule and `_short_reason` changed after approval: see "Changes after approval".
 
 ### `probe.py`: seeing errors
 
@@ -266,7 +268,7 @@ _AUTH_ERROR_HINTS = (
 
 `is_auth_error(message)`, public now:
 
-1. Drop the `[site] id: ` prefix and any URL. Lowercase.
+1. Drop the `[site] id: ` prefix and any URL. Lowercase. As shipped: an `ERROR: ` label and terminal colors go too, on every line; lines with HTTP 404, 410 or 5xx, or "is not a valid URL", are dropped whole; and every address goes, not just `http(s)` URLs. See "Changes after approval".
 2. A login hint means yes. It outranks the next step, because a message with the hint is yt-dlp saying cookies are the way.
 3. A `_NOT_AUTH_ERRORS` match means no.
 4. Otherwise, any `_AUTH_ERROR_HINTS` match.
@@ -279,7 +281,7 @@ yt-dlp's text stays in English: it comes from 1800 sites, and translating it isn
 
 `_short_reason(message)`, used only for what's displayed:
 
-1. Take the first line. Geo errors add a VPN line.
+1. Take the first line. Geo errors add a VPN line. As shipped, the prefix is dropped and the text stripped first, so the first line with words is taken, and an `ERROR: ` label is read past.
 2. Drop the `[site] id: ` prefix.
 3. Cut at `; please report`, `, please report` and ` (caused by`.
 4. Drop every sentence from the first one naming a flag on, matching `(?:^|[\s`])--?[a-z]`. This catches `Use --cookies...`, `Use --list-formats...` and `` `-t sleep` ``.
@@ -434,69 +436,69 @@ The three `Probe` mocks in `test_wizard_flow.py:170-192` pass but print `None` a
 
 **Gate**
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] No test that isn't in the table above needed changing
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] No test that isn't in the table above needed changing
 
 **Seeing the error, `fake_site`**
 
-- [ ] **[fix]** `probe()` on `needs-cookies`: `failed`, `needs_cookies`, `error_message == "Login required"`. Replaces the mock as the proof for `test_probe_never_raises`
-- [ ] **[fix]** Parametrized over `age-gate`, `paid-post`, `rate-limited`, `geo-metadata`, `drm`, `no-video-post`: `failed`, `content_kind` isn't image. **Fails if `ignore_no_formats_error` is ever set in the probe**
-- [ ] **[fix]** Parametrized over `age-gate`, `paid-post`, `login-hint`, `anonymous-limit`: `needs_cookies`
-- [ ] **[fix]** Parametrized over `rate-limited`, `geo`, `geo-metadata`, `drm`, `no-video-post`, `extractor-bug`: not `needs_cookies`
-- [ ] **[fix]** `extractor-bug`: `"please report" not in error_message`
-- [ ] **[pin]** `carousel`, `ig-carousel`, `only-images`, `url-only-carousel`, `empty`: same kinds and items as measured on `main`, `error_message` empty, not `needs_cookies`
+- [x] **[fix]** `probe()` on `needs-cookies`: `failed`, `needs_cookies`, `error_message == "Login required"`. Replaces the mock as the proof for `test_probe_never_raises`
+- [x] **[fix]** Parametrized over `age-gate`, `paid-post`, `rate-limited`, `geo-metadata`, `drm`, `no-video-post`: `failed`, `content_kind` isn't image. **Fails if `ignore_no_formats_error` is ever set in the probe**
+- [x] **[fix]** Parametrized over `age-gate`, `paid-post`, `login-hint`, `anonymous-limit`: `needs_cookies`
+- [x] **[fix]** Parametrized over `rate-limited`, `geo`, `geo-metadata`, `drm`, `no-video-post`, `extractor-bug`: not `needs_cookies`
+- [x] **[fix]** `extractor-bug`: `"please report" not in error_message`
+- [x] **[pin]** `carousel`, `ig-carousel`, `only-images`, `url-only-carousel`, `empty`: same kinds and items as measured on `main`, `error_message` empty, not `needs_cookies`
 
 **Flows, `fake_site`, each with the prompts in Cases**
 
-- [ ] **[fix]** Wizard on `needs-cookies`, browser: exit 0, `Clip.mp4`, `--cookies` in the printed command; replay saves the same file with no prompt
-- [ ] **[fix]** Wizard on `needs-cookies`, declines: exit 1, `t("auth_needed_retry", "Login required")` and `t("probe_failed", "Login required")` in the output, `"unknown"` not in it
-- [ ] **[fix]** Wizard on `needs-cookies`, `b`: as declining, no exception
-- [ ] **[fix]** Wizard on `needs-cookies`, `c`, and `EOFError`: exit 0, `t("equiv_cmd")` not in the output
-- [ ] **[fix]** Wizard on `gated-carousel`, browser: `[video]` in the output, 2 files named `NN - Clip [id].mp4`, `--cookies` and `--playlist-items` in the printed command; replay saves the same files
-- [ ] **[fix]** Cookie-hungry `needs-cookies`, declines twice: exit 1, 8 prompts
-- [ ] **[fix]** Cookie-hungry `needs-cookies`, declines then browser: exit 0, `Clip.mp4`
-- [ ] **[pin]** Cookie-hungry `needs-cookies`, browser up front: 6 prompts, `t("auth_needed_retry", ...)` not in the output
-- [ ] **[pin]** Cookie-hungry `carousel`, declines: 7 prompts
-- [ ] **[fix]** Browser at the prompt on `private`: exit 1, `t("auth_still_needed", BROWSERS[0])` in the output, 7 prompts, so no loop
-- [ ] **[fix]** `-i --cookies firefox` on `private`: `t("auth_still_needed", "firefox")` in the output, `t("auth_needed_retry", ...)` not in it
-- [ ] **[fix]** `rate-limited` and `geo`: real reason in the output, `t("ask_cookies")` printed exactly once, by the late step
-- [ ] **[fix]** `partial-gated`, declines: `t("probe_partial", "Login required")`, `[?]` in the output, 1 file, exit 0
-- [ ] **[fix]** `partial-gated`, browser: 2 files, no `[?]`
-- [ ] **[fix]** `partial-rate`: `t("probe_partial", ...)`, one `t("ask_cookies")`, from the late step, 1 file
-- [ ] **[fix]** `partial-broken`, `all`: `t("partial_result", 1, 3, 1, 1)`, exit 0, and `-y -p` saves the same file
-- [ ] **[fix]** `all-gated`, declines: `t("no_supported_items")` not in the output, exit 1
-- [ ] **[fix]** `hole`: `[?]` for the empty entry, no `t("probe_partial", ...)`, `t("ig_image_warning")` not in the output
-- [ ] **[fix]** `ig-image`, `image-format`, `storyboard-only`, `thumbnail-image`: `t("image_only_skipped")`, exit 0, 1 prompt, no files
-- [ ] **[fix]** `fake.test/image`: `t("probe_failed", "No video formats found!")`, exit 1
-- [ ] **[fix]** `undownloadable-carousel`: 3 `[image]`, 1 `[video]`, no `t("probe_partial", ...)`. Fails with `or` in `_media_kind`, measured
-- [ ] **[pin]** `-i --cookies brave` on `rejects-cookies`: saved, exit 0, no `--cookies` in the printed command
-- [ ] **[pin]** `-i -a` on `needs-cookies`, browser: `.mp3`
-- [ ] **[pin]** Parametrized over the new pages and `needs-cookies`: `-y`, `-y -p`, `-y -P`, `-y -a` and `-y -l` give the exit code and file names measured on `main`
+- [x] **[fix]** Wizard on `needs-cookies`, browser: exit 0, `Clip.mp4`, `--cookies` in the printed command; replay saves the same file with no prompt
+- [x] **[fix]** Wizard on `needs-cookies`, declines: exit 1, `t("auth_needed_retry", "Login required")` and `t("probe_failed", "Login required")` in the output, `"unknown"` not in it
+- [x] **[fix]** Wizard on `needs-cookies`, `b`: as declining, no exception
+- [x] **[fix]** Wizard on `needs-cookies`, `c`, and `EOFError`: exit 0, `t("equiv_cmd")` not in the output
+- [x] **[fix]** Wizard on `gated-carousel`, browser: `[video]` in the output, 2 files named `NN - Clip [id].mp4`, `--cookies` and `--playlist-items` in the printed command; replay saves the same files
+- [x] **[fix]** Cookie-hungry `needs-cookies`, declines twice: exit 1, 8 prompts
+- [x] **[fix]** Cookie-hungry `needs-cookies`, declines then browser: exit 0, `Clip.mp4`
+- [x] **[pin]** Cookie-hungry `needs-cookies`, browser up front: 6 prompts, `t("auth_needed_retry", ...)` not in the output
+- [x] **[pin]** Cookie-hungry `carousel`, declines: 7 prompts
+- [x] **[fix]** Browser at the prompt on `private`: exit 1, `t("auth_still_needed", BROWSERS[0])` in the output, 7 prompts, so no loop
+- [x] **[fix]** `-i --cookies firefox` on `private`: `t("auth_still_needed", "firefox")` in the output, `t("auth_needed_retry", ...)` not in it
+- [x] **[fix]** `rate-limited` and `geo`: real reason in the output, `t("ask_cookies")` printed exactly once, by the late step
+- [x] **[fix]** `partial-gated`, declines: `t("probe_partial", "Login required")`, `[?]` in the output, 1 file, exit 0
+- [x] **[fix]** `partial-gated`, browser: 2 files, no `[?]`
+- [x] **[fix]** `partial-rate`: `t("probe_partial", ...)`, one `t("ask_cookies")`, from the late step, 1 file
+- [x] **[fix]** `partial-broken`, `all`: `t("partial_result", 1, 3, 1, 1)`, exit 0, and `-y -p` saves the same file
+- [x] **[fix]** `all-gated`, declines: `t("no_supported_items")` not in the output, exit 1
+- [x] **[fix]** `hole`: `[?]` for the empty entry, no `t("probe_partial", ...)`, `t("ig_image_warning")` not in the output
+- [x] **[fix]** `ig-image`, `image-format`, `storyboard-only`, `thumbnail-image`: `t("image_only_skipped")`, exit 0, 1 prompt, no files
+- [x] **[fix]** `fake.test/image`: `t("probe_failed", "No video formats found!")`, exit 1
+- [x] **[fix]** `undownloadable-carousel`: 3 `[image]`, 1 `[video]`, no `t("probe_partial", ...)`. Fails with `or` in `_media_kind`, measured
+- [x] **[pin]** `-i --cookies brave` on `rejects-cookies`: saved, exit 0, no `--cookies` in the printed command
+- [x] **[pin]** `-i -a` on `needs-cookies`, browser: `.mp3`
+- [x] **[pin]** Parametrized over the new pages and `needs-cookies`: `-y`, `-y -p`, `-y -P`, `-y -a` and `-y -l` give the exit code and file names measured on `main`
 
 **Real generic extractor, loopback**
 
-- [ ] **[fix]** Wizard on `/status/401`, declines: `t("auth_needed_retry", "Unable to download webpage: HTTP Error 401: Unauthorized")`, exit 1
-- [ ] **[fix]** Parametrized over 403, 404, 429: real reason in `t("probe_failed", ...)`, no `t("auth_needed_retry", ...)`
-- [ ] **[fix]** `-i --cookies chrome` on a real page, with `HOME` in a temp folder: `could not find chrome cookies database` in the output, `failed to load cookies` not in it, saved through the retry
+- [x] **[fix]** Wizard on `/status/401`, declines: `t("auth_needed_retry", "Unable to download webpage: HTTP Error 401: Unauthorized")`, exit 1
+- [x] **[fix]** Parametrized over 403, 404, 429: real reason in `t("probe_failed", ...)`, no `t("auth_needed_retry", ...)`
+- [x] **[fix]** `-i --cookies chrome` on a real page, with `HOME` in a temp folder: `could not find chrome cookies database` in the output, `failed to load cookies` not in it, saved through the retry
 
 **Unit, `tests/test_probe.py`**
 
-- [ ] **[fix]** `is_auth_error` over every row of the table in "What counts as an auth failure", plus `Unsupported URL: https://example.com/private/page` and `[generic] login: ... HTTP Error 404: Not Found`, both `False`
-- [ ] **[fix]** `_short_reason` over the table in Design, a geo error with its VPN line, and a 400-character message: at most 200 characters
-- [ ] **[fix]** `_classify_single({"url": "http://x/f.mp4", "formats": []})` isn't video; `_media_kind` is `None`, while the filter passes it
-- [ ] **[fix]** `_classify_single({"formats": [], "thumbnail": "http://x/i.jpg"})` is image
-- [ ] **[pin]** Spec 17's `:280` and `:281` pins still pass
+- [x] **[fix]** `is_auth_error` over every row of the table in "What counts as an auth failure", plus `Unsupported URL: https://example.com/private/page` and `[generic] login: ... HTTP Error 404: Not Found`, both `False`
+- [x] **[fix]** `_short_reason` over the table in Design, a geo error with its VPN line, and a 400-character message: at most 200 characters
+- [x] **[fix]** `_classify_single({"url": "http://x/f.mp4", "formats": []})` isn't video; `_media_kind` is `None`, while the filter passes it
+- [x] **[fix]** `_classify_single({"formats": [], "thumbnail": "http://x/i.jpg"})` is image
+- [x] **[pin]** Spec 17's `:280` and `:281` pins still pass
 
 **Unit, `tests/test_cli.py`, if D2 is approved**
 
-- [ ] **[fix]** `_hint` on yt-dlp's default login text, and on `anonymous-limit`'s: suggests `--cookies <browser>`
-- [ ] **[fix]** `_hint` on `HTTP Error 429: Too Many Requests` and a geo error: empty
+- [x] **[fix]** `_hint` on yt-dlp's default login text, and on `anonymous-limit`'s: suggests `--cookies <browser>`
+- [x] **[fix]** `_hint` on `HTTP Error 429: Too Many Requests` and a geo error: empty
 
 **Commits:** `fix(probe): see extraction errors so the cookie retry fires`, with the wizard and `i18n.py` changes, since neither works alone. `_media_kind` belongs with it, as the design depends on it. Under D2, `fix(cli): share the auth error rule with the probe` on its own.
 
 **SemVer:** minor by `AGENTS.md`'s rule, because it adds new messages (`auth_still_needed`, `probe_partial`). Not breaking: no flag, default or on-disk path changes. The next release is already 0.3.0, so this moves nothing, and no version is bumped here.
 
-One change belongs in the release notes: in the wizard, a lone image now stops at once with exit 0, where it used to walk six questions and exit 1. Its exit code is already on `cancel-exits`' list.
+Two changes belong in the release notes: in the wizard, a lone image now stops at once with exit 0, where it used to walk six questions and exit 1. Its exit code is already on `cancel-exits`' list. And image rows in the carousel picker show the entry's real title, where they read `(image #N)`, since images now arrive as dicts.
 
 ## Live check
 
@@ -539,6 +541,39 @@ What must hold:
 2. `This content needs a login:` with YouTube's reason, no `--cookies-from-browser` in that line, exit 1, no files.
 3. Anonymous: a reason, no "unknown", no files. Logged in: `This content is a standalone image`, exit 0. If either differs, record what was printed: that corrects this spec, and isn't by itself a failure.
 4. Gated post: `This content needs a login:` appears after the up-front decline, the content is detected, and what's on disk matches what's reported.
+
+**Result, partial.** Step 1 ran in QA at `e69dda4`, without cookies, and passed. `git diff e69dda4 0e523ad -- src` is empty, so it wasn't run again. Steps 2 and 3 and the gated post were **skipped**: `DM_LIVE_AGE_GATED`, `DM_LIVE_IG_IMAGE` and `DM_LIVE_IG_GATED` aren't set. So YouTube's real age-gate wording and Instagram's real answer on a gated post and on a lone image haven't been seen. The rule for them still rests on yt-dlp's source and on `fake_site` pages built with yt-dlp's own raisers. Run them before the release.
+
+## Changes after approval
+
+Review rounds changed the auth rule and the reason. Each change has its own test, and the gate covers them.
+
+**The auth rule reads only what the site said** (`6e502fc`, `8ab163c`, `e69dda4`):
+
+- **Lines with HTTP 404, 410 or 5xx, or "is not a valid URL", never count** (`_NEVER_A_LOGIN`). They're about the address, so anything else on them came from the id. In the first round, whose prefix stopped at a space or a colon, a plain 404 at `/private%20clip` or `/tag:private` asked for cookies. Tests: `test_a_status_that_is_no_login_outranks_the_rest_of_its_line`, `test_a_real_404_named_after_a_login_asks_for_nothing`.
+- **A hint on a 404 line doesn't ask.** It follows from the rule above. No extractor produces that today. A login error whose 404 is only the cause still asks. Test: `test_a_status_that_is_no_login_outranks_the_rest_of_its_line`.
+- **Accepted:** a site that hides private content behind a 404 gets no prompt up front, only the late cookies step. That rescue saves the file. Test: `test_a_404_hiding_a_private_video_is_rescued_by_the_late_cookies_step`.
+- **Every address is dropped** (`_ADDRESS`), not just `http(s)` URLs: other schemes and dotted host names too, so a host name in a resolve error can't ask. Test: `test_words_from_the_id_or_the_address_ask_for_nothing`.
+- **The prefix tries `Unable to|Failed to` first.** The generic extractor's id is the URL's last segment, unquoted, so it can hold spaces or `": "`. When yt-dlp's own opening follows, the prefix takes the whole id up to it. Otherwise it takes `[site] \S+: `. It also reads past `ERROR: ` and colors, on every line, which is how a `DownloadError` arrives, one error per line under `-p`. **Accepted tradeoff:** a site sentence that ends in `": Unable to ..."` loses what comes before it, so a login hint there no longer counts. The only reachable error of that shape in yt-dlp, at the floor and at 2026.10.26, is openload's PhantomJS failure, which has nothing to do with a login, and the late cookies step still covers it. Tests: `test_the_end_of_an_id_with_a_colon_asks_for_nothing`, `test_wizard_ignores_an_id_with_a_colon_on_a_403`, `test_the_reason_of_a_404_drops_all_of_an_id_with_a_colon`.
+
+**`-y` lost a false hint, beyond D2.** On `bf10163`, `_hint_for_download_error` matched `"private"` anywhere in the message, the id included (`cli.py:334-336`). So `-y` printed `→ try again with --cookies` on a 403 or a 404 whose id held "private". Sharing the rule removes that. A false hint on any error at `/login`, a refused connection included, appeared during review with the shared rule, and was fixed before the merge; `main` never had it. D2 only promised to add the hint on missed login errors, so this goes further, and it's an improvement. Tests: `test_direct_mode_hint_on_real_http_errors`, `test_direct_mode_does_not_blame_a_404_on_login`, `test_direct_mode_ignores_an_id_with_a_colon_on_a_403`, `test_direct_mode_ignores_an_id_with_a_colon_on_a_refused_connection`, `test_hint_ignores_the_id_of_a_real_download_error`, `test_hint_ignores_the_id_of_any_download_error`.
+
+**`_short_reason` strips first and reads past `ERROR: `** (`581500a`). An error that opened with a newline left an empty reason: "This content needs a login: ", then "unknown", with the words one line down. Tests: `test_only_the_first_line_of_an_error_is_the_reason`, `test_short_reason_drops_the_label_of_a_raised_error`.
+
+**`_read_result` runs inside the `try`** (`f4f9734`). The override hands image entries back before yt-dlp's numeric sanitizing, so a text `duration` raised outside the `try` and crashed the wizard after the first prompt. Everything that reads the extracted data now runs inside it, so "never raises" holds by construction, and durations are read as yt-dlp would leave them (`_seconds`). Tests: `test_a_text_duration_on_an_image_entry_cannot_break_the_probe`, `test_odd_types_on_an_image_entry_cannot_break_the_probe`, `test_what_the_classifier_cannot_read_is_a_failure_and_not_a_crash`, `test_a_text_duration_on_an_image_entry_keeps_the_picker`.
+
+**Picker titles use the real title.** Images now arrive as dicts, so their rows show the entry's title, where they read `(image #N)`. A `None` entry reads `(item #N)`. See the release notes above.
+
+## Validation
+
+On `main` at `0e523ad`, yt-dlp 2026.10.26, `curl_cffi` 0.17.0. GitHub CI hasn't run on this code: nothing has been pushed.
+
+- **Gate:** `timeout 400 scripts/pre-release.sh --no-live` exit 0. Lint and types clean. 1156 passed, 9 deselected, 2 xfailed, in `es` and in `en`, coverage 98.52%. The two xfails are known and not from this item: the `opus` rerun, and spec 17's D4, the relative `og:image` traceback.
+- **Criteria:** every one maps to a named test, and all of them pass in one run (`pytest -k` over the 48 names, 217 passed). Main ones: `test_probe_reports_the_real_reason`, `test_a_failure_with_metadata_never_reads_as_an_image`, `test_probe_asks_for_cookies_on_a_login_error`, `test_probe_does_not_ask_for_cookies_when_they_cannot_help`, `test_probe_drops_the_bug_report_request`, `test_a_healthy_carousel_keeps_its_items`; the flows from `test_wizard_retries_a_gated_video_with_the_browser_it_is_given` to `test_direct_modes_keep_their_exit_codes_and_files`; `test_wizard_asks_for_cookies_on_a_real_401`, `test_wizard_explains_a_real_http_error_without_a_prompt`, `test_a_browser_that_is_not_installed_is_named_and_the_retry_still_saves`; `test_cookies_can_help`, `test_cookies_cannot_help`, `test_short_reason_keeps_the_sites_words`, `test_short_reason_is_bounded`, `test_probe_and_match_filter_differ_on_an_empty_formats_list_with_a_url`, `test_a_thumbnail_key_alone_makes_a_result_without_formats_an_image`; `test_hint_follows_the_probe_on_what_cookies_can_fix`, `test_hint_stays_quiet_when_cookies_cannot_help`. The pre-existing tests that changed are the table's eight, plus the import of `_is_auth_error`, which this spec makes public.
+- **Reverting the fix:** not repeated here. Testing and QA reported mutation runs of 22/22, 21/21, 28/30 (2 equivalent) and 2/2 across the rounds.
+- **Reproduction:** the Problem section's command, with the real console script and the generic extractor on a loopback server, `HOME` and `XDG_*` in a temp folder. On `/s401`: `This content needs a login: Unable to download webpage: HTTP Error 401: Unauthorized`, one cookies prompt, manual flow, `Download failed`, `→ try again with --cookies <browser>`, exit 1. On `/s403`, `/s404`, `/s429`, `/s451` and an unsupported page: `Could not inspect URL:` with the real reason, no early prompt, one late cookies step, exit 1. "unknown" printed nowhere. No files, and no history written.
+- **Scope:** outside `.ai/`, the diff `bf10163..0e523ad` touches the nine files in the Files table, plus one sentence in `README.md`. No change to `pyproject.toml`, `PKGBUILD` or the version.
+- **Floor:** not re-run here. QA's floor run failed `test_yt_dlp_can_impersonate` with `curl_cffi` 0.17 in its venv, and `main` fails it the same way. The developer's floor venv, with a declared `curl_cffi`, passed.
 
 ## Open decisions
 
