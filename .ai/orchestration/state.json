@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T19:13:50-04:00",
+  "updated": "2026-11-07T19:19:24-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,9 +1054,9 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
       "worktree": ".worktrees/fix-audio-thumbnail",
@@ -1071,9 +1071,7 @@
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "medium downloader.py:100-117 thumbnail link ending in the media's own extension: cover written where the download goes, audio extraction fails, and the guard keeps the JPEG named .m4a"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -1131,6 +1129,13 @@
           "result": "done",
           "at": "2026-11-07T19:13:50-04:00",
           "note": "Round 2: thumbnails named <name>.cover.<ext> via the _write_thumbnails override (the outtmpl thumbnail key doesn't fix it: yt-dlp writes at the temp filename). item_media guard removed as dead code. Rerun overwrite closed. 1661 passed, 2 xfailed. Side effect: a user's own <title>.jpg is no longer deleted by -a."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T19:19:24-04:00",
+          "note": "Round 2 closed. Mutation 3/3. Accepted: yt-dlp deletes a user's own <title>.cover.jpg (main did this to <title>.jpg). Planner: a later item titled X with an .mp3 cover link deletes an earlier X.cover.mp3; per-item cover names would close it."
         }
       ]
     }
