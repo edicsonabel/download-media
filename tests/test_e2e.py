@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -15,9 +16,10 @@ from yt_dlp.networking.exceptions import NoSupportingHandlers
 
 from download_media import cli, i18n, wizard
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
+from download_media.downloader import _source_url
 from download_media.i18n import t
 
-from .conftest import GEO_BLOCK, HTTP_404, FakeSiteIE
+from .conftest import GEO_BLOCK, HTTP_404, JUNK, NO_EXT_VIDEO, FakeSiteIE
 
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
@@ -2175,19 +2177,139 @@ def test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio(
 @pytest.mark.parametrize(
     ("page", "saved"), [("video-ogx.html", "video-ogx (1).ogx"), ("theora.ogx", "theora.ogx")]
 )
-def test_wizard_keeps_an_ogx_and_reports_the_metadata_failure(
+def test_wizard_keeps_an_ogx_and_reports_it_untagged(
     generic: Any, media_url: str, home: Path, page: str, saved: str
 ) -> None:
-    # ffmpeg has no muxer for .ogx, so yt-dlp's metadata step fails after the
-    # download. The same happens with -y and on main: the file stays, video included.
+    # ffmpeg has no muxer for .ogx, so yt-dlp's metadata step fails after the download.
     code, output = generic(page, *SINGLE_WALK)
-    assert code == 1
+    assert code == 0
     assert detected("kind_video") in output
-    assert t("failed", f"{media_url}/{page}") in output
-    assert t("done") not in output
+    assert t("untagged", saved) in output
+    assert t("done") in output
+    assert t("failed", f"{media_url}/{page}") not in output
     assert names(home / "Music") == []
     assert names(home / "Videos") == [saved]
     assert "video" in streams(home / "Videos" / saved)
+
+
+def step_leftovers(folder: Path) -> list[str]:
+    """What a failed ffmpeg step or an unfinished download leaves behind."""
+    return [n for n in names(folder) if ".temp." in n or n.endswith((".meta", ".part"))]
+
+
+def untagged_warnings(output: str) -> int:
+    return output.count(t("untagged", ""))
+
+
+def said_partial_result(output: str) -> bool:
+    pattern = re.escape(t("partial_result", *["{}"] * 4)).replace(r"\{\}", r"\d+")
+    return re.search(pattern, output) is not None
+
+
+@pytest.mark.parametrize(
+    ("page", "kinds"),
+    [
+        ("theora.ogx", {"audio", "video"}),
+        ("typed/audio/webm/audio.webm/clip.weba", {"audio"}),
+        ("typed/audio/mp4/tiny.m4a/clip.m4r", {"audio"}),
+        ("typed/audio/mp4/tiny.m4a/clip.f4a", {"audio"}),
+        # ffmpeg's muxer can't take the streams, and leaves an empty temp file.
+        ("typed/audio/x-wav/tiny.mp4/clip.wav", {"audio", "video"}),
+        ("typed/audio/ogg/tiny.mp4/clip.oga", {"audio", "video"}),
+        (NO_EXT_VIDEO, {"audio", "video"}),
+    ],
+)
+def test_a_saved_file_ffmpeg_cannot_tag_is_a_success(
+    generic: Any, media_url: str, out: Path, page: str, kinds: set[str]
+) -> None:
+    code, output = generic(page, flags=("-y", "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert streams(out / saved) == kinds
+    assert t("untagged", saved) in output
+    assert untagged_warnings(output) == 1
+    assert t("done") in output
+    assert t("failed", f"{media_url}/{page}") not in output
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
+
+
+def test_a_body_that_is_not_media_is_still_a_failure(
+    generic: Any, media_url: str, out: Path
+) -> None:
+    code, output = generic(JUNK, flags=("-y", "-o", str(out)))
+    assert code == 1
+    assert t("failed", f"{media_url}/{JUNK}") in output
+    assert untagged_warnings(output) == 0
+    assert history_rows() == []
+
+
+def test_playlist_with_an_untaggable_item_saves_both_and_counts_each_once(
+    generic: Any, out: Path
+) -> None:
+    code, output = generic("ogx-and-mp4.html", flags=("-y", "-p", "-o", str(out)))
+    assert code == 0
+    saved = names(out)
+    assert len(saved) == 2
+    assert all("video" in streams(out / name) for name in saved)
+    [ogx] = [name for name in saved if name.endswith(".ogx")]
+    assert t("untagged", ogx) in output
+    assert untagged_warnings(output) == 1
+    assert not said_partial_result(output)
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
+
+
+def test_single_mode_goes_on_past_an_untaggable_item(generic: Any, out: Path) -> None:
+    code, output = generic("ogx-and-mp4.html", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert len(names(out)) == 2
+    assert untagged_warnings(output) == 1
+
+
+def test_rerunning_an_untaggable_file_adds_one_copy_at_most(generic: Any, out: Path) -> None:
+    # No source-URL tag, so the second run can't tell the file is its own (D5).
+    page = "typed/audio/webm/audio.webm/clip.weba"
+    for count in (1, 2, 2):
+        code, output = generic(page, flags=("-y", "-o", str(out)))
+        assert code == 0
+        assert t("done") in output
+        assert len(names(out)) == count
+    assert len(history_rows()) == 3
+
+
+def test_audio_from_an_untaggable_file_is_tagged_as_usual(generic: Any, out: Path) -> None:
+    code, output = generic("theora.ogx", flags=("-y", "-a", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["theora.mp3"]
+    assert untagged_warnings(output) == 0
+
+
+def test_a_taggable_file_still_gets_its_source_url(generic: Any, media_url: str, out: Path) -> None:
+    code, output = generic("tiny.mp4", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["tiny.mp4"]
+    assert _source_url(out / "tiny.mp4") == f"{media_url}/tiny.mp4"
+    assert untagged_warnings(output) == 0
+
+
+def test_an_untaggable_file_with_cookies_is_not_downloaded_again(
+    run: Any, out: Path, fake_site: list[Any]
+) -> None:
+    code, output = run("-y", "--cookies", "brave", "https://fake.test/ogx")
+    assert code == 0
+    assert names(out) == ["Clip.ogx"]
+    assert t("cookies_retry", "brave") not in output
+    assert t("untagged", "Clip.ogx") in output
+    assert fake_site == [("brave",)]
+
+
+def test_an_untaggable_file_with_chapters_leaves_no_chapters_file(run: Any, out: Path) -> None:
+    code, output = run("-y", "https://fake.test/ogx-chapters")
+    assert code == 0
+    assert step_leftovers(out) == []
+    assert names(out) == ["Clip.ogx"]
+    assert t("untagged", "Clip.ogx") in output
 
 
 @pytest.mark.parametrize(

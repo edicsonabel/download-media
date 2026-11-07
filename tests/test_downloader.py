@@ -201,3 +201,11 @@ def test_result_total() -> None:
     from download_media.downloader import DownloadResult
 
     assert DownloadResult(saved=1, skipped=2, failed=3).total == 6
+
+
+@pytest.mark.parametrize("audio_only", [False, True])
+def test_metadata_step_is_added_in_download_not_in_the_options(audio_only: bool) -> None:
+    # download() adds a metadata step that tells an untagged file from a broken one.
+    opts = DownloadOptions(urls=["http://x"], audio_only=audio_only)
+    keys = [pp["key"] for pp in build_ydl_opts(opts, Path("/tmp/out"))["postprocessors"]]
+    assert "FFmpegMetadata" not in keys

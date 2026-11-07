@@ -16,8 +16,8 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 from yt_dlp.postprocessor.common import PostProcessor
-from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP
-from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension
+from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP, FFmpegMetadataPP
+from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension, replace_extension
 
 from .config import DownloadOptions
 from .cookies import ydl_cookies
@@ -39,6 +39,8 @@ class DownloadResult:
     subs_missing: bool = False
     # Files holding fewer subtitle streams than subtitle files saved for them.
     subs_not_embedded: tuple[str, ...] = ()
+    # Files saved whole that ffmpeg couldn't write tags to.
+    untagged: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -116,7 +118,6 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
                         "preferredquality": "0",
                     },
                     {"key": "EmbedThumbnail"},
-                    {"key": "FFmpegMetadata"},
                 ],
             }
         )
@@ -138,7 +139,8 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
             {
                 "format": fmt,
                 "merge_output_format": opts.video_format,
-                "postprocessors": [{"key": "FFmpegMetadata"}],
+                # download() adds the metadata step (_TagSource).
+                "postprocessors": [],
             }
         )
 
@@ -262,6 +264,46 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
         return [], info
 
 
+def _has_media_streams(path: str) -> bool:
+    try:
+        cmd = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0"]
+        done = subprocess.run([*cmd, path], capture_output=True, text=True, timeout=15, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0 and bool({"audio", "video"} & set(done.stdout.split()))
+
+
+class _TagSource(FFmpegMetadataPP):  # type: ignore[misc]
+    """yt-dlp's metadata step, except that a file ffmpeg can't tag still counts as saved.
+
+    ffmpeg can read an .ogx, a .weba or a renamed file and still have no muxer for it, and
+    yt-dlp would report a file already on disk as a failed download.
+    """
+
+    def __init__(self, downloader: Any, untagged: list[str]) -> None:
+        super().__init__(downloader)
+        self._untagged = untagged
+
+    @classmethod
+    def pp_key(cls) -> str:
+        # Keeps the [Metadata] tag it prints, and its postprocessor_args key.
+        return "Metadata"
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        try:
+            return super().run(info)  # type: ignore[no-any-return]
+        except PostProcessingError:
+            # The step writes to a temp file and replaces the original only on success.
+            path = info["filepath"]
+            Path(prepend_extension(path, "temp")).unlink(missing_ok=True)
+            Path(replace_extension(path, "meta")).unlink(missing_ok=True)  # Chapters.
+            # Asking ffprobe, not reading ffmpeg's error text: that varies by version.
+            if not _has_media_streams(path):
+                raise
+            self._untagged.append(Path(path).name)
+            return [], info
+
+
 def _skip_items_without_media(skipped: list[str]) -> Callable[..., str | None]:
     """``match_filter`` dropping carousel items yt-dlp has no formats for.
 
@@ -293,7 +335,10 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     ydl_opts = build_ydl_opts(opts, output_dir)
     ydl_opts["post_hooks"] = [saved.append]
     ydl_opts["match_filter"] = _skip_items_without_media(skipped)
+    untagged: list[str] = []
     with _Ydl(ydl_opts) as ydl:
+        # Appended after the params' postprocessors: audio extraction comes first.
+        ydl.add_post_processor(_TagSource(ydl, untagged), when="post_process")
         final_ext = opts.audio_format if opts.audio_only else None
         ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
         counts: list[int | None] = []
@@ -304,7 +349,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         subs_seen: list[bool] = []
         not_embedded: list[str] = []
         if opts.subs:
-            # After the params' postprocessors, so FFmpegMetadata's source URL tag stays.
+            # After the metadata step, so embedding keeps its source URL tag.
             ydl.add_post_processor(_SubtitlesSeen(subs_seen), when="post_process")
             if not opts.audio_only:
                 ydl.add_post_processor(_EmbedSubtitles(ydl, not_embedded), when="post_process")
@@ -323,6 +368,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         playlist_count=count,
         subs_missing=opts.subs and not subs_seen,
         subs_not_embedded=tuple(not_embedded),
+        untagged=tuple(untagged),
     )
 
 
