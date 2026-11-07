@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T17:24:53-04:00",
+  "updated": "2026-11-07T17:28:47-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,12 +940,12 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
-      "worktree": ".worktrees/fix-false-failure",
+      "worktree": null,
       "commits": [
         "037a6f6",
         "24f2bd1",
@@ -955,7 +955,8 @@
         "c58f7ef",
         "0310713",
         "f8ef735",
-        "f08a7c2"
+        "f08a7c2",
+        "a420f54"
       ],
       "review": {
         "approved": true,
@@ -1040,6 +1041,13 @@
           "result": "merged",
           "at": "2026-11-07T17:24:53-04:00",
           "note": "Merged as f08a7c2, no conflicts. Gate exit 0, 1603 passed, 3 xfailed. Pushed by the orchestrator, as the human approved."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T17:28:47-04:00",
+          "note": "All criteria mapped to tests; reproduction fixed. D6 and D7 await the human's review. Planner: rerun warning; _source_url '-' path gap; .meta overwritten by yt-dlp with chapters; 0-byte temp left; -p -a thumbnail failure counts as failed; xattrs."
         }
       ]
     }
