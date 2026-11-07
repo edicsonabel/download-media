@@ -1,6 +1,6 @@
 # 27 — Let the wizard keep a video that is labelled as audio
 
-Status: draft
+Status: approved
 Item: `fix/audio-type-step`
 
 ## Problem
@@ -290,6 +290,8 @@ Not needed. The labels come from yt-dlp's generic extractor and its HTML5 parser
 **Release notes:** compared with 0.2.0, which is what users have, these sources keep 0.2.0's result on Enter (the raw file in `~/Videos`), now with `Audio` and a note where 0.2.0 said `Unknown`, and without its extra confirmation. The 0.3.0 note "a video served as `audio/*` converts too, and loses its video" can go. The `.ogg` note narrows: `.ogg` sent as `audio/*`, or in `<audio>`, no longer converts on Enter. `.m4a` and `.wav` pages still do.
 
 ## Open decisions
+
+Resolved by the roles under the human's overnight delegation, each on the recommended option: D1 A, D2 A (default video, no keepvideo), D3 A (`audio_may_hold_video`), D4 A, D5 A (accept aiff, alac, ape, wav like the other seven; the human should confirm this one, since it was put to them), D6 A. The human reviews this.
 
 The human delegated tonight's decisions to the roles. Each decision has a recommendation, chosen to lose no user data and to be easy to undo, with one exception, D5, which explains why.
 
