@@ -1,9 +1,9 @@
 # 21 — Make `-s` embed subtitles as documented, and let `--sub-langs` turn them on
 
-Status: approved
+Status: done
 Item: `fix/subs-as-documented`
 
-> **For the human's review: D1, D2 and D3 change shipped behaviour.** The roles decided them under the overnight delegation. D1: with `-s`, video files now hold the subtitles as streams, and the `.vtt`/`.srt` files users get today stay next to them. In mp4, ffmpeg always marks the first embedded language as the default track, so some players may show it straight away. D2: `--sub-langs` on its own now downloads subtitles. D3: two new warnings, and the exit status stays 0. All three are easy to undo and none loses a file. See Open decisions and SemVer.
+> **For the human's review: D1, D2 and D3 change shipped behaviour.** The roles decided them under the overnight delegation. D1: with `-s`, video files now hold the subtitles as streams, and the `.vtt`/`.srt` files users get today stay next to them. In mp4, ffmpeg always marks the first embedded language as the default track, so some players may show it straight away; mkv and webm mark none (changed after approval, see below). D2: `--sub-langs` on its own now downloads subtitles. D3: two new warnings, and the exit status stays 0. All three are easy to undo and none loses a file. See Open decisions and SemVer.
 
 ## Problem
 
@@ -69,7 +69,7 @@ Confirmed in the installed source, and in the `pyproject.toml` floor (2024.10.7,
 | No subtitles selected: `process_subtitles` returns `None`; `_write_subtitles` prints `[info] There are no subtitles for the requested languages`; the per-language `… subtitles not available` is a `report_warning`, hidden by our `no_warnings` | `YoutubeDL.py:3166-3197`, `:4453` | real (`subs-fr.html`, `nosubs.html`) |
 | `_write_subtitles` sets `sub_info['filepath']` only for a file it wrote or found | `YoutubeDL.py:4461-4492` | source |
 | `add_post_processor` appends after the `postprocessors` from params, so a custom step added there runs after `FFmpegMetadata` | `YoutubeDL.py:946` | in-process: embedding after `FFmpegMetadata` keeps `purl`/`comment` (mkv: both, mp4: `comment`), which `_source_url` reads for reruns |
-| The mp4 muxer always enables the first subtitle track. `-disposition:s 0` doesn't stop it, and `postprocessor_args` can't either. mkv and webm leave it off | ffmpeg n9.0.2 | direct ffmpeg: mp4 `mov_text,1` even with `-disposition:s 0`; mkv `webvtt,0` |
+| The mp4 muxer always enables the first subtitle track. `-disposition:s 0` doesn't stop it, and `postprocessor_args` can't either. **Corrected after approval:** mkv and webm also mark the first track default once 2+ languages are embedded; they obey `-disposition:s 0` | ffmpeg n9.0.2 | direct ffmpeg: mp4 `mov_text,1` even with `-disposition:s 0`; mkv `webvtt,0` with one track only; `test_no_subtitle_track_is_marked_default_where_the_container_allows` |
 | Merged split streams (`bv*+ba`) embed into the merged file | — | in-process: `--video-format mkv` → 2 `webvtt` streams; mp4 → 2 `mov_text` |
 
 ### Other paths, read or run
@@ -168,7 +168,7 @@ subs_not_embedded: tuple[str, ...] = () # file names holding fewer subtitle stre
 | Case | Today | After |
 | --- | --- | --- |
 | `-y -s`, mp4, subs in es+en | mp4 without streams, 2 `.vtt` | mp4 with `mov_text` `spa`, `eng` (first marked default by the muxer), 2 `.vtt` kept (prototype) |
-| `-y -s --video-format mkv`, merged source | 2 `.vtt` only | mkv with 2 `webvtt` streams, 2 `.vtt` (in-process) |
+| `-y -s --video-format mkv`, merged source | 2 `.vtt` only | mkv with 2 `webvtt` streams, none marked default, 2 `.vtt` (in-process) |
 | `-y -s --video-format webm`, webm + vtt | `.vtt` only | `webvtt` stream + `.vtt` (prototype) |
 | webm + srt, or a saved ext outside `SUPPORTED_EXTS` | sidecar only | sidecar only, plus `subs_not_embedded` |
 | TTML/other undecodable track | sidecar, `Done.` | sidecar, `subs_not_embedded`, `Done.`, exit 0. Not `Download failed` (the naive embed's regression, prototype) |
@@ -195,22 +195,24 @@ subs_not_embedded: tuple[str, ...] = () # file names holding fewer subtitle stre
 
 Every criterion is an automated test unless it says otherwise. The e2e ones run `cli.main` on `fake_site` with the real yt-dlp and ffmpeg, and read streams back with `ffprobe`. `media_url` gains real `en.vtt`, `es.vtt`, `en.srt` and `en.ttml` files (text, no new encoder). `FakeSiteIE` gains pages whose entries carry `subtitles` and/or `automatic_captions` pointing at them. Use a merged-format page for mkv and a `tiny.webm` page for webm. "Fails on `main`" means: run the test on a tree with only the `src/` changes reverted. It is not a check to repeat after the merge.
 
-- [ ] `scripts/pre-release.sh --no-live` passes.
-- [ ] `-y -s` on an mp4 page with en + es: the mp4 holds 2 `mov_text` streams tagged `spa` and `eng`, both `.vtt` files are on disk, exit 0, `Done.` once, one history row. Fails on `main`.
-- [ ] `-y -s --video-format mkv` on a merged page: the `.mkv` holds 2 subtitle streams, the files are kept. Fails on `main`.
-- [ ] `-y -s --video-format webm` on a webm page with a vtt track: one `webvtt` stream. Fails on `main`.
-- [ ] `-y --sub-langs en` (no `-s`): `Clip.en.vtt` on disk and one `eng` stream. The printed command has `-s` and `--sub-langs en`, and replaying it gives the same file set. Fails on `main`.
-- [ ] `options_from_args` unit tests: `--sub-langs X` gives `subs=True`, `sub_langs="X"`. No flag gives `subs=False`, `sub_langs=DEFAULT_SUB_LANGS`. `--sub-langs es,en` gives `subs=True`.
-- [ ] `-y -s` on a page with only an `fr` track, and on one with none: the video is saved, exit 0, `Done.`, and `t("subs_none", "es,en")` is printed once. No subtitle file is written. Fails on `main`.
-- [ ] `-y -s` on a page whose only track is `en.ttml`: exit 0, `Done.`, no `t("failed", url)`, `t("subs_not_embedded", "Clip.mp4")` printed, `Clip.en.ttml` kept, no `*.temp.*` file, one history row. Fails on `main` (no warning). It also fails on a naive embed (`Download failed`).
-- [ ] `-y -s --video-format webm` on a webm page with an `en.srt` track: `t("subs_not_embedded", …)`, `.srt` kept, exit 0.
-- [ ] `-y -p -s` on a 2-item carousel where item 1 has a track and item 2 has none: item 1's file holds the stream, item 2's holds none, no `subs_none`, no `partial_result`. A 2-item carousel where one item's track is TTML: both saved, `subs_not_embedded` names that item's file, no `partial_result` line. Fails on `main`.
-- [ ] `-y -a -s` (mp3, and `-f m4a`): the audio file has no subtitle stream, the `.vtt` files are on disk, no `subs_not_embedded`. Pins D4: it passes on `main` too.
-- [ ] Rerun: `("-s",)` in `test_rerun_over_existing_files_is_not_a_false_failure` points at the new subtitle page. After the second run, the file set is unchanged and the video still holds exactly 2 subtitle streams.
-- [ ] Wizard: `-i -s` with scripted answers on the subtitle page saves an mp4 with subtitle streams. A plain wizard walk on the same page writes no subtitle file.
-- [ ] `test_subs_enables_subtitle_options` no longer asserts `embedsubtitles`. `build_ydl_opts` has no `embedsubtitles` key, and with `subs=True` its `postprocessors` match `subs=False`.
-- [ ] `subs_none` and `subs_not_embedded` exist in both blocks (`test_es_and_en_have_same_keys`).
-- [ ] Docs (command): `grep -n "embeds them in the video" README.md` matches line 14, `grep -n "implies -s" README.md` matches the options block, and `download-media --help` shows both new help strings.
+- [x] `scripts/pre-release.sh --no-live` passes. Tech-lead's gate on `389f546`, split in two runs (battery timeout): lint, mypy, es 1558 passed / 3 xfailed / 98.39%, en 1558 passed / 3 xfailed. Not re-run at validation.
+- [x] `test_e2e.py::test_subs_are_embedded_and_kept_as_files`. `-y -s` on an mp4 page with en + es: the mp4 holds 2 `mov_text` streams tagged `spa` and `eng`, both `.vtt` files are on disk, exit 0, `Done.` once, one history row. Fails on `main`.
+- [x] `test_e2e.py::test_subs_are_embedded_in_a_merged_mkv`. `-y -s --video-format mkv` on a merged page: the `.mkv` holds 2 subtitle streams, the files are kept. Fails on `main`.
+- [x] `test_e2e.py::test_subs_are_embedded_in_a_webm`. `-y -s --video-format webm` on a webm page with a vtt track: one `webvtt` stream. Fails on `main`.
+- [x] `test_e2e.py::test_sub_langs_alone_turns_subtitles_on`. `-y --sub-langs en` (no `-s`): `Clip.en.vtt` on disk and one `eng` stream. The printed command has `-s` and `--sub-langs en`, and replaying it gives the same file set. Fails on `main`.
+- [x] `test_cli.py::test_sub_langs_alone_turns_subtitles_on`, `test_no_subtitle_flag_leaves_subtitles_off`, `test_sub_langs_set_to_the_default_still_turns_subtitles_on`. `options_from_args` unit tests: `--sub-langs X` gives `subs=True`, `sub_langs="X"`. No flag gives `subs=False`, `sub_langs=DEFAULT_SUB_LANGS`. `--sub-langs es,en` gives `subs=True`.
+- [x] `test_e2e.py::test_no_subtitles_in_the_languages_is_a_warning` (`subs-fr` and a page with none). `-y -s` on a page with only an `fr` track, and on one with none: the video is saved, exit 0, `Done.`, and `t("subs_none", "es,en")` is printed once. No subtitle file is written. Fails on `main`.
+- [x] `test_e2e.py::test_a_subtitle_ffmpeg_cannot_read_is_not_a_failure`, plus `test_an_embed_that_fails_after_starting_leaves_no_temp_file`. `-y -s` on a page whose only track is `en.ttml`: exit 0, `Done.`, no `t("failed", url)`, `t("subs_not_embedded", "Clip.mp4")` printed, `Clip.en.ttml` kept, no `*.temp.*` file, one history row. Fails on `main` (no warning). It also fails on a naive embed (`Download failed`).
+- [x] `test_e2e.py::test_srt_cannot_go_in_a_webm`. `-y -s --video-format webm` on a webm page with an `en.srt` track: `t("subs_not_embedded", …)`, `.srt` kept, exit 0.
+- [x] `test_e2e.py::test_carousel_with_subtitles_on_one_item`, `test_carousel_item_with_an_unreadable_subtitle_still_counts`. `-y -p -s` on a 2-item carousel where item 1 has a track and item 2 has none: item 1's file holds the stream, item 2's holds none, no `subs_none`, no `partial_result`. A 2-item carousel where one item's track is TTML: both saved, `subs_not_embedded` names that item's file, no `partial_result` line. Fails on `main`.
+- [x] `test_e2e.py::test_audio_keeps_subtitles_as_files_only[mp3|m4a]`. `-y -a -s` (mp3, and `-f m4a`): the audio file has no subtitle stream, the `.vtt` files are on disk, no `subs_not_embedded`. Pins D4: it passes on `main` too.
+- [x] `test_e2e.py::test_rerun_over_existing_files_is_not_a_false_failure` (now on `https://fake.test/subs`), `test_subs_rerun_keeps_one_stream_per_language`. Rerun: `("-s",)` in `test_rerun_over_existing_files_is_not_a_false_failure` points at the new subtitle page. After the second run, the file set is unchanged and the video still holds exactly 2 subtitle streams.
+- [x] `test_e2e.py::test_wizard_carries_subs_from_the_command_line`, `test_plain_wizard_writes_no_subtitles`; unit: `test_wizard_flow.py::test_subtitles_from_the_command_line_pass_through_unasked`, `test_plain_walk_leaves_subtitles_off`. Wizard: `-i -s` with scripted answers on the subtitle page saves an mp4 with subtitle streams. A plain wizard walk on the same page writes no subtitle file.
+- [x] `test_downloader.py::test_subs_enables_subtitle_options` (asserts `embedsubtitles` is absent), `test_subs_leave_the_postprocessors_alone[False|True]`. `test_subs_enables_subtitle_options` no longer asserts `embedsubtitles`. `build_ydl_opts` has no `embedsubtitles` key, and with `subs=True` its `postprocessors` match `subs=False`.
+- [x] `test_i18n.py::test_es_and_en_have_same_keys`; wording in both locales: `test_e2e.py::test_subtitle_warnings_in_both_languages`. `subs_none` and `subs_not_embedded` exist in both blocks (`test_es_and_en_have_same_keys`).
+- [x] `test_cli.py::test_help_describes_subtitles` covers `--help`; the README lines are in `749e7d0` and `8d77191`. Docs (command): `grep -n "embeds them in the video" README.md` matches line 14, `grep -n "implies -s" README.md` matches the options block, and `download-media --help` shows both new help strings.
+
+Added after approval (D1 option b): `test_e2e.py::test_no_subtitle_track_is_marked_default_where_the_container_allows[mkv|webm|mp4]`. Two embedded languages: mkv and webm mark neither track default, mp4 marks the first one only.
 
 ## Live check
 
@@ -218,7 +220,7 @@ Not needed. Selecting (`process_subtitles`), writing (`_write_subtitles`) and em
 
 ## SemVer
 
-**Minor.** There are new user-visible messages (`AGENTS.md` counts those as minor), and `-s` and `--sub-langs` change behaviour. Nothing is breaking: no flag is renamed, no default value changes, no path moves, and the files `-s` users get today are still written. 0.3.0 is already a minor because of `8cc3d30`. The 0.3.0 notes should say: "`-s` now embeds subtitles in the video (the subtitle files are still saved); `--sub-langs` alone now turns subtitles on; in mp4 the first language is marked as the default track." Commit type: `fix`.
+**Minor.** There are new user-visible messages (`AGENTS.md` counts those as minor), and `-s` and `--sub-langs` change behaviour. Nothing is breaking: no flag is renamed, no default value changes, no path moves, and the files `-s` users get today are still written. 0.3.0 is already a minor because of `8cc3d30`. The 0.3.0 notes should say: "`-s` now embeds subtitles in the video (the subtitle files are still saved); `--sub-langs` alone now turns subtitles on; in mp4 the first language is marked as the default track (mkv and webm mark none)." Commit type: `fix`. (Corrected after approval: before D1 option b the first language was marked default in any container with 2+ languages; now only mp4 does it.)
 
 ## Open decisions
 
@@ -244,3 +246,23 @@ Each was decided by the roles under the overnight delegation, following the rule
 **D4 — `-a -s`.** **Recommended: unchanged, files only.** mp3, opus and wav can't hold subtitles, and m4a subtitles are rarely shown. Alternatives: embed into m4a only, or skip subtitles on `-a` (which would drop files users get today).
 
 **D5 — Wizard.** **Recommended: no subtitle step in this item** (a feature; planner note). `-i -s` and `-i --sub-langs` keep working through the walk, unseen.
+
+## Changes after approval
+
+QA approved the first round. The human then picked **D1 option b**, and three commits landed before the merge (`389f546`). They change what the human approved, so they are listed here.
+
+- **No default subtitle track in mkv and webm** (`e3aa3f3`). With 2+ embedded languages, ffmpeg marked the first track default in every container, not only mp4 as Findings said (that row is corrected above). With the default `es,en`, players then showed Spanish unasked. `_EmbedSubtitles.run_ffmpeg_multiple_files` now appends `-disposition:s 0`. mkv and webm obey it. The mp4 muxer still enables the first track whatever it's told, so mp4 is unchanged and still marks the first `--sub-langs` language.
+- **`subs_not_embedded` reworded** (`734c061`). "Not every subtitle could be embedded" undersold the common case where none was (a lone TTML track, a container outside yt-dlp's list). Now: en `{}: one or more subtitles couldn't be embedded; all of them are kept as separate files.`, es `{}: uno o más subtítulos no se pudieron incrustar; todos se conservan como archivos aparte.` Same key, same single argument. The table in Design §5 shows the approved wording.
+- **README** (`8d77191`). Line 14 adds: "In mp4 the first language is marked as the default track, so players may show it."
+- **0.3.0 release-note text corrected** (SemVer above). Before this round any container with 2+ languages marked the first one default; now only mp4 does.
+
+D1, D2 and D3 still change shipped behaviour and still need the human's review. They were decided under the overnight delegation; this round only narrowed D1.
+
+## Validation
+
+On `main` at `389f546`, 2026-11-07.
+
+- **Gate:** not re-run (laptop on battery). The tech-lead's run on `389f546`, split across two runs because of a timeout: lint passed, mypy passed (14 files), es 1558 passed / 3 xfailed / coverage 98.39%, en 1558 passed / 3 xfailed. The 3 xfails are known rows (opus rerun, relative og:image, ogg rerun), none about subtitles.
+- **GitHub CI has not run:** nothing was pushed, no push was authorized.
+- **Criteria:** each one maps to the tests named above (from the code and test names; the suite was not re-run here).
+- **Reproduction, real console script:** `.venv/bin/download-media -y -s -o <abs scratch>/out http://127.0.0.1:<port>/subs.html`, served by `python -m http.server` on loopback (a 1 s h264/aac mp4 made with ffmpeg, `en.vtt`, `es.vtt`, a page with two `<track kind="subtitles">`). `HOME` and every `XDG_*` in a scratch folder, `XDG_VIDEOS_DIR`/`XDG_MUSIC_DIR` unset, `LANG=en_US.UTF-8`. Output: `[EmbedSubtitle] Embedding subtitles in "…/subs (1).mp4"`, `Done.`, exit 0, equivalent command `download-media -y -o <out> -s <url>`. On disk: `subs (1).mp4`, `subs (1).es.vtt`, `subs (1).en.vtt`, no temp file. `ffprobe`: h264, aac, `mov_text` `spa` (default 1), `mov_text` `eng` (default 0). One history row. On `be78a3c` the same command left an mp4 with no subtitle stream.
