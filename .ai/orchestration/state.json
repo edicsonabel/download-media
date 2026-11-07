@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T21:37:32-04:00",
+  "updated": "2026-11-06T21:52:45-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,14 +251,15 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
       "commits": [
-        "fe91ce0"
+        "fe91ce0",
+        "5ec306b"
       ],
       "review": {
         "approved": false,
@@ -285,6 +286,13 @@
           "result": "approved",
           "at": "2026-11-06T21:37:32-04:00",
           "note": "Spec approved with every recommended option: D1 A, D2 include, D3 A, D4 ship with its own row."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-06T21:52:45-04:00",
+          "note": "Gate passes, 571 tests, 98.44% coverage. Live Instagram check not run. Release notes: .m4a, .ogg and .wav pages now convert to the audio format in the wizard. playlist-items-fix must update the direct pins that record NA names."
         }
       ]
     }
