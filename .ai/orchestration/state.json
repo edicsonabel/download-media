@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T20:26:23-04:00",
+  "updated": "2026-11-06T20:56:10-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -245,6 +245,30 @@
           "result": "validated",
           "at": "2026-11-06T20:26:23-04:00",
           "note": "All 23 criteria hold, reproduction fixed in es and en. CI run 42315736194: attempt 1 cancelled by the job timeout during apt-get install ffmpeg, attempt 2 re-run by the orchestrator succeeded on 3.12, 477 passed. Planner follow-up: a slow mirror can time out CI."
+        }
+      ]
+    },
+    "fix/probe-no-codec": {
+      "type": "fix",
+      "title": "Wizard refuses or mislabels videos whose formats have no codec info",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/17-probe-no-codec.md",
+      "branch": "fix/probe-no-codec",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T20:56:10-04:00",
+          "note": "Human asked to start /fix probe-no-codec."
         }
       ]
     }
