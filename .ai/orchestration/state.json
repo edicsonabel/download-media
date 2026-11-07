@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T08:19:34-04:00",
+  "updated": "2026-11-07T08:38:09-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,13 +707,15 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-playlist-items-fix",
+      "commits": [
+        "a928006"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -725,6 +727,20 @@
           "result": "approved",
           "at": "2026-11-07T08:19:34-04:00",
           "note": "Next P1, under the human's overnight delegation. Must merge before /release so the new flag doesn't ship with these gaps."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T08:38:09-04:00",
+          "note": "All four findings reproduced. Decisions D1-D6. Prototype: 1369 passed, 7 expected failures. Planner: 'No items are downloadable. Cancelling.' also reads wrong in direct mode on image-only lists; -i -p and -i -P don't preselect the picker."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T08:38:09-04:00",
+          "note": "Spec approved under the human's delegation, every recommended option. D2 changes the shipped -p file name on a plain video (drops 'NA - '); flagged for the human's review."
         }
       ]
     }
