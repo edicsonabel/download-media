@@ -554,6 +554,40 @@ def test_wizard_selection_replaces_the_playlist_items_flag(
     assert names(out) == ["04 - Clip [v2].mp4"]
 
 
+def test_wizard_picker_preselects_the_playlist_items_flag(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    prompts = answers(*PICKER_WALK)
+    code, output = run("-i", "--playlist-items", "2", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    assert t("ask_selection_default_preset", "2") in prompts
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == "2"
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_wizard_picker_preset_out_of_range_is_reported(run: Any, out: Path, answers: Any) -> None:
+    answers(*PICKER_WALK)
+    code, output = run("-i", "--playlist-items", "9", CAROUSEL)
+    assert code == 1
+    assert t("items_not_found", 4, "9") in output
+    assert names(out) == []
+
+
+def test_wizard_picker_preset_reaches_every_url(run: Any, out: Path, answers: Any) -> None:
+    prompts = answers(*PICKER_WALK, *PICKER_WALK)
+    other = "https://fake.test/rejects-cookies-carousel"
+    code, _ = run("-i", "--playlist-items", "4", CAROUSEL, other)
+    assert code == 0
+    assert names(out) == ["04 - Clip [v2].mp4"]
+    preset = t("ask_selection_default_preset", "4")
+    assert prompts.count(preset) == 2
+
+
 def test_detected_keyring_reaches_wizard_probe(
     run: Any, fake_site: list[Any], tmp_path: Path, answers: Any
 ) -> None:

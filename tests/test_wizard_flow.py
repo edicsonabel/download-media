@@ -339,6 +339,18 @@ def test_carousel_default_selects_videos(walk: Any) -> None:
     assert opts.playlist_items == "2"
 
 
+def test_carousel_default_keeps_the_playlist_items_flag(walk: Any) -> None:
+    preset = DownloadOptions(urls=[URL], playlist_items="1-2")
+    opts = walk(carousel(), "", "", "", "", "", "", "", opts=preset)
+    assert opts.playlist_items == "1-2"
+
+
+def test_carousel_default_ignores_an_empty_playlist_items_flag(walk: Any) -> None:
+    preset = DownloadOptions(urls=[URL], playlist_items="")
+    opts = walk(carousel(), "", "", "", "", "", "", "", opts=preset)
+    assert opts.playlist_items == "2"
+
+
 def test_carousel_without_videos_defaults_to_supported_items(walk: Any) -> None:
     items = [
         ProbeItem(1, ContentKind.SINGLE_AUDIO, True, "A"),
