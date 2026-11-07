@@ -135,6 +135,7 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
 
 # A text file served as a video: ffmpeg finds no stream in it.
 JUNK = "typed/video/mp4/en.vtt/junk.mp4"
+JUNK_2 = "typed/video/mp4/es.vtt/junk-2.mp4"
 # yt-dlp names a link with no extension and no media type .unknown_video.
 NO_EXT_VIDEO = "typed/application/octet-stream/tiny.mp4/stream"
 
@@ -190,8 +191,10 @@ def _write_generic_pages(root: Path, base: str) -> None:
             '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
         ),
         "no-video": '<video src="tiny.jpg"></video><audio src="a1.m4a"></audio>',
-        # ffmpeg can't write tags to an .ogx.
+        # ffmpeg can't write tags to an .ogx, and can't read a text body at all.
         "ogx-and-mp4": '<video src="theora.ogx"></video><video src="tiny.mp4"></video>',
+        "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
+        "all-junk": f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>',
     }
     for name, body in pages.items():
         (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")

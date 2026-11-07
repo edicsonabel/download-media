@@ -2260,6 +2260,26 @@ def test_playlist_with_an_untaggable_item_saves_both_and_counts_each_once(
     assert len(history_rows()) == 1
 
 
+def test_playlist_counts_an_item_that_is_not_media_as_failed_only(generic: Any, out: Path) -> None:
+    # yt-dlp reports a failed post-processing step under ignoreerrors, then still runs the
+    # post hooks: the item was counted as saved and as failed.
+    code, output = generic("junk-and-mp4.html", flags=("-y", "-p", "-o", str(out)))
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert t("done") in output
+    assert untagged_warnings(output) == 0
+
+
+def test_playlist_where_no_item_is_media_is_a_failure(
+    generic: Any, media_url: str, out: Path
+) -> None:
+    code, output = generic("all-junk.html", flags=("-y", "-p", "-o", str(out)))
+    assert code == 1
+    assert t("failed", f"{media_url}/all-junk.html") in output
+    assert t("done") not in output
+    assert history_rows() == []
+
+
 def test_single_mode_goes_on_past_an_untaggable_item(generic: Any, out: Path) -> None:
     code, output = generic("ogx-and-mp4.html", flags=("-y", "-o", str(out)))
     assert code == 0

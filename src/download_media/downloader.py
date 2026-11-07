@@ -51,10 +51,20 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
     count_entries = False
+    # len(errors) when the current item started.
+    item_errors = 0
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.errors: list[str] = []
         super().__init__(*args, **kwargs)
+
+    def process_info(self, info_dict: Any) -> Any:
+        self.item_errors = len(self.errors)
+        return super().process_info(info_dict)
+
+    def item_failed(self) -> bool:
+        # ignoreerrors reports a failed post-processing step, then runs the post hooks anyway.
+        return len(self.errors) > self.item_errors
 
     def report_error(self, message: Any, *args: Any, **kwargs: Any) -> None:
         self.errors.append(str(message))
@@ -333,10 +343,15 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     saved: list[str] = []
     skipped: list[str] = []
     ydl_opts = build_ydl_opts(opts, output_dir)
-    ydl_opts["post_hooks"] = [saved.append]
     ydl_opts["match_filter"] = _skip_items_without_media(skipped)
     untagged: list[str] = []
     with _Ydl(ydl_opts) as ydl:
+
+        def keep(path: str) -> None:
+            if not ydl.item_failed():
+                saved.append(path)
+
+        ydl.add_post_hook(keep)
         # Appended after the params' postprocessors: audio extraction comes first.
         ydl.add_post_processor(_TagSource(ydl, untagged), when="post_process")
         final_ext = opts.audio_format if opts.audio_only else None
