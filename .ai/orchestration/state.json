@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T07:49:32-04:00",
+  "updated": "2026-11-07T08:07:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -599,9 +599,9 @@
     "fix/audio-type-step": {
       "type": "fix",
       "title": "Wizard converts a video served as audio and drops its video",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/27-audio-type-step.md",
       "branch": "fix/audio-type-step",
       "worktree": ".worktrees/fix-audio-type-step",
@@ -613,8 +613,14 @@
         "f2ceff7"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor PLAN.md:56 next-release sentence about video served as audio/* is wrong after merge",
+          "minor probe.py:199 unknown_video exclusion must rejoin the flag when row 29 lands; row 29 doesn't say so",
+          "minor spec 27:274 unit criterion still lists unknown_video as flagged",
+          "minor tests/conftest.py cwd isolation outside spec scope",
+          "minor no suite test for the with-and-without-cookies case"
+        ]
       },
       "history": [
         {
@@ -665,6 +671,20 @@
           "result": "done",
           "at": "2026-11-07T07:49:32-04:00",
           "note": "Round 1 confirmed on real runs. Mutation 2/2."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T08:07:13-04:00",
+          "note": "Gate exit 0, 1370 passed, 3 xfailed. Bug reproduces on main and is fixed. Mutation 11/11. Specs 09, 18, 19 hold. Suggested 0.3.0 note recorded in the report."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T08:07:13-04:00",
+          "note": "Merge decided by the roles under the human's overnight delegation. Local main only, no push."
         }
       ]
     }
