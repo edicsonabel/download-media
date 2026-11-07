@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T21:52:45-04:00",
+  "updated": "2026-11-06T22:12:49-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,19 +251,22 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
       "commits": [
         "fe91ce0",
-        "5ec306b"
+        "5ec306b",
+        "d6b83a4"
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "major probe.py:143 ogg and asf hold video, but an unknown vcodec with those extensions reads as audio: the wizard converts the video to mp3, deletes it and reports Done. Regression from main; gap in the approved rule table."
+        ]
       },
       "history": [
         {
@@ -293,6 +296,13 @@
           "result": "done",
           "at": "2026-11-06T21:52:45-04:00",
           "note": "Gate passes, 571 tests, 98.44% coverage. Live Instagram check not run. Release notes: .m4a, .ogg and .wav pages now convert to the audio format in the wizard. playlist-items-fix must update the direct pins that record NA names."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-06T22:12:49-04:00",
+          "note": "Round 1. 107 cases added, 675 passed, 4 xfailed, mutation 24/24. One major finding, a gap in the approved rule table. Orchestrator direction: unknown vcodec on a container that can hold video reads as video, which keeps the file as main does. Human is told at the merge point; architect records the rule change at validation. Planner follow-ups: _media_kind uses or where yt-dlp uses is None, matters under probe-auth; Enter prompt says videos only but saves jpg and audio when there are no videos. New fixtures need libvpx, libvorbis and libtheora in CI's ffmpeg."
         }
       ]
     }
