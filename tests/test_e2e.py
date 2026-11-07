@@ -2691,6 +2691,26 @@ def test_a_thumbnail_named_like_the_audio_never_deletes_it(
     assert t("no_cover", "audio-mp3-thumb (1).mp3") in output
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="Bug: a thumbnail link ending in the media's own extension (.m4a) writes the cover "
+    "where the media goes, so yt-dlp says it was already downloaded and ExtractAudio fails on "
+    "the JPEG: exit 1, nothing saved. Since 059c24a, item_media claims that path, so the JPEG "
+    "named .m4a (and a .png with -p) stays behind; cbd49b2 removed it.",
+)
+@pytest.mark.parametrize("flags", [(), ("-p",)])
+def test_a_thumbnail_named_like_the_downloaded_media_never_fails_the_audio(
+    generic: Any, media_url: str, out: Path, flags: tuple[str, ...]
+) -> None:
+    page = "audio-m4a-thumb.html"
+    code, output = generic(page, flags=("-y", "-a", *flags, "-o", str(out)))
+    assert names(out) == ["audio-m4a-thumb (1).mp3"]
+    assert "audio" in streams(out / "audio-m4a-thumb (1).mp3")
+    assert code == 0
+    assert t("failed", f"{media_url}/{page}") not in output
+    assert len(history_rows()) == 1
+
+
 @pytest.mark.parametrize(
     ("page", "flags"),
     [

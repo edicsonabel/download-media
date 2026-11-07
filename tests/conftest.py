@@ -203,6 +203,8 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "audio-php-thumb": f'<audio src="tiny.m4a"></audio>{og(JPEG_AS.format("php"))}',
         "audio-html-thumb": f'<audio src="tiny.m4a"></audio>{og("audio.html")}',
         "audio-mp3-thumb": f'<audio src="tiny.m4a"></audio>{og(JPEG_AS.format("mp3"))}',
+        # Named like the media itself, so yt-dlp finds the cover where the download goes.
+        "audio-m4a-thumb": f'<audio src="tiny.m4a"></audio>{og(JPEG_AS.format("m4a"))}',
         "audio-file-thumb": (
             f'<audio src="tiny.m4a"></audio><meta property="og:image" content="file://{root}/tiny.jpg">'
         ),
