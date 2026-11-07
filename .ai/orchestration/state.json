@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T11:07:43-04:00",
+  "updated": "2026-11-07T11:21:05-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -817,8 +817,8 @@
       "type": "fix",
       "title": "Subtitles behave as documented",
       "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/21-subs-as-documented.md",
       "branch": "fix/subs-as-documented",
       "worktree": ".worktrees/fix-subs-as-documented",
@@ -830,8 +830,13 @@
         "f30b945"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor spec 21:72 default subtitle flag also lands on the first language in mkv and webm with 2+ languages, not only mp4",
+          "minor spec 21:221 release-note text says mp4 only; README doesn't mention the default flag",
+          "minor downloader.py:248 subs_not_embedded never says why",
+          "minor i18n.py:150 English warning undersells the case where none was embedded"
+        ]
       },
       "history": [
         {
@@ -868,6 +873,13 @@
           "result": "done",
           "at": "2026-11-07T11:07:43-04:00",
           "note": "No bugs. 39 tests, 1555 passed, 3 xfailed. Mutation 20/21, survivor equivalent. Planner: 0-byte subtitle aborts a single video; garbage .vtt embeds as an empty track with no warning; argparse prefix abbreviations get past has_intent_flags."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T11:21:05-04:00",
+          "note": "Gate exit 0, 1555 passed, 3 xfailed. 37 branch tests fail on main. Four minor findings; D1's facts were incomplete (mkv and webm flag default too). Human is back, so the merge goes to them."
         }
       ]
     }
