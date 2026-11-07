@@ -1941,6 +1941,30 @@ def test_wizard_trusts_an_audio_tag_on_such_a_container(generic: Any, home: Path
     assert names(home / "Music") == ["audio-theora-ogg (1).mp3"]
 
 
+def test_wizard_tells_ogg_video_from_ogg_audio_on_one_page_and_repeats_it(
+    generic: Any, pasted: Any, media_url: str, home: Path, tmp_path: Path, monkeypatch: Any
+) -> None:
+    # Same extension on both items: only the vcodec yt-dlp sets for <audio> separates them.
+    code, output = generic("ogg-video-and-audio.html", *PICKER_WALK)
+    assert code == 0
+    assert tag("kind_video") in output
+    assert tag("kind_audio") in output
+    saved = "01 - ogg-video-and-audio (1) [ogg-video-and-audio-1].ogg"
+    assert names(home / "Videos") == [saved]
+    assert names(home / "Music") == []
+    assert "video" in streams(home / "Videos" / saved)
+
+    [line] = commands(output)
+    assert line == f"download-media -y --playlist-items 1 {media_url}/ogg-video-and-audio.html"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == [saved]
+    assert "video" in streams(elsewhere / "Videos" / saved)
+
+
 def test_wizard_on_a_generic_page_with_every_kind(
     generic: Any, pasted: Any, media_url: str, home: Path, tmp_path: Path, monkeypatch: Any
 ) -> None:

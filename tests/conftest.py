@@ -102,6 +102,7 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "video-tag-audio-ogg": '<video src="tiny.ogg"></video>',
         "video-tag-audio-m4b": '<video src="tiny.m4b"></video>',
         "audio-theora-ogg": '<audio src="theora.ogg"></audio>',
+        "ogg-video-and-audio": '<video src="theora.ogg"></video><audio src="tiny.ogg"></audio>',
         "everything": (
             '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
         ),
