@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T18:41:44-04:00",
+  "updated": "2026-11-07T18:53:12-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,16 +1054,18 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
       "worktree": ".worktrees/fix-audio-thumbnail",
       "commits": [
         "e2c7144",
         "38c1931",
-        "cbd49b2"
+        "cbd49b2",
+        "059c24a",
+        "1ae70f1"
       ],
       "review": {
         "approved": false,
@@ -1107,6 +1109,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T18:41:44-04:00",
           "note": "Round 1. 1651 passed, 7 xfailed (5 new strict). Mutation 25/25. Orchestrator: both findings in scope (the second breaks the spec's goal). Planner: network-failed thumbnails give no no_cover warning; -a -p double count when extraction and metadata both fail."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T18:53:12-04:00",
+          "note": "Round 1 fixed: media path never dropped; _UnsafeExtensionError caught. 1656 passed, 2 xfailed. Floor yt-dlp 2024.10.07: test_other_thumbnail_links_never_fail_the_audio[audio-short-thumb] leaves a partial .jpg, pre-existing at cbd49b2. Orchestrator ruling: cosmetic leftover at the floor only, goes to the planner as its own row, not this item."
         }
       ]
     }
