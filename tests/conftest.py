@@ -38,6 +38,9 @@ def isolated_env(
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
         # xdg_dir() falls back to $HOME/Videos and $HOME/Music.
         monkeypatch.setenv("HOME", str(tmp_path / "isolated-home"))
+        # Desktops export these, and some xdg-user-dir builds read them first.
+        for kind in ("VIDEOS", "MUSIC"):
+            monkeypatch.delenv(f"XDG_{kind}_DIR", raising=False)
 
 
 @pytest.fixture
