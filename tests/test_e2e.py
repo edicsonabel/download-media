@@ -2161,12 +2161,6 @@ def test_wizard_keeps_the_audio_flow_for_audio_that_says_so(
     assert commands(output) == [f"download-media -y -a {shlex.quote(f'{media_url}/{page}')}"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Spec 27: _ext_says_audio compares the extension as written, and yt-dlp keeps the "
-    "URL's case, so real audio at an uppercase .MP3, .M4A, .WAV or .FLAC is flagged: a type "
-    "step that main didn't ask, and Enter saves the raw file in ~/Videos.",
-)
 @pytest.mark.parametrize(
     "page",
     [
@@ -2236,13 +2230,6 @@ def test_hls_in_an_audio_tag_reads_as_video_and_keeps_it(generic: Any, home: Pat
     assert "video" in streams(home / "Videos" / saved)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Spec 27 flags ext 'unknown_video', which yt-dlp gives an <audio src> with no "
-    "extension. Enter then takes the video path on real audio: the raw "
-    "'audio-no-ext (1).unknown_video', 'Download failed' and exit 1, where main saved an .mp3 "
-    "with exit 0. The failure itself is -y's (row 29), now on the wizard's Enter.",
-)
 def test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds(
     media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
 ) -> None:

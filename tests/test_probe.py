@@ -259,7 +259,7 @@ def test_every_other_extension_yt_dlp_lists_as_audio_stays_audio(
 
 
 # A Content-Type or an <audio> tag gives vcodec 'none' and names no audio codec.
-EXT_MAY_HOLD_VIDEO = ["ogg", "wma", "m4b", "asf", "ogx", "mp4", "webm", "unknown_video"]
+EXT_MAY_HOLD_VIDEO = ["ogg", "wma", "m4b", "asf", "ogx", "mp4", "webm"]
 # D5: aiff, alac, ape and wav can't hold a video unless renamed, like the rest here.
 EXT_SAYS_AUDIO = ["m4a", "wav", "aiff", "alac", "ape", "mp3", "aac", "flac", "opus", "oga", "mka"]
 HLS_VARIANT = {"vcodec": "avc1.64001f", "acodec": "mp4a.40.2", "ext": "mp4"}
@@ -275,6 +275,8 @@ def may_hold_video(*formats: dict[str, Any]) -> bool:
     [
         *(([{"vcodec": "none", "acodec": None, "ext": e}], True) for e in EXT_MAY_HOLD_VIDEO),
         *(([{"vcodec": "none", "acodec": None, "ext": e}], False) for e in EXT_SAYS_AUDIO),
+        # An <audio src> with no extension: its video path fails today (roadmap row 29).
+        ([{"vcodec": "none", "acodec": None, "ext": "unknown_video"}], False),
         *(
             ([{"vcodec": None, "acodec": None, "ext": e}], False)
             for e in EXT_MAY_HOLD_VIDEO + EXT_SAYS_AUDIO
@@ -347,11 +349,6 @@ def test_a_url_only_result_whose_extension_says_audio_is_not_flagged(ext: str) -
     assert result.may_hold_video is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Spec 27: _ext_says_audio compares the extension as written, and yt-dlp keeps "
-    "the URL's case (determine_ext), so an uppercase audio extension raises the flag.",
-)
 @pytest.mark.parametrize("ext", ["MP3", "M4A", "WAV", "FLAC", "Opus"])
 def test_an_uppercase_extension_that_says_audio_is_not_flagged(ext: str) -> None:
     assert may_hold_video({"vcodec": "none", "acodec": None, "ext": ext}) is False
