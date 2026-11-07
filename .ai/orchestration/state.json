@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T02:41:10-04:00",
+  "updated": "2026-11-07T03:18:12-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -368,9 +368,9 @@
     "fix/probe-auth": {
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
       "worktree": ".worktrees/fix-probe-auth",
@@ -378,7 +378,12 @@
         "65fbbcb",
         "7fd33c1",
         "1770eed",
-        "1fcd55f"
+        "1fcd55f",
+        "f4f9734",
+        "6e502fc",
+        "8ab163c",
+        "581500a",
+        "4120f18"
       ],
       "review": {
         "approved": false,
@@ -423,6 +428,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T02:41:10-04:00",
           "note": "Round 1. 88 cases added, 1067 passed, 18 xfailed (16 new strict). Mutation 77/77. Three findings. Planner notes: storyboard-only result could read as a standalone image; nested list with every entry gated reads image, exit 0."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T03:18:12-04:00",
+          "note": "Round 1 findings fixed. 1142 passed, 2 xfailed, 98.52%, floor passes. 21/21 mutants. Rule differs from the spec: status lines never count, every address is dropped; architect records it at validation."
         }
       ]
     }
