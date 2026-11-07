@@ -1,6 +1,6 @@
 # 27 — Let the wizard keep a video that is labelled as audio
 
-Status: approved
+Status: done
 Item: `fix/audio-type-step`
 
 ## Problem
@@ -148,6 +148,8 @@ Written for the recommended option of each decision. The prototype produced ever
 
 ### `probe.py`
 
+Amended after approval: the label rule lowercases `ext` and leaves out `unknown_video`. See Changes after approval.
+
 ```python
 def _ext_says_audio(ext: Any) -> bool:
     return ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO
@@ -255,25 +257,25 @@ Fixtures, in `tests/conftest.py`:
 
 Generic extractor, loopback, real yt-dlp, ffmpeg and ffprobe:
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** Parametrized over direct `theora.ogg`, `clip.wma` and `clip.m4b`; `as-audio/` on `tiny.mp4`, `tiny.webm` and `clip.asf`; and the pages `audio-theora-ogg`, `<audio src="tiny.mp4">` and `<audio src="tiny.webm">`. The wizard with `SINGLE_WALK`: exit 0; exactly one file in `~/Videos`, with `"video"` in `streams()`; `~/Music` empty; `detected("kind_audio")`, `t("audio_may_hold_video")` and `t("done")` in the output; `commands(output) == [f"download-media -y {url}"]`; that command, replayed in a fresh `HOME`, saves the same name with a video stream
-- [ ] **[fix]** Same sources, answers URL, `2`, format, folder, cookies: one `.mp3` in `~/Music`, `~/Videos` empty, command `download-media -y -a {url}`
-- [ ] **[fix]** `-i -a` on direct `theora.ogg`, five Enters: `t("ask_type")` in the output, one `.mp3` in `~/Music`
-- [ ] **[fix]** `-i -q 720` on direct `theora.ogg`, `SINGLE_WALK`: the `.ogg` with its video in `~/Videos`, command `download-media -y -q 720 {url}`
-- [ ] **[fix]** Real audio, direct `tiny.ogg` and `audio-ogg.html`: with `SINGLE_WALK`, the raw `.ogg` in `~/Videos` and `streams() == {"audio"}`; with `2`, the `.mp3` in `~/Music`. This replaces the `tiny.ogg` and `audio-ogg.html` rows of `test_wizard_converts_audio_without_codec_info_and_reruns`, and the `tiny.ogg` row of `test_wizard_on_audio_without_codec_info_honours_the_format`, which gains the type answer `2`
-- [ ] **[fix]** `test_wizard_trusts_an_audio_tag_on_such_a_container` is removed: the `audio-theora-ogg` row of the first criterion states the opposite
-- [ ] **[fix]** Several URLs: `theora.ogg` and then `audio.html`, ten prompts: `Videos/theora.ogg` with its video, `Music/audio (1).mp3`, history kinds `video` then `audio`, commands `download-media -y {ogg}` and `download-media -y -a {audio}`
-- [ ] **[fix]** The wizard twice on direct `clip.wma`: one file in `~/Videos`, `t("done")` both times, two history rows
-- [ ] **xfail, strict:** the wizard twice on direct `theora.ogg` leaves one file. The reason names row 25: ogg keeps `purl` in stream tags. It fails today with `theora [theora].ogg`, as `-y` does on `main`
-- [ ] **[pin]** The remaining rows of `test_wizard_converts_audio_without_codec_info_and_reruns` (`tiny.m4a`, `tiny.m4a?token=1`, `tiny.wav`, `audio-wav.html`, `audio.html`) pass unchanged, with no type step
-- [ ] **[pin]** Direct with the preview, `-y` and `-y -a`, on `theora.ogg`, `clip.wma` and `as-audio/tiny.mp4`: the files and exit codes measured on `main`. `-y` and the preview keep the raw file with its video in `~/Videos`; `-y -a` gives the `.mp3`
-- [ ] **[pin]** `test_wizard_tells_ogg_video_from_ogg_audio_on_one_page_and_repeats_it` and the `test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio` table pass unchanged
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** Parametrized over direct `theora.ogg`, `clip.wma` and `clip.m4b`; `as-audio/` on `tiny.mp4`, `tiny.webm` and `clip.asf`; and the pages `audio-theora-ogg`, `<audio src="tiny.mp4">` and `<audio src="tiny.webm">`. The wizard with `SINGLE_WALK`: exit 0; exactly one file in `~/Videos`, with `"video"` in `streams()`; `~/Music` empty; `detected("kind_audio")`, `t("audio_may_hold_video")` and `t("done")` in the output; `commands(output) == [f"download-media -y {url}"]`; that command, replayed in a fresh `HOME`, saves the same name with a video stream
+- [x] **[fix]** Same sources, answers URL, `2`, format, folder, cookies: one `.mp3` in `~/Music`, `~/Videos` empty, command `download-media -y -a {url}`
+- [x] **[fix]** `-i -a` on direct `theora.ogg`, five Enters: `t("ask_type")` in the output, one `.mp3` in `~/Music`
+- [x] **[fix]** `-i -q 720` on direct `theora.ogg`, `SINGLE_WALK`: the `.ogg` with its video in `~/Videos`, command `download-media -y -q 720 {url}`
+- [x] **[fix]** Real audio, direct `tiny.ogg` and `audio-ogg.html`: with `SINGLE_WALK`, the raw `.ogg` in `~/Videos` and `streams() == {"audio"}`; with `2`, the `.mp3` in `~/Music`. This replaces the `tiny.ogg` and `audio-ogg.html` rows of `test_wizard_converts_audio_without_codec_info_and_reruns`, and the `tiny.ogg` row of `test_wizard_on_audio_without_codec_info_honours_the_format`, which gains the type answer `2`
+- [x] **[fix]** `test_wizard_trusts_an_audio_tag_on_such_a_container` is removed: the `audio-theora-ogg` row of the first criterion states the opposite
+- [x] **[fix]** Several URLs: `theora.ogg` and then `audio.html`, ten prompts: `Videos/theora.ogg` with its video, `Music/audio (1).mp3`, history kinds `video` then `audio`, commands `download-media -y {ogg}` and `download-media -y -a {audio}`
+- [x] **[fix]** The wizard twice on direct `clip.wma`: one file in `~/Videos`, `t("done")` both times, two history rows
+- [x] **xfail, strict:** the wizard twice on direct `theora.ogg` leaves one file. The reason names row 25: ogg keeps `purl` in stream tags. It fails today with `theora [theora].ogg`, as `-y` does on `main`
+- [x] **[pin]** The remaining rows of `test_wizard_converts_audio_without_codec_info_and_reruns` (`tiny.m4a`, `tiny.m4a?token=1`, `tiny.wav`, `audio-wav.html`, `audio.html`) pass unchanged, with no type step
+- [x] **[pin]** Direct with the preview, `-y` and `-y -a`, on `theora.ogg`, `clip.wma` and `as-audio/tiny.mp4`: the files and exit codes measured on `main`. `-y` and the preview keep the raw file with its video in `~/Videos`; `-y -a` gives the `.mp3`
+- [x] **[pin]** `test_wizard_tells_ogg_video_from_ogg_audio_on_one_page_and_repeats_it` and the `test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio` table pass unchanged
 
 Unit:
 
-- [ ] **[fix]** `tests/test_probe.py`, one parametrized table over `_read_result`, or `probe()` on a scripted result. `may_hold_video` is true for `vcodec` `'none'`, `acodec` `None`, with `ext` in `ogg`, `wma`, `m4b`, `asf`, `ogx`, `mp4`, `webm` and `unknown_video`. It is false with `ext` in `m4a`, `wav`, `aiff`, `alac`, `ape`, `mp3`, `aac`, `flac`, `opus`, `oga` and `mka`. It is also false for `webm` with `acodec` `opus`, for `vcodec` `None` on any extension, for a playlist, and for a video result that also holds a labelled audio format (the HLS rendition shape). It is true for an audio result whose formats mix a named `mp3` and a labelled `webm` (D6). The `aiff`, `alac`, `ape` and `wav` rows follow D5
-- [ ] **[fix]** `tests/test_wizard_flow.py`, with a scripted `Probe(..., content_kind=SINGLE_AUDIO, may_hold_video=True)`: six answers walk it, and `opts.audio_only is False`. With `audio_only=True` preset, as under `-i -a`, Enter keeps it `True`, and the walk takes five answers. `test_single_audio_skips_type_step` passes unchanged
-- [ ] `audio_may_hold_video` is in both the `es` and the `en` blocks
+- [x] **[fix]** `tests/test_probe.py`, one parametrized table over `_read_result`, or `probe()` on a scripted result. `may_hold_video` is true for `vcodec` `'none'`, `acodec` `None`, with `ext` in `ogg`, `wma`, `m4b`, `asf`, `ogx`, `mp4` and `webm`. It is false with `ext` in `m4a`, `wav`, `aiff`, `alac`, `ape`, `mp3`, `aac`, `flac`, `opus`, `oga` and `mka`, in upper case too (`MP3`, `M4A`, `WAV`, `FLAC`, `Opus`), and for `unknown_video` until row 29 lands (see Changes after approval). It is also false for `webm` with `acodec` `opus`, for `vcodec` `None` on any extension, for a playlist, and for a video result that also holds a labelled audio format (the HLS rendition shape). It is true for an audio result whose formats mix a named `mp3` and a labelled `webm` (D6). The `aiff`, `alac`, `ape` and `wav` rows follow D5
+- [x] **[fix]** `tests/test_wizard_flow.py`, with a scripted `Probe(..., content_kind=SINGLE_AUDIO, may_hold_video=True)`: six answers walk it, and `opts.audio_only is False`. With `audio_only=True` preset, as under `-i -a`, Enter keeps it `True`, and the walk takes five answers. `test_single_audio_skips_type_step` passes unchanged
+- [x] `audio_may_hold_video` is in both the `es` and the `en` blocks
 
 The pre-existing tests that change are the four in "The prototype against the suite", and no others.
 
@@ -289,7 +291,41 @@ Not needed. The labels come from yt-dlp's generic extractor and its HTML5 parser
 
 **Release notes:** compared with 0.2.0, which is what users have, these sources keep 0.2.0's result on Enter (the raw file in `~/Videos`), now with `Audio` and a note where 0.2.0 said `Unknown`, and without its extra confirmation. The 0.3.0 note "a video served as `audio/*` converts too, and loses its video" can go. The `.ogg` note narrows: `.ogg` sent as `audio/*`, or in `<audio>`, no longer converts on Enter. `.m4a` and `.wav` pages still do.
 
+Suggested 0.3.0 note (QA, for the planner): "In the wizard, a file a server or page labels as audio but whose container can hold a video (`.ogg`, `.wma`, `.m4b`, `.asf`, `.mp4`, `.webm` sent as `audio/*` or in `<audio>`) now shows `Audio` with a note and the video/audio choice. Enter keeps the file as served in ~/Videos, as 0.2.0 and `-y` do. Choose 2 for an mp3. `.mp3`, `.m4a`, `.wav`, `.flac`, `.aac` and `.opus` keep the audio flow and convert to ~/Music."
+
+## Changes after approval
+
+Each change has its own test, and the gate covers them.
+
+**The label rule lowercases the extension** (`f2ceff7`). yt-dlp keeps the URL's case in `ext`, so real audio at `.MP3`, `.M4A`, `.WAV` or `.FLAC` missed "the extension says audio", got the type step, and Enter saved the raw file in `~/Videos`. `_audio_by_label_only` now lowercases `ext` before the test. Spec 17's `_format_kind` is left as it was. Tests: `test_an_uppercase_extension_that_says_audio_is_not_flagged` (unit), `test_wizard_keeps_the_audio_flow_for_an_uppercase_audio_extension` (e2e), and the uppercase `.OGG` row of `test_wizard_offers_the_video_of_other_labelled_shapes`, which keeps the flag.
+
+**`unknown_video` is not flagged** (`f2ceff7`). An `<audio src>` with no extension comes back as `unknown_video`. Flagged, Enter took the video path, which today saves `.unknown_video`, says `Download failed` and exits 1 (row 29), where `main` saved an `.mp3`. It is left out of the rule until row 29 lands, and **must rejoin the flagged side when row 29 lands**: a video in such a tag is still converted and lost on Enter today. Extensionless `.ogg` and `.webm` direct URLs keep the flag, because yt-dlp takes `ogg` and `webm` from the `Content-Type`. The unit criterion above is corrected to match. Test: `test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds`, and the `unknown_video` row of `test_audio_known_only_by_a_label_may_hold_a_video`.
+
+**`isolated_env` runs tests from an empty folder** (`254af34`). Outside the spec's scope; QA flagged it. A scripted wizard answer that drifts by one step can be read as a relative output folder: during this item it left `<worktree>/2/`. Outside the live tests, the autouse fixture now changes into an empty `tmp_path / "cwd"` and fails the test if anything is left there. Test-only, no behaviour change. Test: `test_relative_paths_resolve_under_tmp_path` in `tests/test_isolation.py`.
+
+**Files outside the table.** `tests/test_isolation.py`, for the fixture above. Nothing else outside `.ai/` changed beyond the Files table.
+
+**More coverage than the criteria asked** (`e828336`): real audio that says so (`.mp3`, `.opus`, `.flac`, `.aac`, a `<source>` naming its codec, extensionless audio `Content-Type`s, a site extractor naming the codec) keeps the audio flow; query strings, extensionless ogg and webm, a bare `<source type>` and a site extractor's unnamed codec get the step; `-i` with `-f`, `--video-format` and `-a`; `b` and `c` at the new step; HLS in `<audio>`; a page of labelled `<audio>` items; two multi-URL walks that share no answer.
+
+## Validation
+
+On `main` at `11711f2` (merge `cc4de64`), yt-dlp 2026.10.26, ffmpeg 9.0.2, Python 3.14.9. **GitHub CI hasn't run on this code: nothing has been pushed.**
+
+- **Gate:** `timeout 400 scripts/pre-release.sh --no-live`, exit 0. Lint and types clean. 1370 passed, 9 deselected, 3 xfailed in each locale run (es, en), coverage 98.44%. The xfails: this item's strict `.ogg` rerun pin (row 25), the `opus` rerun (row 25) and spec 17's D4 relative `og:image`.
+- **Criteria,** in order, all passing in the gate: `test_wizard_enter_keeps_the_video_of_a_file_labelled_as_audio` (9 sources, with the replay in a fresh `HOME`); `test_wizard_can_still_take_the_audio_of_a_file_labelled_as_audio` (9); `test_interactive_audio_flag_opens_the_type_step_of_a_file_labelled_as_audio_at_audio`; `test_interactive_quality_flag_on_a_file_labelled_as_audio_keeps_the_video`; `test_wizard_enter_keeps_real_audio_under_a_label_raw` and `test_wizard_converts_real_audio_under_a_label_when_asked` (2 each), with the two rows gone from `test_wizard_converts_audio_without_codec_info_and_reruns` and the `tiny.ogg` row of `test_wizard_on_audio_without_codec_info_honours_the_format` answering `("2", "2")`; `test_wizard_trusts_an_audio_tag_on_such_a_container` is no longer collected; `test_wizard_gives_a_file_labelled_as_audio_its_type_step_among_several_urls`; `test_wizard_twice_on_a_file_labelled_as_audio_keeps_one_file` (`clip.wma`, `clip.m4b`, `as-audio/tiny.mp4`); the strict xfail `test_wizard_twice_on_an_ogg_labelled_as_audio_keeps_one_file`; pins: the 5 remaining rows of `test_wizard_converts_audio_without_codec_info_and_reruns`, `test_direct_runs_on_a_file_labelled_as_audio_are_unchanged` (9), `test_wizard_tells_ogg_video_from_ogg_audio_on_one_page_and_repeats_it` and `test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio` (6), unchanged. Unit: `test_audio_known_only_by_a_label_may_hold_a_video` (41 rows), plus `test_a_url_only_result_under_a_label_may_hold_a_video`, `test_a_playlist_of_labelled_audio_is_not_flagged` and `test_the_flag_reads_every_format_of_an_audio_result`; `test_audio_that_may_hold_a_video_gets_the_type_step` (`plain`: 6 answers, `audio_only` False; `audio-flag`: 5, True); `test_single_audio_skips_type_step` unchanged. `audio_may_hold_video` is in both blocks (`i18n.py:75`, `:153`), checked by `test_es_and_en_have_same_keys` and `test_the_note_on_a_file_labelled_as_audio_in_both_languages`. Removed lines in `tests/` are only the four pre-existing tests the spec named, and the old body of `isolated_env`.
+- **Reverting the fix:** not repeated here. This validation relies on the testing and review stages for it; QA approved the item.
+- **Reproduction:** the real console script (`.venv/bin/download-media`) against a scratch `http.server` that sends `/a/vid.ogg` (Theora and Vorbis) as `audio/ogg` and `/audio/vid.mp4.html` as `<audio src="/o/vid.mp4">`, under `env -i` with `HOME` and `XDG_*` in a temp folder, `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR` unset, no clipboard, run from an empty folder. Streams by ffprobe.
+  - Six Enters on `/a/vid.ogg`: `Detected: generic / Audio`, the note, the type step at `[1]`, `Done.`, exit 0, `Videos/vid.ogg` with video and audio, one history row of kind `video`, command `download-media -y <url>`. `-y` saves the same file.
+  - The Problem's own four Enters: the walk reaches the folder prompt and stdin ends: `Cancelled.`, exit 0, nothing saved. Nothing is deleted.
+  - `2` at the type step: `Music/vid.mp3`, audio only, `download-media -y -a <url>`, kind `audio`.
+  - `-i -o <absolute folder>`, six Enters: `vid.ogg` with both streams in that folder, nothing in the temp home's `Videos`, command `-y -o <folder> <url>`.
+  - Six Enters on the `<audio src="vid.mp4">` page: `Videos/vid.mp4 (1).mp4` with both streams, exit 0, the same as `-y`.
+  - Nothing was left in the working folder by any run. The full matrix was QA's and isn't repeated.
+- **Scope:** outside `.ai/`, the diff `a3f63df..cc4de64` touches the seven files in the Files table plus `tests/test_isolation.py`. No change to `pyproject.toml`, `PKGBUILD`, `downloader.py`, `cli.py`, `equivalent.py` or the version.
+
 ## Open decisions
+
+**Waiting for the human: D5.** The roles chose A (renamed videos under `aiff`, `alac`, `ape` and `wav` are accepted, like the other seven: such a file becomes an `.mp3` and its video is lost). The decision was put to the human, so it needs their confirmation. Switching to B or C is a one-word change in `_AUDIO_LISTED_BUT_MAY_HOLD_VIDEO`, plus the D5 rows of the probe tests.
 
 Resolved by the roles under the human's overnight delegation, each on the recommended option: D1 A, D2 A (default video, no keepvideo), D3 A (`audio_may_hold_video`), D4 A, D5 A (accept aiff, alac, ape, wav like the other seven; the human should confirm this one, since it was put to them), D6 A. The human reviews this.
 
