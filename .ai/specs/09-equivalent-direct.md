@@ -1,6 +1,6 @@
 # 09 — Make the equivalent command repeat the run
 
-Status: approved
+Status: done
 Item: `fix/equivalent-direct`
 
 ## Problem
@@ -103,6 +103,7 @@ Written for the recommended option of each decision. Each decision says what cha
 - `parts` starts as `["download-media", "-y"]` (D1). Update the module docstring, which still says only "wizard run".
 - Subtitles: append `-s` whenever `opts.subs`, then `--sub-langs <shlex.quote(value)>` if it isn't the default.
 - Playlist: with mode `yes`, emit `--playlist-items <shlex.quote(items)>` if `opts.playlist_items` is non-empty, otherwise `-p` (D3). An empty string means the wizard's `all`.
+- A `--sub-langs` or `--playlist-items` value starting with `-` prints as one token, `--flag=<shlex.quote(value)>`: `--sub-langs=-live_chat`, `--playlist-items=-2:`. As its own token, argparse can take it for a flag and exit 2: `-2:` and `-5::2` before Python 3.14, `-x` on every version. Every other value keeps the two-token form. `-o` doesn't get this: see Out.
 - Keep the `-P` branch as it is, and reword its comment: under `-y` it no longer prevents a question, but it records the decision on a URL that looks multi-entry. `test_no_playlist_flag_kept_for_instagram_posts` stays valid.
 
 ### `cli.py`
@@ -181,29 +182,29 @@ Carousels and playlists follow the same rows, since `build` only sees the mode a
 
 Every behavior below needs a test that fails on `main`, shown by reverting the fix (`constraints.md`, Verification 5). A replay test parses the printed line with `shlex.split`, swaps the output folder for an empty one, and calls `cli.main` with no scripted `answers()`, so any prompt fails the test. The all-defaults and cookie-drop cases must not use the `run` fixture: it always adds `-o`, which hides F1. Point `HOME` at `tmp_path` and call `cli.main` directly.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] `build(DownloadOptions(urls=["https://example.com/v"]))` is `download-media -y https://example.com/v`
-- [ ] For every line printed in the replay tests, `should_run_wizard` is `False`
-- [ ] Replay, wizard on all defaults: same file names, no prompt
-- [ ] Replay, `--cookies brave -P https://fake.test/rejects-cookies` (cookies dropped): no `--cookies`, no prompt
-- [ ] `-y` appears in the line printed by a `-y` run
-- [ ] `build` with `subs=True, sub_langs="fr,de"` parses back to `subs is True` and `sub_langs == "fr,de"`
-- [ ] `build` with `sub_langs="fr, de"` parses back to one URL and `sub_langs == "fr, de"`
-- [ ] Direct on `https://fake.test/carousel?list=1`, answer `2`: the line has `-p`, and replay saves `02 - Clip [v1].mp4` and `04 - Clip [v2].mp4`
-- [ ] Same URL, answer `1`: the line has `-P`, and replay saves `Clip [v1].mp4` and `Clip [v2].mp4`
-- [ ] Direct on that URL plus `https://fake.test/video`, answers `2` and Enter: one header, two commands, and replaying both gives the same files as the run
-- [ ] Wizard on `https://fake.test/carousel`, item `2`: replay saves only `02 - Clip [v1].mp4`
-- [ ] Wizard on that carousel, Enter: replay saves the same two files as the run
-- [ ] `--playlist-items 2 https://fake.test/carousel` skips the wizard, and `-P --playlist-items 2` exits 2
-- [ ] `-y --playlist-items 9 https://fake.test/carousel`: exit 1, `t("done")` not in the output, no history row
-- [ ] `-y --playlist-items x https://fake.test/carousel`: exit 1, `t("failed", url)` in the output, no traceback
-- [ ] Preview declined: `t("equiv_cmd")` not in the output, exit still 1
-- [ ] Two URLs, first declined: the printed line holds only the second
-- [ ] Wizard cancelled: `t("equiv_cmd")` not in the output, exit still 0
-- [ ] `-y -l <url>`: `t("equiv_cmd")` not in the output
-- [ ] Total failure: the command is printed, exit 1
-- [ ] A URL and folder with spaces, `&`, `'` and `$` round-trip through `shlex.split`
-- [ ] The reproduction under Problem, run with the fix, prints a command that downloads with stdin closed
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] `build(DownloadOptions(urls=["https://example.com/v"]))` is `download-media -y https://example.com/v`
+- [x] For every line printed in the replay tests, `should_run_wizard` is `False`
+- [x] Replay, wizard on all defaults: same file names, no prompt
+- [x] Replay, `--cookies brave -P https://fake.test/rejects-cookies` (cookies dropped): no `--cookies`, no prompt
+- [x] `-y` appears in the line printed by a `-y` run
+- [x] `build` with `subs=True, sub_langs="fr,de"` parses back to `subs is True` and `sub_langs == "fr,de"`
+- [x] `build` with `sub_langs="fr, de"` parses back to one URL and `sub_langs == "fr, de"`
+- [x] Direct on `https://fake.test/carousel?list=1`, answer `2`: the line has `-p`, and replay saves `02 - Clip [v1].mp4` and `04 - Clip [v2].mp4`
+- [x] Same URL, answer `1`: the line has `-P`, and replay saves `Clip [v1].mp4` and `Clip [v2].mp4`
+- [x] Direct on that URL plus `https://fake.test/video`, answers `2` and Enter: one header, two commands, and replaying both gives the same files as the run
+- [x] Wizard on `https://fake.test/carousel`, item `2`: replay saves only `02 - Clip [v1].mp4`
+- [x] Wizard on that carousel, Enter: replay saves the same two files as the run
+- [x] `--playlist-items 2 https://fake.test/carousel` skips the wizard, and `-P --playlist-items 2` exits 2
+- [x] `-y --playlist-items 9 https://fake.test/carousel`: exit 1, `t("done")` not in the output, no history row
+- [x] `-y --playlist-items x https://fake.test/carousel`: exit 1, `t("failed", url)` in the output, no traceback
+- [x] Preview declined: `t("equiv_cmd")` not in the output, exit still 1
+- [x] Two URLs, first declined: the printed line holds only the second
+- [x] Wizard cancelled: `t("equiv_cmd")` not in the output, exit still 0
+- [x] `-y -l <url>`: `t("equiv_cmd")` not in the output
+- [x] Total failure: the command is printed, exit 1
+- [x] A URL and folder with spaces, `&`, `'` and `$` round-trip through `shlex.split`
+- [x] The reproduction under Problem, run with the fix, prints a command that downloads with stdin closed
 
 Existing tests that must change, and why:
 
