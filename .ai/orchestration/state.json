@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T22:30:27-04:00",
+  "updated": "2026-11-06T22:48:47-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,9 +251,9 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
@@ -261,13 +261,12 @@
         "fe91ce0",
         "5ec306b",
         "d6b83a4",
-        "bec654d"
+        "bec654d",
+        "875030f"
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "major probe.py:143 ogg and asf hold video, but an unknown vcodec with those extensions reads as audio: the wizard converts the video to mp3, deletes it and reports Done. Regression from main; gap in the approved rule table."
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -311,6 +310,13 @@
           "result": "done",
           "at": "2026-11-06T22:30:27-04:00",
           "note": "Finding fixed: asf, m4b, ogg, ogx, wma with an unknown vcodec read as video. 802 passed, 2 xfailed (D4, opus). Human decision at merge: seven extensions (oga, spx, mka, weba, m4r, f4a, f4b) still convert a renamed video. Architect records the rule change at validation. Planner follow-up: metadata step fails on extensions ffmpeg can't mux, reporting Download failed with the file saved."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-06T22:48:47-04:00",
+          "note": "Finding closed. 803 passed, 2 xfailed. Mutation 12/12. Human decision at merge: a direct Theora .ogg served as audio/ogg gets vcodec none, so the wizard converts it to mp3 and drops the video; main kept it raw. Same for wma, m4b, asf holding video under audio/*. Planner follow-ups: .ogx carousel count wrong; extensionless octet-stream link saves .unknown_video and reports failure; og:video without extension fails."
         }
       ]
     }
