@@ -202,6 +202,37 @@ def test_equivalent_groups_urls_by_mode_in_first_seen_order(monkeypatch, capsys)
     ]
 
 
+def _equivalent_lines(capsys, runs: list, results: list) -> list[str]:
+    from download_media import cli
+
+    cli._print_equivalent(runs, [cli._Outcome(*result) for result in results])
+    lines = (line.strip() for line in capsys.readouterr().out.splitlines())
+    return [line for line in lines if line.startswith("download-media ")]
+
+
+def test_equivalent_shares_one_command_between_equal_wizard_walks(capsys) -> None:
+    runs = [("a", parse(["a"])), ("b", parse(["b"]))]
+    lines = _equivalent_lines(capsys, runs, [(True, False, "no")] * 2)
+    assert lines == ["download-media -y a b"]
+
+
+def test_equivalent_gives_different_wizard_walks_a_command_each(capsys) -> None:
+    runs = [("a", parse(["a"])), ("b", parse(["-a", "b"])), ("c", parse(["c"]))]
+    lines = _equivalent_lines(capsys, runs, [(True, False, "no")] * 3)
+    assert lines == ["download-media -y a c", "download-media -y -a b"]
+
+
+def test_equivalent_cookie_drop_is_decided_per_browser(capsys) -> None:
+    runs = [
+        ("a", parse(["--cookies", "brave", "a"])),
+        ("b", parse(["--cookies", "firefox", "b"])),
+        ("c", parse(["--cookies", "firefox", "c"])),
+    ]
+    results = [(True, True, "no"), (True, False, "no"), (True, True, "no")]
+    lines = _equivalent_lines(capsys, runs, results)
+    assert lines == ["download-media -y a", "download-media -y --cookies firefox b c"]
+
+
 def test_playlist_items_excludes_both_playlist_flags(capsys) -> None:
     import pytest
 
@@ -425,7 +456,7 @@ def test_main_cancelled_wizard_exits_clean(monkeypatch, capsys) -> None:
     from download_media import cli
     from download_media.i18n import t
 
-    monkeypatch.setattr(cli.wizard, "run", lambda opts: None)
+    monkeypatch.setattr(cli.wizard, "run_all", lambda opts: None)
     assert cli.main([]) == 0
     assert t("cancelled") in capsys.readouterr().out
 
