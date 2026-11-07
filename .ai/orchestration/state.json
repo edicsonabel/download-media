@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T09:32:59-04:00",
+  "updated": "2026-11-07T09:39:54-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,9 +707,9 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
       "worktree": ".worktrees/fix-playlist-items-fix",
@@ -721,13 +721,12 @@
         "ce926e6",
         "fab0a23",
         "21c228f",
-        "1f4c65f"
+        "1f4c65f",
+        "31b8a0d"
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "medium downloader.py:217-229 missing items checked against the extractor's declared playlist_count, not the entries read; YouTube's count includes hidden videos. Too high: item dropped silently; too low: saved item reported as skipped."
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -771,6 +770,13 @@
           "result": "done",
           "at": "2026-11-07T09:32:59-04:00",
           "note": "Round 1 fixed: under --playlist-items in playlist mode, the declared playlist_count is removed so yt-dlp counts entries itself. 1489 passed, 3 xfailed; floor passes. Side effect: yt-dlp's 'of M' line uses the real count."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T09:39:54-04:00",
+          "note": "Round 1 closed. Nothing else reads the removed count. Mutation 3/7, 4 equivalent survivors. Added a multi_video case."
         }
       ]
     }
