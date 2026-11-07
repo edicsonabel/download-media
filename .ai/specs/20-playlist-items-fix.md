@@ -1,7 +1,9 @@
 # 20 — Report `--playlist-items` truthfully, and drop `NA` from single-video names
 
-Status: approved
+Status: done
 Item: `fix/playlist-items-fix`
+
+> **For the human's review: D2.** The shipped `-p` file name on a URL that holds a single video changes: 0.2.0 saved `NA - Clip [v1].mp4`, this saves `Clip.mp4`. Decided by the roles under the overnight delegation; see D2 and SemVer. GitHub CI has not run on this code: nothing was pushed.
 
 ## Problem
 
@@ -88,7 +90,7 @@ Confirmed in the installed source, and at the `pyproject.toml` floor (2024.10.7,
 - **"No items are downloadable. Cancelling." in direct mode** when the list holds only images, or `--playlist-items 1` picks an image: "Cancelling" reads wrong there too, but the message is the wizard's, the cause is true, and changing it touches every refusal. For the planner (rows 23 or 31).
 - **`-i -p` and `-i -P`** don't preselect the picker either: Enter still picks the supported videos. That's shipped behaviour (spec 17's case table records `-i -P`). For the planner.
 - **A total failure with an error** (`DownloadError`, e.g. `1,9` where item 1 is broken) prints `Download failed` and the hints, as today, without the not-found note: the run already fails loudly, and the result never reaches `cli.py`.
-- **Lists whose size yt-dlp doesn't learn** (a lazy, paged list not read to its end, with no count from the extractor): nothing is reported. When a requested item is past the end, yt-dlp reads to the end, so the count is known in every case that matters.
+- **Lists whose size yt-dlp doesn't learn** (a lazy, paged list not read to its end): nothing is reported. As approved, this bullet said "with no count from the extractor" and "the count is known in every case that matters". The second part was wrong for extractor-declared counts, which can include hidden videos (YouTube's): see "After approval". What stays out: a segment that selects nothing without making yt-dlp read on, such as `0`, gets no note on such a list and falls back to `no_supported_items`.
 - **The picker doesn't check the preset against the probed list.** The download reports it (D6).
 - **Plurals:** "(1 items)" on a 1-entry list, like the existing `items_count_simple`. Not worth a plural rule here.
 
@@ -105,6 +107,7 @@ Confirmed in the installed source, and at the `pyproject.toml` floor (2024.10.7,
 | modify | `tests/test_selection.py`          |
 | modify | `tests/test_downloader.py`         |
 | modify | `tests/test_wizard_flow.py`        |
+| modify | `tests/conftest.py` (added after approval: `fake_site` pages) |
 | modify | `AGENTS.md`                        |
 
 No new dependency. Two new messages. `equivalent.py` doesn't change.
@@ -193,24 +196,24 @@ In the "Multi-entry URLs" paragraph, after "`-p` must not report success on a to
 
 **[fix]** criteria need a test that fails without the fix, which the developer shows by reverting it (`constraints.md`, Verification 5). **[pin]** criteria pass before and after. Tests that can reach a default folder use the `home` fixture. E2e tests use `fake_site` and the existing helpers in `tests/test_e2e.py` (`run`, `answers`, `names`, `commands`, `history_rows`, `replay`).
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `-y --playlist-items 9 https://fake.test/carousel`: exit 1; `t("items_not_found", 4, "9")` and `t("failed", CAROUSEL)` in the output; `t("no_supported_items")` and `t("done")` not in it; no file; no history row
-- [ ] **[fix]** `-y --playlist-items 2,9` on the carousel: exit 0; only `02 - Clip [v1].mp4`; `t("items_not_found", 4, "9")` appears before `t("done")`; one history row; the printed command has `--playlist-items 2,9`
-- [ ] **[fix]** `-y --playlist-items=2,-7,5-9,3-9,-1` on the carousel: exit 0; `02 - Clip [v1].mp4` and `04 - Clip [v2].mp4`; `t("items_not_found", 4, "-7,5-9")` in the output
-- [ ] **[fix]** `-y --playlist-items 1,3 https://fake.test/nested-gated`: `t("items_not_found", 1, "3")` in the output and `01 - Clip [v2].mp4` on disk (the outermost list's count; the first `playlist` call would give 3 and no note)
-- [ ] **[pin]** `-y --playlist-items 1 https://fake.test/empty`: exit 1, `t("no_supported_items")` in the output, and no `items_not_found` note. `test_empty_playlist_is_a_failure` passes unchanged
-- [ ] **[fix]** `-y -p https://fake.test/video` and `-y --playlist-items 2 https://fake.test/video`: exit 0, `Clip.mp4` only, `t("done")` in the output
-- [ ] **[fix]** `-y -p https://fake.test/video`, then `-y -p https://fake.test/video-b` into the same folder: `Clip.mp4` and `Clip [v2].mp4`
-- [ ] **[pin]** Every existing test that names a carousel or playlist file under `-p` or `--playlist-items` (`BOTH_ITEMS`, `MULTI` and the rest) passes unchanged
-- [ ] **[fix]** `-i --playlist-items 2 https://fake.test/carousel` with `PICKER_WALK`: exit 0; only `02 - Clip [v1].mp4`; the prompts include `t("ask_selection_default_preset", "2")`; the command has `--playlist-items 2`, and its replay into an empty folder saves the same file
-- [ ] **[fix]** `-i --playlist-items 9` on the carousel with `PICKER_WALK`: exit 1, `t("items_not_found", 4, "9")` in the output, no file
-- [ ] **[fix]** `-i --playlist-items 4 https://fake.test/carousel https://fake.test/rejects-cookies-carousel`, `PICKER_WALK` twice: exit 0, `04 - Clip [v2].mp4` on disk, and both picker prompts are `t("ask_selection_default_preset", "4")`
-- [ ] **[pin]** `test_wizard_selection_replaces_the_playlist_items_flag`, `test_wizard_all_replaces_the_playlist_items_flag`, `test_items_flag_is_dropped_when_the_wizard_finds_a_single_video`, `test_items_flag_survives_a_failed_wizard_probe` and `test_wizard_carousel_on_defaults_prints_only_the_selection` pass unchanged
-- [ ] **[fix]** Unit, `tests/test_selection.py`: `missing_items("2,9,-7,5-9,3-9,-1,0", 4) == ["9", "-7", "5-9", "0"]`; `missing_items("1:", 4) == []`; `missing_items("x", 4) == []` and `missing_items("1,,2", 4) == []` (no exception)
-- [ ] **[fix]** Unit, `tests/test_wizard_flow.py`: a scripted carousel walk with `DownloadOptions(urls=[URL], playlist_items="1-2")` and Enter at the picker keeps `opts.playlist_items == "1-2"`; the same walk without the preset still gives the supported videos (`test_carousel_default_selects_videos` unchanged)
-- [ ] **[fix]** Unit, `tests/test_downloader.py`: the playlist-mode `outtmpl` contains `%(playlist_index&{:02d} - |)s` and `%(_name_suffix|)s`, and no bare `%(playlist_index)02d`
-- [ ] `items_not_found` and `ask_selection_default_preset` are in both the `es` and `en` blocks (`test_es_and_en_have_same_keys` covers parity)
-- [ ] The Problem's console-script reproductions, re-run on the merged code against a loopback server with `HOME` and `XDG_*` in a temp folder, give the prototype results listed under Findings, and the files on disk match what each run reports
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** `-y --playlist-items 9 https://fake.test/carousel`: exit 1; `t("items_not_found", 4, "9")` and `t("failed", CAROUSEL)` in the output; `t("no_supported_items")` and `t("done")` not in it; no file; no history row
+- [x] **[fix]** `-y --playlist-items 2,9` on the carousel: exit 0; only `02 - Clip [v1].mp4`; `t("items_not_found", 4, "9")` appears before `t("done")`; one history row; the printed command has `--playlist-items 2,9`
+- [x] **[fix]** `-y --playlist-items=2,-7,5-9,3-9,-1` on the carousel: exit 0; `02 - Clip [v1].mp4` and `04 - Clip [v2].mp4`; `t("items_not_found", 4, "-7,5-9")` in the output
+- [x] **[fix]** `-y --playlist-items 1,3 https://fake.test/nested-gated`: `t("items_not_found", 1, "3")` in the output and `01 - Clip [v2].mp4` on disk (the outermost list's count; the first `playlist` call would give 3 and no note)
+- [x] **[pin]** `-y --playlist-items 1 https://fake.test/empty`: exit 1, `t("no_supported_items")` in the output, and no `items_not_found` note. `test_empty_playlist_is_a_failure` passes unchanged
+- [x] **[fix]** `-y -p https://fake.test/video` and `-y --playlist-items 2 https://fake.test/video`: exit 0, `Clip.mp4` only, `t("done")` in the output
+- [x] **[fix]** `-y -p https://fake.test/video`, then `-y -p https://fake.test/video-b` into the same folder: `Clip.mp4` and `Clip [v2].mp4`
+- [x] **[pin]** Every existing test that names a carousel or playlist file under `-p` or `--playlist-items` (`BOTH_ITEMS`, `MULTI` and the rest) passes unchanged
+- [x] **[fix]** `-i --playlist-items 2 https://fake.test/carousel` with `PICKER_WALK`: exit 0; only `02 - Clip [v1].mp4`; the prompts include `t("ask_selection_default_preset", "2")`; the command has `--playlist-items 2`, and its replay into an empty folder saves the same file
+- [x] **[fix]** `-i --playlist-items 9` on the carousel with `PICKER_WALK`: exit 1, `t("items_not_found", 4, "9")` in the output, no file
+- [x] **[fix]** `-i --playlist-items 4 https://fake.test/carousel https://fake.test/rejects-cookies-carousel`, `PICKER_WALK` twice: exit 0, `04 - Clip [v2].mp4` on disk, and both picker prompts are `t("ask_selection_default_preset", "4")`
+- [x] **[pin]** `test_wizard_selection_replaces_the_playlist_items_flag`, `test_wizard_all_replaces_the_playlist_items_flag`, `test_items_flag_is_dropped_when_the_wizard_finds_a_single_video`, `test_items_flag_survives_a_failed_wizard_probe` and `test_wizard_carousel_on_defaults_prints_only_the_selection` pass unchanged
+- [x] **[fix]** Unit, `tests/test_selection.py`: `missing_items("2,9,-7,5-9,3-9,-1,0", 4) == ["9", "-7", "5-9", "0"]`; `missing_items("1:", 4) == []`; `missing_items("x", 4) == []` and `missing_items("1,,2", 4) == []` (no exception)
+- [x] **[fix]** Unit, `tests/test_wizard_flow.py`: a scripted carousel walk with `DownloadOptions(urls=[URL], playlist_items="1-2")` and Enter at the picker keeps `opts.playlist_items == "1-2"`; the same walk without the preset still gives the supported videos (`test_carousel_default_selects_videos` unchanged)
+- [x] **[fix]** Unit, `tests/test_downloader.py`: the playlist-mode `outtmpl` contains `%(playlist_index&{:02d} - |)s` and `%(_name_suffix|)s`, and no bare `%(playlist_index)02d`
+- [x] `items_not_found` and `ask_selection_default_preset` are in both the `es` and `en` blocks (`test_es_and_en_have_same_keys` covers parity)
+- [x] The Problem's console-script reproductions, re-run on the merged code against a loopback server with `HOME` and `XDG_*` in a temp folder, give the prototype results listed under Findings, and the files on disk match what each run reports
 
 ### Existing tests that change
 
@@ -224,6 +227,58 @@ These, and no other pre-existing test, failed on the prototype in both locales:
 | `test_direct_runs_on_media_without_codec_info_are_unchanged`, 3 `-y -p` rows | `poster (1).mp4`, `video.mp4` and `audio (1).m4a`, the same names as their `-y` rows                  |
 
 Commits, one per logical change: `fix(downloader): keep the single-video name in playlist mode`, `fix(cli): name playlist items that are not in the list`, `fix(wizard): preselect --playlist-items in the item picker`. Each carries its own tests.
+
+## After approval
+
+What changed between the approved spec and the merge (`dd454f1`), all in round 1 of testing:
+
+- **The declared count is removed** (`1f4c65f`, `fix(downloader): count missing items against the entries yt-dlp read`). Under `--playlist-items` in playlist mode, `_Ydl.process_ie_result` pops the extractor's `playlist_count` from `playlist` and `multi_video` results before yt-dlp processes them, so yt-dlp counts the entries itself. The reason: yt-dlp keeps a declared count over the entries it read (`YoutubeDL.py:2099-2101` only fills it when unset), and YouTube's tab extractor declares the header's "N videos", hidden videos included. With that count, an item past the real end went unnamed, and an item that was saved could be reported as skipped. The approved spec's "the count is known in every case that matters" (Out) was wrong for declared counts.
+- **Unknown size, no note.** Without the declared count, yt-dlp fills in `playlist_count` from `get_full_count()` once it has read the list to the end, and leaves it unset otherwise, which the note already treats as unknown. So a segment that selects nothing without making yt-dlp read on, such as `0`, gets no note on a paged list not read to the end, and the run falls back to `no_supported_items` (measured at validation: `0` on a lazy 2-entry list leaves the count unset; `3` reads to the end and gives 2).
+- **yt-dlp's own line changes too.** `Playlist …: Downloading N items of M` takes M from the same `playlist_count` (`YoutubeDL.py:2129-2130`). In those runs it now shows the real count, or no " of M" when the size is unknown. Measured at validation with `_Ydl` on a playlist declaring 3 over 2 entries and `--playlist-items 2,3`: `Downloading 1 items of 3` without the pop, `Downloading 1 items of 2` with it. Runs without `--playlist-items`, or in single mode, keep the declared count.
+- **New `fake_site` pages** in `tests/conftest.py`: `hidden-items` (declares 3, holds 2), `stale-count` (declares 2, holds 3), `lazy-hidden` (declares 3 on a paged list of 2, YouTube's real shape), `multi-hidden` (a `multi_video` result declaring 3 over 2 parts) and `lazy-carousel` (a paged list of 2, no count). They back `test_missing_items_follow_the_entries_not_the_declared_count`, `test_missing_items_note_counts_the_entries_read`, `test_missing_items_of_a_lazy_list_are_named_once_it_is_read_to_the_end` and `test_lazy_list_not_read_to_the_end_has_no_note`.
+
+## Validation
+
+On `main` at `e70616c` (merge `dd454f1`), yt-dlp 2026.10.26, Python 3.14.9.
+
+- **Gate:** `timeout 400 scripts/pre-release.sh --no-live`, exit 0: ruff clean, mypy strict clean on 14 files, 1491 passed, 9 deselected, 3 xfailed (the three known ones: opus rerun, relative `og:image`, ogg wizard rerun). **GitHub CI has not run on this code**: nothing has been pushed.
+- **Criteria to tests** (`tests/test_e2e.py` unless noted):
+
+| Criterion                                  | Test                                                                                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `9` on the carousel                        | `test_playlist_items_out_of_range_is_a_failure`                                                                                                   |
+| `2,9` on the carousel                      | `test_playlist_items_names_the_missing_item_before_done`                                                                                          |
+| `2,-7,5-9,3-9,-1`                          | `test_playlist_items_names_each_segment_that_selects_nothing`                                                                                     |
+| `1,3` on `nested-gated`                    | `test_playlist_items_counts_the_outermost_list`                                                                                                   |
+| `1` on `empty`                             | `test_playlist_items_on_an_empty_playlist_has_no_note`, `test_empty_playlist_is_a_failure` (unchanged)                                            |
+| `-p` / `--playlist-items 2` on `video`     | `test_a_plain_video_in_playlist_mode_keeps_its_single_mode_name` (both flags)                                                                     |
+| `video` then `video-b` under `-p`          | `test_plain_videos_in_playlist_mode_still_avoid_a_name_clash`                                                                                     |
+| Carousel and playlist names unchanged      | Every pre-existing `BOTH_ITEMS` / `MULTI` test, green in the gate                                                                                 |
+| `-i --playlist-items 2`                    | `test_wizard_picker_preselects_the_playlist_items_flag` (prompt, command, replay)                                                                 |
+| `-i --playlist-items 9`                    | `test_wizard_picker_preset_out_of_range_is_reported`                                                                                              |
+| `-i --playlist-items 4`, two carousels     | `test_wizard_picker_preset_reaches_every_url`                                                                                                     |
+| The five wizard pins                       | `test_wizard_selection_replaces_the_playlist_items_flag`, `test_wizard_all_replaces_the_playlist_items_flag`, `test_items_flag_is_dropped_when_the_wizard_finds_a_single_video`, `test_items_flag_survives_a_failed_wizard_probe`, `test_wizard_carousel_on_defaults_prints_only_the_selection` |
+| `missing_items` unit                       | `tests/test_selection.py`: `test_missing_items_names_segments_that_select_nothing`, `test_missing_items_follows_yt_dlp_slices`, `test_missing_items_never_raises_on_a_bad_spec` |
+| Picker preset unit                         | `tests/test_wizard_flow.py`: `test_carousel_default_keeps_the_playlist_items_flag`, `test_carousel_default_selects_videos` (unchanged)            |
+| Playlist `outtmpl` unit                    | `tests/test_downloader.py`: `test_playlist_template_leaves_out_a_missing_index`                                                                   |
+| Both i18n keys                             | `tests/test_i18n.py`: `test_es_and_en_have_same_keys`; keys at `i18n.py:93-94` and `:173-174`                                                     |
+| Console-script reproductions               | Below                                                                                                                                             |
+
+- **Findings reproduced once each** with `.venv/bin/download-media` against `python -m http.server` on 127.0.0.1 serving a tiny mp4, a 4-`<video>` `multi.html` and a 1-`<video>` `poster.html`; `HOME` and `XDG_STATE_HOME`/`CONFIG`/`CACHE`/`DATA` in a scratch folder, `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR` unset, absolute `-o`, `LANG=en_US.UTF-8`. Each matches the prototype result, and the disk matches the report:
+
+| Command                                   | Output                                                                                     | Exit | On disk                          | History |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------ | ---- | -------------------------------- | ------- |
+| `-y --playlist-items 9` `multi.html`      | `Not in this playlist (4 items), skipped: 9`, `Download failed: <url>`, command printed     | 1    | nothing                          | 0 rows  |
+| `-y --playlist-items 2,9` `multi.html`    | the same note, then `Done.`; command keeps `--playlist-items 2,9`                           | 0    | `02 - multi (2) [multi-2].mp4`   | 1 row   |
+| `-y --playlist-items 2` `poster.html`     | `Done.`, no note                                                                            | 0    | `poster (1).mp4`                 | 1 row   |
+| `-y -p` `poster.html`                     | `Done.`                                                                                     | 0    | `poster (1).mp4`                 | 1 row   |
+| `-y` `poster.html` (reference)            | `Done.`                                                                                     | 0    | `poster (1).mp4`                 | 1 row   |
+| `-i --playlist-items 2` `multi.html`, Enter at every prompt | `Pick items (Enter = 2, …): Selected: 2`; command `--playlist-items 2`     | 0    | `02 - multi (2) [multi-2].mp4`   | 1 row   |
+
+- **Scope:** `git diff 71250f4 dd454f1` touches the files in the Files table and nothing else outside `.ai/` (spec, `PLAN.md`, `state.json`). QA's full case matrix was not repeated.
+- **Live check:** not needed (see below); none run.
+- **Open, for the planner:** QA's two minor findings, `tests/test_e2e.py:396` (the `stale-count` comment still describes the bug the round-1 fix removed) and `selection.py:11` (`PlaylistEntries` imported at module load, so a yt-dlp rename would break every command; the tests would fail loudly). The 0.3.0 release note under SemVer is not in `PLAN.md` yet.
+- **Open, for the human:** D2.
 
 ## Live check
 
