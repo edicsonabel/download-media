@@ -10,6 +10,7 @@ from __future__ import annotations
 import builtins
 import functools
 import http.server
+import re
 import shutil
 import subprocess
 import threading
@@ -83,6 +84,13 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, format: str, *args: Any) -> None:
         pass
+
+    def send_head(self) -> Any:
+        status = re.fullmatch(r"/status/(\d{3})", self.path)
+        if status:
+            self.send_error(int(status[1]))
+            return None
+        return super().send_head()
 
 
 def _write_generic_pages(root: Path, base: str) -> None:
@@ -197,6 +205,22 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     _write_generic_pages(root, base)
     yield base
     server.shutdown()
+
+
+# instagram.py and youtube/_video.py, word for word.
+ANONYMOUS_LIMIT = (
+    "The webpage request was redirected to the login page. "
+    "You have exceeded the rate-limit for accessing posts anonymously"
+)
+FOLLOWERS_ONLY = "This content is only available for registered users who follow this account"
+GEO_BLOCK = "The uploader has not made this video available in your country"
+SUBSCRIBERS_ONLY = "This post requires a subscription"
+SESSION_RATE_LIMIT = (
+    "This content isn't available, try again later. The current session has been rate-limited "
+    "by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between "
+    "video requests to avoid exceeding the rate limit. For more information, refer to  "
+    "https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later"
+)
 
 
 class FakeSiteIE(InfoExtractor):
@@ -358,6 +382,67 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result(entries, "post", "Post")
         return None
 
+    def _failure_shape(self, page: str) -> dict[str, Any] | None:
+        """Failures built with yt-dlp's own raisers, so the wording is yt-dlp's.
+
+        Some raisers only warn under ``ignore_no_formats_error``, and then real extractors
+        go on to return their metadata. Those pages must too: falling through would land
+        on "This post is private", and a test could no longer catch that option.
+        """
+        metadata = self._instagram_image("m1")
+        if page == "login-hint":
+            self.raise_login_required()
+        if page == "anonymous-limit":
+            self.raise_login_required(ANONYMOUS_LIMIT)
+        if page == "age-gate":
+            hint = self._login_hint(method="cookies")
+            self.raise_no_formats(f"Sign in to confirm your age. {hint}", expected=True)
+            return metadata
+        if page == "rate-limited":
+            self.raise_no_formats(SESSION_RATE_LIMIT, expected=True)
+            return metadata
+        if page == "geo":
+            self.raise_geo_restricted(countries=["US"])
+        if page == "geo-metadata":
+            self.raise_geo_restricted(GEO_BLOCK, ["US"], metadata_available=True)
+            return metadata
+        if page == "paid-post":
+            self.raise_login_required(SUBSCRIBERS_ONLY, metadata_available=True)
+            return metadata
+        if page == "no-video-post":
+            self.raise_no_formats("There is no video in this post", expected=True)
+            return metadata
+        if page == "drm":
+            drm_format = {"url": f"{self.media_url}/tiny.mp4", "ext": "mp4", "has_drm": True}
+            return {**metadata, "formats": [drm_format]}
+        if page == "extractor-bug":
+            raise ExtractorError("Unable to extract video data")
+        return None
+
+    def _partial_shape(self, page: str) -> dict[str, Any] | None:
+        """Carousels where some entries fail, or are left empty."""
+        follow = "https://fake.test/{}".format
+        video, image = self._video("v2"), self._image("i1")
+        if page == "partial-gated":
+            entries = [video, image, self.url_result(follow("needs-cookies"))]
+        elif page == "partial-rate":
+            entries = [video, self.url_result(follow("rate-limited"))]
+        elif page == "partial-broken":
+            entries = [video, image, self.url_result(follow("extractor-bug"))]
+        elif page == "all-gated":
+            entries = [self.url_result(follow(p)) for p in ("needs-cookies", "login-hint")]
+        elif page == "partial-both":
+            entries = [
+                self.url_result(follow("rate-limited")),
+                self.url_result(follow("needs-cookies")),
+                video,
+            ]
+        elif page == "hole":
+            entries = [video, None]
+        else:
+            return None
+        return self.playlist_result(entries, "post", "Post")
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -370,7 +455,7 @@ class FakeSiteIE(InfoExtractor):
     def _real_extract(self, url: str) -> dict[str, Any]:
         page = self._match_id(url)
         cookies = self._downloader.cookies_used
-        shape = self._codec_shape(page)
+        shape = self._codec_shape(page) or self._failure_shape(page) or self._partial_shape(page)
         if shape is not None:
             return shape
         if page == "video":
@@ -379,6 +464,8 @@ class FakeSiteIE(InfoExtractor):
             return self._video("v2", page="video-b")
         if page == "image":
             return self._image("i1")
+        if page == "thumbnail-image":
+            return {**self._image("i1"), "thumbnail": f"{self.media_url}/tiny.jpg"}
         if page == "merged":
             return self._merged_video("v1", "merged")
         if page == "empty":
@@ -420,6 +507,11 @@ class FakeSiteIE(InfoExtractor):
             raise ExtractorError("Login required", expected=True)
         if page == "needs-cookies":
             return self._video("v1", page="needs-cookies")
+        if page == "gated-carousel" and not cookies:
+            self.raise_login_required(FOLLOWERS_ONLY)
+        if page == "gated-carousel":
+            entries = [self._image("i1"), self._video("v1"), self._video("v2")]
+            return self.playlist_result(entries, "post", "Post")
         raise ExtractorError("This post is private", expected=True)
 
 
@@ -443,6 +535,10 @@ def fake_site(monkeypatch: pytest.MonkeyPatch, media_url: str) -> list[Any]:
 
     monkeypatch.setattr(downloader, "_Ydl", FakeYdl)
     monkeypatch.setattr(downloader, "YoutubeDL", FakeYdl)
-    monkeypatch.setattr(probe_module, "YoutubeDL", FakeYdl)
+
+    class FakeProbeYdl(FakeYdl, probe_module._ProbeYdl):  # type: ignore[misc, name-defined]
+        pass
+
+    monkeypatch.setattr(probe_module, "_ProbeYdl", FakeProbeYdl)
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYdl)
     return seen

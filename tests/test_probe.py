@@ -13,11 +13,15 @@ from download_media.probe import (
     ContentKind,
     _classify_entry,
     _classify_single,
-    _is_auth_error,
     _media_kind,
+    _short_reason,
     detect_site,
+    is_auth_error,
+    probe,
     site_likely_needs_cookies,
 )
+
+from .conftest import ANONYMOUS_LIMIT, GEO_BLOCK, SUBSCRIBERS_ONLY
 
 
 @pytest.mark.parametrize(
@@ -56,21 +60,21 @@ def test_cookie_hungry_sites() -> None:
         ("Sign in to confirm you're not a bot", True),
         ("ERROR: Login required to access this video", True),
         ("This is a private account", True),
-        ("Rate-limit reached", True),
+        ("Rate-limit reached", False),
         ("HTTP 404 Not Found", False),
         ("Connection refused", False),
         ("Unable to extract initial data", False),
     ],
 )
 def test_is_auth_error(msg: str, expected: bool) -> None:
-    assert _is_auth_error(msg) is expected
+    assert is_auth_error(msg) is expected
 
 
-def test_classify_entry_none_is_image() -> None:
+def test_classify_entry_none_is_not_called_an_image() -> None:
     item = _classify_entry(None, 5)
-    assert item.kind == ContentKind.SINGLE_IMAGE
+    assert item.kind == ContentKind.UNKNOWN
     assert item.supported is False
-    assert "image" in item.title.lower()
+    assert "image" not in item.title.lower()
 
 
 def test_classify_entry_video() -> None:
@@ -289,7 +293,6 @@ def test_a_url_only_result_with_a_thumbnail_is_not_an_image() -> None:
         {"duration": 3},
         {"url": "http://x/f.mp4"},
         {"url": "http://x/f.mp4", "formats": None},
-        {"url": "http://x/f.mp4", "formats": []},
         {"formats": [{"url": "http://x/f.mp4"}]},
         {"formats": [{"url": "http://x/f.mp4"}], "url": None},
         {"formats": [STORYBOARD]},
@@ -301,6 +304,25 @@ def test_probe_and_match_filter_agree_on_nothing_to_fetch(extra: dict[str, Any])
     verdict = _skip_items_without_media(skipped)({**entry, "playlist_index": 1}, incomplete=True)
     assert (verdict is not None) is (_media_kind(entry) is None)
     assert bool(skipped) is (_media_kind(entry) is None)
+
+
+def test_probe_and_match_filter_differ_on_an_empty_formats_list_with_a_url() -> None:
+    # yt-dlp reads an empty list as no formats, so nothing can be fetched, and the probe says
+    # so. The filter lets it through, for yt-dlp to report as a failed item: aligning the two
+    # would change what -y -p counts.
+    entry = {"id": "i", "title": "t", "url": "http://x/f.mp4", "formats": []}
+    skipped: list[str] = []
+    assert (
+        _skip_items_without_media(skipped)({**entry, "playlist_index": 1}, incomplete=True) is None
+    )
+    assert skipped == []
+    assert _media_kind(entry) is None
+    assert _classify_single(entry) != VIDEO
+
+
+def test_a_thumbnail_key_alone_makes_a_result_without_formats_an_image() -> None:
+    # yt-dlp fills ``thumbnails`` in later, so a raw result may carry just this.
+    assert _classify_single({"formats": [], "thumbnail": "http://x/i.jpg"}) == IMAGE
 
 
 def test_a_duration_does_not_make_audio_a_video() -> None:
@@ -327,7 +349,7 @@ def test_probe_never_raises(monkeypatch) -> None:
     def explode(opts):
         raise RuntimeError("Login required")
 
-    monkeypatch.setattr(probe_module, "YoutubeDL", explode)
+    monkeypatch.setattr(probe_module, "_ProbeYdl", explode)
     result = probe_module.probe("http://x")
     assert result.failed is True
     assert result.needs_cookies is True
@@ -340,3 +362,221 @@ def test_probe_handles_empty_extraction(fake_site, monkeypatch) -> None:
     # ignoreerrors turns a failed extraction into None.
     result = probe_module.probe("https://fake.test/private")
     assert result.failed is True
+
+
+HINT = "Use --cookies-from-browser or --cookies for the authentication. See  https://x.test/faq"
+RATE_LIMIT_REASON = (
+    "This content isn't available, try again later. The current session has been rate-limited "
+    "by YouTube for up to an hour."
+)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        f"[site] x: This video is only available for registered users. {HINT}",
+        f"[Instagram] x: This content is only available for registered users who follow this account. {HINT}",
+        "[Instagram] x: Instagram sent an empty media response. Check if this post is accessible "
+        f"in your browser without being logged-in. If it is not, then use {HINT[4:]}",
+        f"[Instagram] x: The webpage request was redirected to the login page. You have exceeded "
+        f"the rate-limit for accessing posts anonymously. {HINT}",
+        f"[Instagram] x: Requested content is not available, rate-limit reached or login required. {HINT}",
+        f"[youtube] x: Sign in to confirm your age. {HINT}",
+        f"[youtube] x: Private video. Sign in if you've been granted access to this video. {HINT}",
+        "[youtube] x: Join this channel to get access to members-only content like this video.",
+        "[TikTok] 1: Fresh cookies (not necessarily logged in) are needed",
+        "[generic] s401: Unable to download webpage: HTTP Error 401: Unauthorized "
+        "(caused by <HTTPError 401: Unauthorized>)",
+    ],
+)
+def test_cookies_can_help(message: str) -> None:
+    assert is_auth_error(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[Instagram] x: There is no video in this post",
+        "[youtube] x: This content isn't available, try again later. The current session has "
+        "been rate-limited by YouTube for up to an hour.",
+        "[bilibili] 1: You have exceeded the rate limit. Try again later",
+        "[generic] s429: Unable to download webpage: HTTP Error 429: Too Many Requests",
+        "This video is not available from your location due to geo restriction\n"
+        "You might want to use a VPN or a proxy server (with --proxy) to workaround.",
+        "Private to your region\nYou might want to use a VPN or a proxy server.",
+        "[generic] s403: Unable to download webpage: HTTP Error 403: Forbidden",
+        "[generic] s404: Unable to download webpage: HTTP Error 404: Not Found",
+        "Unsupported URL: https://example.com/page",
+        "This video is DRM protected",
+        'could not find chrome cookies database in "/tmp/home/.config/google-chrome"',
+        # The site's words only: an id or a path says nothing about the content.
+        "Unsupported URL: https://example.com/private/page",
+        "[generic] login: Unable to download webpage: HTTP Error 404: Not Found",
+    ],
+)
+def test_cookies_cannot_help(message: str) -> None:
+    assert is_auth_error(message) is False
+
+
+@pytest.mark.parametrize(
+    "message,shown",
+    [
+        (
+            "[Instagram] x: Instagram sent an empty media response. Check if this post is "
+            "accessible in your browser without being logged-in. If it is not, then use "
+            "--cookies-from-browser or --cookies for the authentication.",
+            "Instagram sent an empty media response. Check if this post is accessible in your "
+            "browser without being logged-in.",
+        ),
+        (
+            "[generic] s401: Unable to download webpage: HTTP Error 401: Unauthorized "
+            "(caused by <HTTPError 401: Unauthorized>)",
+            "Unable to download webpage: HTTP Error 401: Unauthorized",
+        ),
+        (
+            "[fakesite] bug: Unable to extract video data; please report this issue on  "
+            "https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the template",
+            "Unable to extract video data",
+        ),
+        (
+            "[fakesite] bug: Unable to extract video data, please report this issue on  x",
+            "Unable to extract video data",
+        ),
+        (
+            "[fakesite] i1: Requested format is not available. Use --list-formats for a list",
+            "Requested format is not available.",
+        ),
+        (
+            "The session is limited. It is recommended to use `-t sleep` to add a delay.",
+            "The session is limited.",
+        ),
+        (
+            "This video is not available from your location due to geo restriction\n"
+            "This video is available in United States.\n"
+            "You might want to use a VPN or a proxy server (with --proxy) to workaround.",
+            "This video is not available from your location due to geo restriction",
+        ),
+    ],
+)
+def test_short_reason_keeps_the_sites_words(message: str, shown: str) -> None:
+    assert _short_reason(message) == shown
+
+
+def test_short_reason_keeps_something_when_a_flag_opens_the_message() -> None:
+    assert _short_reason("[x] y: Use --cookies to log in") == "Use --cookies to log in"
+
+
+def test_short_reason_is_bounded() -> None:
+    reason = _short_reason("word " * 80)
+    assert len(reason) <= 200
+    assert reason.endswith("...")
+
+
+def test_probe_reports_the_real_reason(fake_site: Any) -> None:
+    result = probe("https://fake.test/needs-cookies")
+    assert result.failed is True
+    assert result.needs_cookies is True
+    assert result.error_message == "Login required"
+
+
+@pytest.mark.parametrize(
+    "page,reason",
+    [
+        ("age-gate", "Sign in to confirm your age."),
+        ("paid-post", f"{SUBSCRIBERS_ONLY}."),
+        ("rate-limited", RATE_LIMIT_REASON),
+        ("geo-metadata", GEO_BLOCK),
+        ("drm", "This video is DRM protected"),
+        ("no-video-post", "There is no video in this post"),
+    ],
+)
+def test_a_failure_with_metadata_never_reads_as_an_image(
+    fake_site: Any, page: str, reason: str
+) -> None:
+    # These only stay failures if the probe doesn't set ignore_no_formats_error.
+    result = probe(f"https://fake.test/{page}")
+    assert result.failed is True
+    assert result.content_kind != IMAGE
+    assert result.error_message == reason
+
+
+@pytest.mark.parametrize(
+    "page,reason",
+    [
+        ("age-gate", "Sign in to confirm your age."),
+        ("paid-post", f"{SUBSCRIBERS_ONLY}."),
+        ("login-hint", "This video is only available for registered users."),
+        ("anonymous-limit", f"{ANONYMOUS_LIMIT}."),
+    ],
+)
+def test_probe_asks_for_cookies_on_a_login_error(fake_site: Any, page: str, reason: str) -> None:
+    # The reason proves the page's own raiser fired: "This post is private" would ask too.
+    result = probe(f"https://fake.test/{page}")
+    assert result.needs_cookies is True
+    assert result.error_message == reason
+
+
+@pytest.mark.parametrize(
+    "page", ["rate-limited", "geo", "geo-metadata", "drm", "no-video-post", "extractor-bug"]
+)
+def test_probe_does_not_ask_for_cookies_when_they_cannot_help(fake_site: Any, page: str) -> None:
+    result = probe(f"https://fake.test/{page}")
+    assert result.failed is True
+    assert result.error_message
+    assert "private" not in result.error_message
+    assert result.needs_cookies is False
+
+
+def test_probe_drops_the_bug_report_request(fake_site: Any) -> None:
+    result = probe("https://fake.test/extractor-bug")
+    assert result.error_message == "Unable to extract video data"
+
+
+@pytest.mark.parametrize(
+    "page,kinds",
+    [
+        ("carousel", [IMAGE, VIDEO, IMAGE, VIDEO]),
+        ("ig-carousel", [IMAGE, VIDEO, VIDEO, IMAGE]),
+        ("only-images", [IMAGE, IMAGE]),
+        ("url-only-carousel", [VIDEO, VIDEO]),
+    ],
+)
+def test_a_healthy_carousel_keeps_its_items(fake_site: Any, page: str, kinds: list[Any]) -> None:
+    result = probe(f"https://fake.test/{page}")
+    assert result.content_kind == ContentKind.PLAYLIST
+    assert [item.kind for item in result.items] == kinds
+    assert [item.supported for item in result.items] == [kind != IMAGE for kind in kinds]
+    assert not result.failed
+    assert not result.error_message
+    assert result.needs_cookies is False
+
+
+def test_an_empty_playlist_has_no_error_to_report(fake_site: Any) -> None:
+    result = probe("https://fake.test/empty")
+    assert result.content_kind == ContentKind.UNKNOWN
+    assert result.items == []
+    assert not result.failed
+    assert not result.error_message
+    assert result.needs_cookies is False
+
+
+def test_a_gated_entry_keeps_the_rest_of_the_carousel(fake_site: Any) -> None:
+    result = probe("https://fake.test/partial-gated")
+    assert result.failed is False
+    assert result.needs_cookies is True
+    assert result.error_message == "Login required"
+    assert [item.kind for item in result.items] == [VIDEO, IMAGE, ContentKind.UNKNOWN]
+
+
+def test_the_login_error_outranks_an_earlier_failure(fake_site: Any) -> None:
+    # A rate limit on one entry mustn't hide the reason cookies are offered for.
+    result = probe("https://fake.test/partial-both")
+    assert result.needs_cookies is True
+    assert result.error_message == "Login required"
+
+
+def test_a_carousel_with_every_entry_gated_is_a_failure(fake_site: Any) -> None:
+    result = probe("https://fake.test/all-gated")
+    assert result.failed is True
+    assert result.needs_cookies is True
+    assert result.error_message == "Login required"

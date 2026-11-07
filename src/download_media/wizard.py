@@ -481,11 +481,13 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
     info(t("probing"))
     probe_result = probe(opts.urls[0], opts.cookies_browser)
     if probe_result.needs_cookies and not opts.cookies_browser:
-        warn(t("auth_needed_retry"))
+        warn(t("auth_needed_retry", probe_result.error_message))
         try:
             step_cookies(opts)
         except _Cancel:
             return None
+        except _Back:
+            pass  # The URL is already probed, so there's nothing to go back to: same as no.
         cookies_asked = True
         # step_cookies mutates opts.cookies_browser; mypy's narrowing inside
         # this branch can't see that, so we use an unrelated read path.
@@ -498,6 +500,8 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
         if probe_result.content_kind == ContentKind.SINGLE_IMAGE:
             warn(t("image_only_skipped"))
             return None
+        if probe_result.error_message:
+            warn(t("probe_partial", probe_result.error_message))
         if probe_result.is_playlist and not any(it.supported for it in probe_result.items):
             warn(t("no_supported_items"))
             return None
@@ -506,6 +510,8 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
             opts.audio_only = True
     else:
         warn(t("probe_failed", probe_result.error_message or "unknown"))
+        if probe_result.needs_cookies and opts.cookies_browser:
+            warn(t("auth_still_needed", browser_of(opts.cookies_browser)))
         warn(t("probe_falling_back"))
 
     # Lock in the playlist decision so cli.py doesn't re-ask.

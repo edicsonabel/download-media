@@ -9,14 +9,15 @@ discovering at download time that the user picked an image.
 from __future__ import annotations
 
 import re
+import textwrap
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from yt_dlp import YoutubeDL
 from yt_dlp.utils import MEDIA_EXTENSIONS
 
 from .cookies import ydl_cookies
+from .downloader import _Ydl
 
 
 class ContentKind(str, Enum):
@@ -111,22 +112,56 @@ class _SilentLogger:
     def error(self, msg: str) -> None: ...
 
 
-_AUTH_ERROR_HINTS = (
-    "sign in to confirm",
-    "login required",
-    "private",
+_LOGIN_HINTS = ("--cookies", "--username")  # yt-dlp's own hint, from raise_login_required.
+_NOT_AUTH_ERRORS = (
     "rate-limit",
-    "requested content is not available",
-    "login or signup",
-    "this video is unavailable",
-    "members-only",
-    "premium content",
+    "rate limit",
+    "too many requests",
+    "try again later",
+    "use a vpn",  # yt-dlp adds this to every geo error.
 )
+_AUTH_ERROR_HINTS = (
+    "sign in",
+    "log in",
+    "login",
+    "logged in",
+    "private",
+    "registered users",
+    "members-only",
+    "premium",
+    "http error 401",
+)
+_SITE_PREFIX = re.compile(r"^\[[^\]]+\] (?:[^\s:]+: )?")
+_NAMES_A_FLAG = re.compile(r"(?:^|[\s`])--?[a-z]")
+_REASON_TAILS = ("; please report", ", please report", " (caused by")
+_REASON_LENGTH = 200
 
 
-def _is_auth_error(message: str) -> bool:
-    msg = message.lower()
-    return any(hint in msg for hint in _AUTH_ERROR_HINTS)
+def is_auth_error(message: str) -> bool:
+    """Whether browser cookies are the user's next move after this yt-dlp error."""
+    # An id or a URL can say "private" or "login" and mean nothing by it.
+    words = re.sub(r"https?://\S+", "", _SITE_PREFIX.sub("", message)).lower()
+    if any(hint in words for hint in _LOGIN_HINTS):
+        return True
+    if any(hint in words for hint in _NOT_AUTH_ERRORS):
+        return False
+    return any(hint in words for hint in _AUTH_ERROR_HINTS)
+
+
+def _short_reason(message: str) -> str:
+    """The site's words, without what only means something to a yt-dlp user.
+
+    Its hints name its own flags: ``--cookies`` is a file there and a browser here.
+    """
+    text = _SITE_PREFIX.sub("", message.split("\n")[0])
+    for tail in _REASON_TAILS:
+        text = text.partition(tail)[0]
+    kept: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if _NAMES_A_FLAG.search(sentence):
+            break
+        kept.append(sentence)
+    return textwrap.shorten(" ".join(kept) or text, _REASON_LENGTH, placeholder="...")
 
 
 # yt-dlp lists these as audio, yet they can hold a video it would keep. A wrong
@@ -164,7 +199,9 @@ _KINDS_BY_STRENGTH = (
 def _media_kind(info: dict[str, Any]) -> ContentKind | None:
     """What ``info`` holds, or None if there is nothing to fetch."""
     # yt-dlp keeps no ``formats`` on a result that only has a ``url``.
-    formats = info.get("formats") or ([info] if info.get("url") else [])
+    formats = info.get("formats")
+    if formats is None:
+        formats = [info] if info.get("url") else []
     kinds = {_format_kind(f) for f in formats}
     return next((kind for kind in _KINDS_BY_STRENGTH if kind in kinds), None)
 
@@ -172,14 +209,12 @@ def _media_kind(info: dict[str, Any]) -> ContentKind | None:
 def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
     """Classify one playlist entry as video / audio / image."""
     if entry is None:
-        # yt-dlp returns None when it can't extract an entry. For Instagram
-        # carousels this happens for image items — yt-dlp doesn't support
-        # downloading IG images at all.
+        # A failure, or a hole the extractor left. Images arrive as dicts.
         return ProbeItem(
             index=idx,
-            kind=ContentKind.SINGLE_IMAGE,
+            kind=ContentKind.UNKNOWN,
             supported=False,
-            title=f"(image #{idx})",
+            title=f"(item #{idx})",
         )
     duration = entry.get("duration") or 0
     kind = _media_kind(entry) or ContentKind.SINGLE_IMAGE
@@ -195,13 +230,33 @@ def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
     )
 
 
+def _has_thumbnail(info: dict[str, Any]) -> bool:
+    # A raw result may carry just ``thumbnail``: yt-dlp hasn't normalized it yet.
+    return bool(info.get("thumbnails") or info.get("thumbnail"))
+
+
 def _classify_single(data: dict[str, Any]) -> ContentKind:
     kind = _media_kind(data)
     if kind is not None:
         return kind
-    if data.get("thumbnails"):
+    if _has_thumbnail(data):
         return ContentKind.SINGLE_IMAGE
     return ContentKind.UNKNOWN
+
+
+class _ProbeYdl(_Ydl):
+    """Hands back what has nothing to fetch, so ``errors`` holds real failures only.
+
+    ``ignore_no_formats_error`` can't do this: extractors read it too, and turn a
+    site's own "sign in" or "private" into a warning.
+    """
+
+    def process_video_result(self, info_dict: dict[str, Any], download: bool = True) -> Any:
+        kind = _media_kind(info_dict)
+        known = info_dict.get("playlist_index") or _has_thumbnail(info_dict)
+        if kind == ContentKind.SINGLE_IMAGE or (kind is None and known):
+            return info_dict
+        return super().process_video_result(info_dict, download=download)
 
 
 def probe(url: str, cookies_browser: str | None = None) -> Probe:
@@ -219,26 +274,31 @@ def probe(url: str, cookies_browser: str | None = None) -> Probe:
     if cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(cookies_browser)
 
+    data: Any = None
+    errors: list[str] = []
     try:
-        with YoutubeDL(ydl_opts) as ydl:
+        with _ProbeYdl(ydl_opts) as ydl:
+            errors = ydl.errors
             data = ydl.extract_info(url, download=False, process=True)
     except Exception as exc:
-        msg = str(exc)
+        # A missing browser reports its real cause first, then raises a generic error.
+        errors = errors or [str(exc)]
+
+    auth_errors = [error for error in errors if is_auth_error(error)]
+    worst = next(iter(auth_errors or errors), None)
+    reason = _short_reason(worst) if worst else None
+    entries = data.get("entries") if isinstance(data, dict) else None
+
+    if not isinstance(data, dict) or (entries and not any(entries)):
         return Probe(
             url=url,
             site=site,
             content_kind=ContentKind.UNKNOWN,
             failed=True,
-            error_message=msg,
-            needs_cookies=_is_auth_error(msg),
+            error_message=reason,
+            needs_cookies=bool(auth_errors),
         )
 
-    if not isinstance(data, dict):
-        return Probe(
-            url=url, site=site, content_kind=ContentKind.UNKNOWN, failed=True
-        )
-
-    entries = data.get("entries")
     if entries:
         items = [_classify_entry(e, i) for i, e in enumerate(entries, 1)]
         return Probe(
@@ -248,6 +308,8 @@ def probe(url: str, cookies_browser: str | None = None) -> Probe:
             title=data.get("title") or data.get("id"),
             uploader=data.get("uploader") or data.get("channel"),
             items=items,
+            needs_cookies=bool(auth_errors),
+            error_message=reason,
         )
 
     kind = _classify_single(data)
