@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T06:14:20-04:00",
+  "updated": "2026-11-07T06:31:04-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -505,9 +505,9 @@
     "fix/wizard-multi-url": {
       "type": "fix",
       "title": "Wizard drops every URL after the first",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/19-wizard-multi-url.md",
       "branch": "fix/wizard-multi-url",
       "worktree": ".worktrees/fix-wizard-multi-url",
@@ -521,8 +521,12 @@
         "7981000"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor wizard.py:495 walks split from one typed answer never show their URL; first walk has no counter",
+          "minor cli.py:432 nothing marks the end of the walks before downloads start",
+          "minor wizard.py:292 [no soportado] hardcoded Spanish (pre-existing)"
+        ]
       },
       "history": [
         {
@@ -559,6 +563,20 @@
           "result": "done",
           "at": "2026-11-07T06:14:20-04:00",
           "note": "No bugs. 48 cases, 1225 passed, 2 xfailed. Mutation 20/21, survivor equivalent. Also cleared exported XDG_VIDEOS_DIR and XDG_MUSIC_DIR in isolated_env: KDE exports them and the shell version of xdg-user-dir reads them before HOME. Planner: the same URL twice is downloaded twice."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T06:31:04-04:00",
+          "note": "Gate exit 0, 1225 passed, 2 xfailed. Revert: 65 fail. Real runs with 2, 3 and 5 URLs match disk, history and commands. Isolation holds. Risks: PYTEST_ADDOPTS could break the subprocess test; XDG_CACHE_HOME and XDG_DATA_HOME not moved."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T06:31:04-04:00",
+          "note": "Merge decided by the roles under the human's overnight delegation. Local main only, no push."
         }
       ]
     }
