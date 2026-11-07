@@ -548,28 +548,24 @@ def test_words_from_the_id_or_the_address_ask_for_nothing(message: str) -> None:
 @pytest.mark.parametrize(
     "message",
     [
-        "[generic] login: Unable to download webpage: HTTP Error 410: Gone",
-        "[generic] login: Unable to download webpage: HTTP Error 500: Internal Server Error",
-        "[generic] private: Unable to download webpage: HTTP Error 503: Service Unavailable",
         "[generic] --cookies: Unable to download webpage: HTTP Error 404: Not Found",
         "[generic] my clip: Failed to download MPD manifest: HTTP Error 404: Not Found",
         "[generic] private clip: Failed to parse JSON",
+        "[site] tag:private: This post is gone",
         "[generic] 'private video' is not a valid URL",
         "[generic] '--cookies' is not a valid URL",
         "[generic] 'private-video' is not a valid URL. Set --default-search \"ytsearch\" (or run  "
         "yt-dlp \"ytsearch:private-video\" ) to search YouTube",
-        "Unsupported URL: ftp://example.com/private/page",
+        "Unsupported URL: ftp://media-server/private/page",
         "[generic] x: Unable to download webpage: "
         "HTTPSConnectionPool(host='login.example.com', port=443): Read timed out",
         "[generic] x: Failed to perform, curl: (6) Could not resolve host: private.example.com",
     ],
     ids=[
-        "410",
-        "500",
-        "503",
         "flag-in-the-id",
         "manifest",
         "failed-to",
+        "id-with-a-colon",
         "not-a-url-with-a-space",
         "flag-as-a-url",
         "not-a-url-at-the-floor",
@@ -580,6 +576,19 @@ def test_words_from_the_id_or_the_address_ask_for_nothing(message: str) -> None:
 )
 def test_only_the_sites_own_words_can_ask_for_cookies(message: str) -> None:
     assert is_auth_error(message) is False
+
+
+@pytest.mark.parametrize("status", [404, 410, 500, 503])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        "[generic] tag: private: Unable to download webpage: HTTP Error {}: Not Found",
+        "[site] x: Unable to download webpage: HTTP Error {}: Login Required",
+    ],
+    ids=["id-the-prefix-cannot-read", "server-reason-phrase"],
+)
+def test_a_status_that_is_no_login_outranks_the_rest_of_its_line(shape: str, status: int) -> None:
+    assert is_auth_error(shape.format(status)) is False
 
 
 @pytest.mark.parametrize(

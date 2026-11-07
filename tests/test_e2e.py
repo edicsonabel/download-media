@@ -2849,6 +2849,16 @@ def test_a_real_404_named_after_a_login_asks_for_nothing(generic: Any, page: str
     assert t("probe_failed", "Unable to download webpage: HTTP Error 404: File not found") in output
 
 
+def test_a_real_404_whose_id_the_prefix_cannot_read_asks_for_nothing(generic: Any) -> None:
+    page = "tag:%20private"
+    code, output = generic(page, flags=("-y",))
+    assert code == 1
+    assert GIVE_UP not in output
+    code, output = generic(page, *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+
+
 def test_direct_mode_does_not_blame_a_refused_connection_on_login(
     home: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
