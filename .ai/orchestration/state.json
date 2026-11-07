@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T00:00:46-04:00",
+  "updated": "2026-11-07T00:22:50-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -362,6 +362,30 @@
           "result": "validated",
           "at": "2026-11-07T00:00:46-04:00",
           "note": "All 27 criteria hold on main. GitHub CI not run yet; the push comes at the end of the run. Not decided by the human: aiff, alac, ape, wav lose a renamed video the same way as the seven accepted."
+        }
+      ]
+    },
+    "fix/probe-auth": {
+      "type": "fix",
+      "title": "Make the probe see extraction errors so the cookie step fires",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/18-probe-auth.md",
+      "branch": "fix/probe-auth",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-07T00:22:50-04:00",
+          "note": "Human asked to start /fix probe-auth."
         }
       ]
     }
