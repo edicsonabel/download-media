@@ -2343,10 +2343,6 @@ def test_an_untaggable_file_leaves_the_users_own_files_alone(run: Any, out: Path
     assert (out / own).read_text(encoding="utf-8") == "mine"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_has_media_streams passes a relative '-…' path to ffprobe, which reads it as an option",
-)
 def test_an_untaggable_file_in_a_relative_folder_starting_with_a_dash(
     generic: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4522,6 +4518,19 @@ def test_a_subtitle_ffmpeg_cannot_read_is_not_a_failure(run: Any, out: Path) -> 
     assert names(out) == ["Clip.en.ttml", "Clip.mp4"]
     assert subtitle_streams(out / "Clip.mp4") == []
     assert len(history_rows()) == 1
+
+
+def test_a_subtitle_left_out_in_a_relative_folder_starting_with_a_dash(
+    run: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    # The last -o wins over the one the fixture passes.
+    code, output = run("-y", "-s", "--output=-clips", "https://fake.test/subs-ttml")
+    assert code == 0
+    assert names(work / "-clips") == ["Clip.en.ttml", "Clip.mp4"]
+    assert t("subs_not_embedded", "Clip.mp4") in output
 
 
 def test_srt_cannot_go_in_a_webm(run: Any, out: Path) -> None:

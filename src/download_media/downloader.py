@@ -214,10 +214,15 @@ def _subtitle_files(info: dict[str, Any]) -> list[str]:
     return [path for path in paths if path and Path(path).is_file()]
 
 
+def _probe_path(path: str) -> str:
+    # A relative path starting with '-' would reach ffprobe as an option.
+    return str(Path(path).absolute())
+
+
 def _subtitle_streams(path: str) -> int | None:
     try:
         cmd = ["ffprobe", "-v", "error", "-select_streams", "s", "-show_entries", "stream=index"]
-        cmd += ["-of", "csv=p=0", path]
+        cmd += ["-of", "csv=p=0", _probe_path(path)]
         done = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -281,7 +286,8 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
 def _has_media_streams(path: str) -> bool:
     try:
         cmd = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0"]
-        done = subprocess.run([*cmd, path], capture_output=True, text=True, timeout=15, check=False)
+        cmd.append(_probe_path(path))
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
     return done.returncode == 0 and bool({"audio", "video"} & set(done.stdout.split()))
