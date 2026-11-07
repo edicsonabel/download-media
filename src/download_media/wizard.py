@@ -17,6 +17,7 @@ even know whether the URL is a video, an image carousel, or an audio track.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 from .clipboard import read_clipboard
@@ -52,6 +53,10 @@ class _Back(Exception):
 
 class _Cancel(Exception):
     """Raised inside a step to abort the wizard entirely."""
+
+
+class _Refused(Exception):
+    """The probe found nothing the wizard can save at this URL."""
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +179,8 @@ def step_url(opts: DownloadOptions) -> None:
     if not new_url:
         from .ui import die
         die(t("empty_url"))
-    opts.urls = [new_url]
+    # A URL can't hold unencoded whitespace, so spaces separate several.
+    opts.urls = new_url.split()
 
 
 def step_cookies(opts: DownloadOptions) -> None:
@@ -449,16 +455,67 @@ def _walk_plan(
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
-def run(opts: DownloadOptions) -> DownloadOptions | None:
-    """Run the full smart wizard. Returns updated opts, or ``None`` if cancelled."""
-    print(f"{C.BOLD}{C.CYAN}{t('wizard_title')}{C.RESET}")
+def _print_title(k: int, n: int) -> None:
+    counter = f" ({k}/{n})" if n > 1 else ""
+    print(f"{C.BOLD}{C.CYAN}{t('wizard_title')}{counter}{C.RESET}")
 
-    # ---- Phase 1: URL ----
+
+def run(opts: DownloadOptions) -> DownloadOptions | None:
+    """Walk the wizard for the first URL only. Returns updated opts, or ``None``."""
+    _print_title(1, 1)
     try:
         step_url(opts)
     except _Cancel:
         return None
+    opts.urls = opts.urls[:1]
+    try:
+        return _walk_url(opts)
+    except _Refused:
+        return None
 
+
+def run_all(opts: DownloadOptions) -> list[tuple[str, DownloadOptions | None]] | None:
+    """Walk the wizard once per URL, in order.
+
+    Returns one pair per URL, with ``None`` options for a URL the wizard
+    refused, or ``None`` if the user cancelled.
+    """
+    # (url, still to be asked at the URL prompt)
+    pending: list[tuple[str, bool]] = [(url, True) for url in opts.urls] or [("", True)]
+    walked: list[tuple[str, DownloadOptions | None]] = []
+    k = 0
+    while k < len(pending):
+        url, ask = pending[k]
+        _print_title(k + 1, len(pending))
+        # Every walk starts from the command line, never from the previous walk.
+        current = replace(opts, urls=[url] if url else [])
+        try:
+            if ask:
+                step_url(current)
+                pending[k : k + 1] = [(u, False) for u in current.urls]
+                current.urls = current.urls[:1]
+            result = _walk_url(current)
+        except _Cancel:
+            return None
+        except _Refused:
+            result = None
+        else:
+            if result is None:
+                return None
+        # The walk can ask for the URL again (back from the first cookies prompt).
+        pending[k + 1 : k + 1] = [(u, False) for u in current.urls[1:]]
+        current.urls = current.urls[:1]
+        walked.append((current.urls[0], result))
+        k += 1
+    return walked
+
+
+def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
+    """Everything after the URL prompt, for ``opts.urls[0]``.
+
+    Returns ``None`` if cancelled, and raises ``_Refused`` when there's
+    nothing to save.
+    """
     # ---- Phase 1.5: pre-emptive cookies for sites that always need them ----
     site = detect_site(opts.urls[0])
     cookies_asked = False
@@ -499,12 +556,12 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
     if not probe_result.failed:
         if probe_result.content_kind == ContentKind.SINGLE_IMAGE:
             warn(t("image_only_skipped"))
-            return None
+            raise _Refused
         if probe_result.error_message:
             warn(t("probe_partial", probe_result.error_message))
         if probe_result.is_playlist and not any(it.supported for it in probe_result.items):
             warn(t("no_supported_items"))
-            return None
+            raise _Refused
         _print_detection(probe_result)
         if probe_result.content_kind == ContentKind.SINGLE_AUDIO:
             opts.audio_only = True

@@ -106,6 +106,11 @@ download type).
      playlists) → type → quality + container (video) or format (audio) →
      folder → cookies. Each step shows a running summary and accepts `b` to
      go back and `c` to cancel.
+
+  With several URLs, the wizard walks each one in turn, each starting from the
+  command-line flags, then downloads them all. `c` cancels the whole run before
+  anything downloads. A URL the wizard refuses is skipped, and named again at
+  the end.
 - **Direct:** triggered by passing any intent flag — the wizard is skipped and
   the download runs with those values plus defaults (a short preview and
   confirmation is still shown for single URLs).
@@ -123,9 +128,9 @@ After every run that reached the download, whether it worked or not, the
 equivalent direct-mode command is printed (`equivalent.py`), so the user can
 repeat it without the wizard or any prompt. It always carries `-y`, and
 otherwise omits flags whose values match the defaults. URLs that ended in
-different playlist modes get one command each. Nothing is printed when the run
-was cancelled before downloading: a cancelled wizard only holds half-made
-choices.
+different playlist modes, or with different wizard choices, get one command
+each. Nothing is printed when the run was cancelled before downloading: a
+cancelled wizard only holds half-made choices.
 
 ## Development
 
@@ -169,7 +174,8 @@ Three layers, all required before a release:
   hardcode personal URLs.
 
 Every bug fix adds a test that fails without the fix. The autouse `isolated_env`
-fixture keeps tests away from the real history log and browser flag files.
+fixture keeps tests away from the real history log, browser flag files and, outside
+the live tests, the home folder.
 
 ## Agent system
 

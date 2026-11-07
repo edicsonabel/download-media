@@ -13,11 +13,11 @@ from typing import Any
 import pytest
 from yt_dlp.networking.exceptions import NoSupportingHandlers
 
-from download_media import cli, i18n
+from download_media import cli, i18n, wizard
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.i18n import t
 
-from .conftest import GEO_BLOCK, HTTP_404
+from .conftest import GEO_BLOCK, HTTP_404, FakeSiteIE
 
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
@@ -2931,3 +2931,435 @@ def test_wizard_does_not_ask_for_cookies_on_a_404_whose_id_is_a_login_word(
     assert code == 1
     assert asked_for_login() not in output
     assert t("probe_failed", "Unable to download webpage: HTTP Error 404: Not Found") in output
+
+
+# Several URLs in the wizard: one walk each, then every download (spec 19).
+IMAGE = "https://fake.test/ig-image"
+ONLY_IMAGES = "https://fake.test/only-images"
+BRAVE = str(BROWSERS.index("brave") + 2)
+
+
+def kinds_and_urls() -> list[list[str]]:
+    return [row.split("\t")[1:3] for row in history_rows()]
+
+
+def walk_into(folder: Path, steps: int) -> tuple[str, ...]:
+    """All defaults, the folder answered: it's the second-to-last step of a walk."""
+    replies = [""] * steps
+    replies[-2] = str(folder)
+    return tuple(replies)
+
+
+@pytest.fixture
+def wizard_urls(
+    fake_site: list[Any],
+    answers: Any,
+    capfd: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[..., tuple[int, str, int]]:
+    """Run ``cli.main(argv)`` as typed: no ``-o``, so no intent flag unless given."""
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+
+    def _go(argv: list[str], *replies: str) -> tuple[int, str, int]:
+        prompts = answers(*replies)
+        code = cli.main(argv)
+        captured = capfd.readouterr()
+        return code, captured.out + captured.err, len(prompts)
+
+    return _go
+
+
+def test_wizard_walks_every_url_then_downloads_them_all(wizard_urls: Any, out: Path) -> None:
+    code, output, asked = wizard_urls([VIDEO, CAROUSEL], *walk_into(out, 6), *walk_into(out, 7))
+    assert asked == 13
+    assert code == 0
+    assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
+    assert kinds_and_urls() == [["video", VIDEO], ["video", CAROUSEL]]
+    assert commands(output) == [
+        f"download-media -y -o {out} {VIDEO}",
+        f"download-media -y -o {out} --playlist-items 2,4 {CAROUSEL}",
+    ]
+    assert output.count(t("equiv_cmd")) == 1
+    assert f"{t('wizard_title')} (2/2)" in output
+
+
+def test_each_command_of_a_multi_url_walk_replays_without_a_prompt(
+    wizard_urls: Any, pasted: Any, out: Path, again: Path
+) -> None:
+    _, output, _ = wizard_urls([VIDEO, CAROUSEL], *walk_into(out, 6), *walk_into(out, 7))
+    for line in commands(output):
+        code, _ = pasted(line, again)
+        assert code == 0
+    assert names(again) == sorted(["Clip.mp4", *BOTH_ITEMS])
+
+
+def test_wizard_gives_each_url_the_steps_of_its_own_kind(
+    media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    audio, video = f"{media_url}/audio.html", f"{media_url}/tiny.mp4"
+    # Audio: URL, format, folder, cookies. Video: URL, type, quality, container, folder, cookies.
+    prompts = answers(*[""] * 4, *[""] * 6)
+    code = cli.main([audio, video])
+    captured = capfd.readouterr()
+    output = captured.out + captured.err
+    assert len(prompts) == 10
+    assert code == 0
+    assert names(home / "Music") == ["audio (1).mp3"]
+    assert names(home / "Videos") == ["tiny.mp4"]
+    assert kinds_and_urls() == [["audio", audio], ["video", video]]
+    assert commands(output) == [f"download-media -y -a {audio}", f"download-media -y {video}"]
+
+
+def test_wizard_asks_for_cookies_on_the_second_url_s_login_wall(
+    wizard_urls: Any, out: Path
+) -> None:
+    # URL, cookies at the login wall, type, quality, container, folder.
+    gated = ("", BRAVE, "", "", "", str(out))
+    code, output, asked = wizard_urls([VIDEO, GATED], *walk_into(out, 6), *gated)
+    assert asked == 12
+    assert code == 0
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert len(names(out)) == 2
+    assert commands(output) == [
+        f"download-media -y -o {out} {VIDEO}",
+        f"download-media -y -o {out} --cookies brave {GATED}",
+    ]
+
+
+def test_wizard_skips_a_refused_url_and_says_so_at_the_end(wizard_urls: Any, out: Path) -> None:
+    code, output, asked = wizard_urls([VIDEO, IMAGE], *walk_into(out, 6), "")
+    assert asked == 7
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert t("image_only_skipped") in output
+    assert output.rindex(t("wizard_skipped", IMAGE)) > output.index(t("done"))
+    assert commands(output) == [f"download-media -y -o {out} {VIDEO}"]
+
+
+def test_wizard_with_every_url_refused_is_cancelled(wizard_urls: Any, out: Path) -> None:
+    code, output, asked = wizard_urls([IMAGE, ONLY_IMAGES], "", "")
+    assert asked == 2
+    assert code == 0
+    assert t("image_only_skipped") in output
+    assert t("no_supported_items") in output
+    assert t("cancelled") in output
+    assert commands(output) == []
+    assert names(out) == []
+
+
+def test_cancel_in_the_second_walk_cancels_the_whole_run(wizard_urls: Any, out: Path) -> None:
+    # The second walk: URL, then c at the picker.
+    code, output, asked = wizard_urls([VIDEO, CAROUSEL], *walk_into(out, 6), "", "c")
+    assert asked == 8
+    assert code == 0
+    assert names(out) == []
+    assert history_rows() == []
+    assert t("cancelled") in output
+    assert commands(output) == []
+
+
+def test_urls_typed_together_are_walked_one_by_one(wizard_urls: Any, out: Path) -> None:
+    # URL, type, quality, container, folder, cookies.
+    first = (f"{VIDEO} {CAROUSEL}", "", "", "", str(out), "")
+    # Straight to the picker: picker, type, quality, container, folder, cookies.
+    second = ("", "", "", "", str(out), "")
+    code, output, asked = wizard_urls([], *first, *second)
+    assert asked == 12
+    assert code == 0
+    assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
+    assert kinds_and_urls() == [["video", VIDEO], ["video", CAROUSEL]]
+    assert f"{t('wizard_title')} (2/2)" in output
+
+
+def test_wizard_failure_on_one_url_keeps_the_other(wizard_urls: Any, out: Path) -> None:
+    # Private reads as a login wall: URL, cookies declined, type, quality, container,
+    # folder. Its probe failed, so its preview comes at download time.
+    private = ("", "", "", "", "", str(out))
+    code, output, asked = wizard_urls([VIDEO, PRIVATE], *walk_into(out, 6), *private, "")
+    assert asked == 13
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    assert kinds_and_urls() == [["video", VIDEO]]
+    assert t("failed", PRIVATE) in output
+    assert commands(output) == [f"download-media -y -o {out} {VIDEO} {PRIVATE}"]
+
+
+def test_interactive_flags_preset_every_walk(wizard_urls: Any, out: Path) -> None:
+    code, _, asked = wizard_urls(["-i", "-o", str(out), VIDEO, CAROUSEL], *[""] * 13)
+    assert asked == 13
+    assert code == 0
+    assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
+
+
+def test_list_formats_still_walks_and_lists_only_the_first_url(
+    wizard_urls: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pin, not a fix: row 22 takes -l out of the wizard and lists every URL.
+    extracted: list[str] = []
+    real = FakeSiteIE._real_extract
+
+    def recording(self: FakeSiteIE, url: str) -> dict[str, Any]:
+        extracted.append(url)
+        return real(self, url)
+
+    monkeypatch.setattr(FakeSiteIE, "_real_extract", recording)
+    code, _, asked = wizard_urls(["-l", VIDEO, VIDEO_B], *SINGLE_WALK)
+    assert asked == 6
+    assert code == 0
+    assert VIDEO in extracted
+    assert VIDEO_B not in extracted
+
+
+# Several URLs, attacked: nothing a walk chose reaches the next one (spec 19, D3).
+def test_cookies_chosen_in_one_walk_are_not_the_next_walk_s_default(
+    wizard_urls: Any, out: Path
+) -> None:
+    # URL, cookies at the login wall, type, quality, container, folder.
+    gated = ("", BRAVE, "", "", "", str(out))
+    code, output, asked = wizard_urls([GATED, VIDEO], *gated, *walk_into(out, 6))
+    assert asked == 12
+    assert code == 0
+    assert commands(output) == [
+        f"download-media -y -o {out} --cookies brave {GATED}",
+        f"download-media -y -o {out} {VIDEO}",
+    ]
+
+
+def test_a_later_walk_probes_without_the_cookies_of_an_earlier_one(
+    wizard_urls: Any, tmp_path: Path
+) -> None:
+    first, second = tmp_path / "first", tmp_path / "second"
+    again = f"{GATED}?again=1"
+    code, output, asked = wizard_urls(
+        [GATED, again], "", BRAVE, "", "", "", str(first), "", BRAVE, "", "", "", str(second)
+    )
+    assert asked == 12
+    assert code == 0
+    assert output.count(asked_for_login(LOGIN_REQUIRED)) == 2
+    assert names(first) == names(second) == ["Clip.mp4"]
+
+
+def test_a_folder_answered_in_one_walk_is_not_the_next_walk_s_default(
+    wizard_urls: Any, home: Path, out: Path
+) -> None:
+    code, output, asked = wizard_urls([VIDEO, VIDEO_B], *walk_into(out, 6), *SINGLE_WALK)
+    assert asked == 12
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert names(home / "Videos") == ["Clip.mp4"]
+    assert commands(output) == [
+        f"download-media -y -o {out} {VIDEO}",
+        f"download-media -y {VIDEO_B}",
+    ]
+
+
+def test_items_picked_in_one_walk_do_not_reach_the_next(wizard_urls: Any, out: Path) -> None:
+    # The carousel: URL, picker, type, quality, container, folder, cookies.
+    picked = ("", "2", "", "", "", str(out), "")
+    code, output, asked = wizard_urls(
+        [VIDEO, CAROUSEL, VIDEO_B], *walk_into(out, 6), *picked, *walk_into(out, 6)
+    )
+    assert asked == 19
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4", "Clip [v2].mp4", "Clip.mp4"]
+    # Both videos had the same choices, so they share a command.
+    assert commands(output) == [
+        f"download-media -y -o {out} {VIDEO} {VIDEO_B}",
+        f"download-media -y -o {out} --playlist-items 2 {CAROUSEL}",
+    ]
+
+
+def test_a_carousel_s_playlist_mode_does_not_reach_a_later_failed_probe(
+    wizard_urls: Any, out: Path
+) -> None:
+    # Private: URL, cookies declined, type, quality, container, folder; then its preview.
+    private = ("", "", "", "", "", str(out))
+    code, output, asked = wizard_urls([CAROUSEL, PRIVATE], *walk_into(out, 7), *private, "")
+    assert asked == 14
+    assert code == 1
+    assert names(out) == BOTH_ITEMS
+    assert t("failed", PRIVATE) in output
+    assert commands(output) == [
+        f"download-media -y -o {out} --playlist-items 2,4 {CAROUSEL}",
+        f"download-media -y -o {out} {PRIVATE}",
+    ]
+
+
+@pytest.mark.parametrize("flags", [("-p",), ("-P",)])
+def test_interactive_playlist_flags_yield_to_each_walk_s_own_decision(
+    wizard_urls: Any, replay: Any, out: Path, again: Path, flags: tuple[str, ...]
+) -> None:
+    code, output, asked = wizard_urls(["-i", *flags, "-o", str(out), VIDEO, CAROUSEL], *[""] * 13)
+    assert asked == 13
+    assert code == 0
+    assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
+    lines = commands(output)
+    assert len(lines) == 2
+    for line in lines:
+        code, _ = replay(line, again)
+        assert code == 0
+    assert names(again) == names(out)
+
+
+def test_interactive_audio_flag_presets_every_walk(wizard_urls: Any, out: Path) -> None:
+    # Each walk: URL, type (audio preselected), audio format, folder, cookies.
+    code, output, asked = wizard_urls(["-i", "-a", "-o", str(out), VIDEO, VIDEO_B], *[""] * 10)
+    assert asked == 10
+    assert code == 0
+    assert names(out) == ["Clip [v2].mp3", "Clip.mp3"]
+    assert commands(output) == [f"download-media -y -a -o {out} {VIDEO} {VIDEO_B}"]
+
+
+# `c` and EOF anywhere in a later walk end the whole run before any download (D4).
+@pytest.mark.parametrize("stop", ["c", EOFError])
+@pytest.mark.parametrize("at", range(6))
+def test_cancel_at_any_prompt_of_a_later_walk_downloads_nothing(
+    wizard_urls: Any, out: Path, stop: Any, at: int
+) -> None:
+    # The second walk: URL, type, quality, container, folder, cookies.
+    second = [*[""] * at, stop]
+    code, output, asked = wizard_urls([VIDEO, VIDEO_B], *walk_into(out, 6), *second)
+    assert asked == 6 + at + 1
+    assert code == 0
+    assert t("cancelled") in output
+    assert t("downloading") not in output
+    assert names(out) == []
+    assert history_rows() == []
+    assert t("equiv_cmd") not in output
+
+
+@pytest.mark.parametrize(
+    ("url", "second"),
+    [
+        (GATED, ("", "c")),  # At the login wall's cookie prompt.
+        (COOKIE_HUNGRY, ("", "c")),  # At the cookie prompt before the probe.
+        (COOKIE_HUNGRY, ("", "b", "c")),  # Back from it, then at the URL prompt.
+        (COOKIE_HUNGRY, ("", "b", EOFError)),
+    ],
+)
+def test_cancel_at_a_later_walk_s_cookie_prompts_downloads_nothing(
+    wizard_urls: Any, out: Path, url: str, second: tuple[Any, ...]
+) -> None:
+    code, output, asked = wizard_urls([VIDEO, url], *walk_into(out, 6), *second)
+    assert asked == 6 + len(second)
+    assert code == 0
+    assert t("cancelled") in output
+    assert names(out) == []
+    assert history_rows() == []
+    assert t("equiv_cmd") not in output
+
+
+def test_cancel_after_a_refusal_skips_nothing_and_downloads_nothing(
+    wizard_urls: Any, out: Path
+) -> None:
+    code, output, asked = wizard_urls([IMAGE, VIDEO], "", "", "c")
+    assert asked == 3
+    assert code == 0
+    assert t("image_only_skipped") in output
+    assert t("cancelled") in output
+    assert t("wizard_skipped", IMAGE) not in output
+    assert names(out) == []
+    assert history_rows() == []
+    assert t("equiv_cmd") not in output
+
+
+# Partial outcomes in other orders (D5, D6).
+def test_a_refusal_before_a_saved_url_still_exits_clean(wizard_urls: Any, out: Path) -> None:
+    code, output, asked = wizard_urls([IMAGE, VIDEO], "", *walk_into(out, 6))
+    assert asked == 7
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert f"{t('wizard_title')} (2/2)" in output
+    assert output.rindex(t("wizard_skipped", IMAGE)) > output.index(t("done"))
+    assert commands(output) == [f"download-media -y -o {out} {VIDEO}"]
+
+
+def test_a_refusal_and_a_failure_exit_1_and_name_both(wizard_urls: Any, out: Path) -> None:
+    private = ("", "", "", "", "", str(out))
+    code, output, asked = wizard_urls([IMAGE, PRIVATE], "", *private, "")
+    assert asked == 8
+    assert code == 1
+    assert names(out) == []
+    assert history_rows() == []
+    assert t("failed", PRIVATE) in output
+    assert t("wizard_skipped", IMAGE) in output
+    assert commands(output) == [f"download-media -y -o {out} {PRIVATE}"]
+
+
+def test_a_declined_preview_a_refusal_and_a_save_in_one_run(wizard_urls: Any, out: Path) -> None:
+    # Private's preview comes at download time, and is declined.
+    private = ("", "", "", "", "", str(out))
+    code, output, asked = wizard_urls(
+        [PRIVATE, IMAGE, VIDEO], *private, "", *walk_into(out, 6), "n"
+    )
+    assert asked == 14
+    # A URL that reached the download and saved nothing counts, as in direct mode.
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    assert kinds_and_urls() == [["video", VIDEO]]
+    assert output.count(t("done")) == 1
+    assert output.rindex(t("wizard_skipped", IMAGE)) > output.index(t("done"))
+    assert commands(output) == [f"download-media -y -o {out} {VIDEO}"]
+
+
+def test_a_typed_url_followed_by_junk_says_the_junk_failed(wizard_urls: Any, out: Path) -> None:
+    # Video: URL, type, quality, container, folder, cookies. Junk fails its probe:
+    # type, quality, container, folder, cookies; then its preview at download time.
+    first = (f"{VIDEO} junk", "", "", "", str(out), "")
+    code, output, asked = wizard_urls([], *first, "", "", "", str(out), "", "")
+    assert asked == 12
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    assert kinds_and_urls() == [["video", VIDEO]]
+    assert t("failed", "junk") in output
+    assert commands(output) == [f"download-media -y -o {out} {VIDEO} junk"]
+
+
+def test_back_at_the_first_step_of_a_later_walk_stays_in_that_walk(
+    fake_site: list[Any],
+    answers: Any,
+    capfd: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    out: Path,
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    # The second walk starts at its type step: b asks it again.
+    first = (f"{VIDEO} {VIDEO_B}", "", "", "", str(out), "")
+    prompts = answers(*first, "b", "", "", "", str(out), "")
+    code = cli.main([])
+    output = capfd.readouterr().out
+    assert len(prompts) == 12
+    assert code == 0
+    assert sum(t("ask_url") in prompt for prompt in prompts) == 1
+    assert output.count(f"{t('wizard_title')} (2/2)") == 1
+    assert names(out) == ["Clip [v2].mp4", "Clip.mp4"]
+    assert kinds_and_urls() == [["video", VIDEO], ["video", VIDEO_B]]
+
+
+def test_a_single_url_keeps_the_title_without_a_counter(wizard_urls: Any, out: Path) -> None:
+    code, output, _ = wizard_urls([VIDEO], *walk_into(out, 6))
+    assert code == 0
+    assert t("wizard_title") in output
+    assert f"{t('wizard_title')} (" not in output
+
+
+@pytest.mark.parametrize(
+    ("lang", "second_title", "skipped"),
+    [
+        ("es", "Wizard de descarga (2/2)", "Omitida, no hay nada que descargar: "),
+        ("en", "Download wizard (2/2)", "Skipped, nothing to download: "),
+    ],
+)
+def test_the_counter_and_the_skipped_url_in_both_languages(
+    wizard_urls: Any,
+    out: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    lang: str,
+    second_title: str,
+    skipped: str,
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output, _ = wizard_urls([VIDEO, IMAGE], *walk_into(out, 6), "")
+    assert code == 0
+    assert second_title in output
+    assert f"{skipped}{IMAGE}" in output

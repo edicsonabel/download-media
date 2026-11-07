@@ -389,3 +389,139 @@ def test_preselected_flags_become_defaults(walk: Any, tmp_path: Path) -> None:
 def test_unknown_step_is_a_programming_error() -> None:
     with pytest.raises(ValueError, match="unknown step"):
         wizard._run_step("nope", DownloadOptions(urls=[URL]), [])
+
+
+# Several URLs: one walk each (spec 19).
+OTHER = "https://site.test/other"
+IMAGE = "https://site.test/image"
+
+
+@pytest.fixture
+def walk_all(
+    monkeypatch: pytest.MonkeyPatch, answers: Any
+) -> Callable[..., tuple[list[tuple[str, DownloadOptions | None]] | None, list[str]]]:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+
+    def probe_for(url: str, cookies: str | None) -> Probe:
+        if url == IMAGE:
+            return Probe(url=url, site="generic", content_kind=ContentKind.SINGLE_IMAGE)
+        return video_probe(url)
+
+    monkeypatch.setattr(wizard, "probe", probe_for)
+
+    def _walk_all(
+        urls: list[str], *replies: Any
+    ) -> tuple[list[tuple[str, DownloadOptions | None]] | None, list[str]]:
+        prompts = answers(*replies)
+        return wizard.run_all(DownloadOptions(urls=urls)), prompts
+
+    return _walk_all
+
+
+def test_run_all_walks_each_url(walk_all: Any) -> None:
+    walked, prompts = walk_all([URL, OTHER], *[""] * 6, *[""] * 6)
+    assert len(prompts) == 12
+    assert [url for url, _ in walked] == [URL, OTHER]
+    assert [opts.urls for _, opts in walked] == [[URL], [OTHER]]
+
+
+def test_run_all_starts_each_walk_from_the_command_line(walk_all: Any) -> None:
+    # The first walk picks audio: URL, type, format, folder, cookies.
+    walked, _ = walk_all([URL, OTHER], "", "2", "", "", "", *[""] * 6)
+    assert [opts.audio_only for _, opts in walked] == [True, False]
+
+
+def test_run_all_records_a_refusal_and_goes_on(walk_all: Any) -> None:
+    walked, prompts = walk_all([IMAGE, OTHER], "", *[""] * 6)
+    assert len(prompts) == 7
+    assert walked[0] == (IMAGE, None)
+    assert walked[1][0] == OTHER
+    assert walked[1][1] is not None
+
+
+@pytest.mark.parametrize("stop", ["c", EOFError])
+def test_run_all_cancel_in_a_later_walk_cancels_everything(walk_all: Any, stop: Any) -> None:
+    walked, _ = walk_all([URL, OTHER], *[""] * 6, "", stop)
+    assert walked is None
+
+
+def test_run_all_splits_urls_typed_together(walk_all: Any) -> None:
+    # The first walk asks for the URL, the second starts at its type step.
+    walked, prompts = walk_all([], f"{URL}  {OTHER}", *[""] * 5, *[""] * 5)
+    assert len(prompts) == 11
+    assert [url for url, _ in walked] == [URL, OTHER]
+    assert sum(t("ask_url") in prompt for prompt in prompts) == 1
+
+
+def test_run_all_splits_urls_typed_after_back_from_the_first_cookies_prompt(
+    walk_all: Any,
+) -> None:
+    hungry = "https://www.instagram.com/p/x/"
+    # URL, back from cookies, URL again, cookies, type, quality, container, folder.
+    first = ("", "b", f"{hungry} {OTHER}", "1", "", "", "", "")
+    walked, prompts = walk_all([hungry], *first, *[""] * 5)
+    assert len(prompts) == 13
+    assert [url for url, _ in walked] == [hungry, OTHER]
+    assert [opts.urls for _, opts in walked] == [[hungry], [OTHER]]
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [f"{URL}\t{OTHER}", f"  {URL}   {OTHER}  ", f"{URL} \t {OTHER}\t"],
+)
+def test_run_all_splits_on_any_whitespace(walk_all: Any, typed: str) -> None:
+    walked, prompts = walk_all([], typed, *[""] * 5, *[""] * 5)
+    assert len(prompts) == 11
+    assert [url for url, _ in walked] == [URL, OTHER]
+
+
+def test_run_all_with_urls_never_reads_the_clipboard(
+    walk_all: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_clipboard() -> str:
+        raise AssertionError("the clipboard was read")
+
+    monkeypatch.setattr(wizard, "read_clipboard", no_clipboard)
+    walked, _ = walk_all([URL, OTHER], *[""] * 12)
+    assert [url for url, _ in walked] == [URL, OTHER]
+
+
+def test_run_all_accepted_clipboard_is_one_url(
+    walk_all: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: OTHER)
+    # Use the clipboard, then type, quality, container, folder, cookies.
+    walked, prompts = walk_all([], "", *[""] * 5)
+    assert len(prompts) == 6
+    assert [url for url, _ in walked] == [OTHER]
+
+
+def test_run_all_declined_clipboard_then_several_typed(
+    walk_all: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: IMAGE)
+    walked, prompts = walk_all([], "n", f"{OTHER} {URL}", *[""] * 5, *[""] * 5)
+    assert len(prompts) == 12
+    assert [url for url, _ in walked] == [OTHER, URL]
+
+
+def test_run_all_eof_at_a_later_url_prompt_cancels_everything(walk_all: Any) -> None:
+    walked, _ = walk_all([URL, OTHER], *[""] * 6, EOFError)
+    assert walked is None
+
+
+def test_run_all_leaves_the_command_line_options_untouched(
+    monkeypatch: pytest.MonkeyPatch, answers: Any
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    monkeypatch.setattr(wizard, "probe", lambda url, cookies: video_probe(url))
+    opts = DownloadOptions(urls=[URL, OTHER])
+    # The first walk: URL, audio, format, folder, brave. The second: all defaults.
+    answers("", "2", "", "", BRAVE, *[""] * 6)
+    walked = wizard.run_all(opts)
+    assert walked is not None
+    assert opts == DownloadOptions(urls=[URL, OTHER])
+    first, second = (walk for _, walk in walked)
+    assert first is not None and second is not None
+    assert (first.audio_only, first.cookies_browser) == (True, "brave")
+    assert (second.audio_only, second.cookies_browser) == (False, None)

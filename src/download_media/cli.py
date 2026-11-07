@@ -338,27 +338,43 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
         warn(t("cookies_keyring_hint", browser_of(opts.cookies_browser)))
 
 
-def _print_equivalent(opts: DownloadOptions, outcomes: list[_Outcome]) -> None:
-    """Print how to repeat the URLs that reached the download, one command per mode."""
-    attempted: list[_Outcome] = []
-    by_mode: dict[PlaylistMode, list[str]] = {}
-    for url, outcome in zip(opts.urls, outcomes, strict=True):
+def _print_equivalent(runs: list[tuple[str, DownloadOptions]], outcomes: list[_Outcome]) -> None:
+    """Print how to repeat the URLs that reached the download.
+
+    One command per playlist mode and set of options, in first-seen order.
+    """
+    attempted: list[tuple[str, DownloadOptions, _Outcome, PlaylistMode]] = []
+    for (url, opts), outcome in zip(runs, outcomes, strict=True):
         if outcome.mode is not None:
-            attempted.append(outcome)
-            by_mode.setdefault(outcome.mode, []).append(url)
+            attempted.append((url, opts, outcome, outcome.mode))
     if not attempted:
         return
 
     # If every URL only worked once the cookies were dropped, repeating the
     # command with --cookies would just fail and retry again.
-    shown = opts
-    if opts.cookies_browser and all(o.ok and o.cookies_dropped for o in attempted):
-        shown = replace(opts, cookies_browser=None)
+    drop: dict[str, bool] = {}
+    for _, opts, outcome, _ in attempted:
+        if opts.cookies_browser:
+            needed_drop = outcome.ok and outcome.cookies_dropped
+            drop[opts.cookies_browser] = drop.get(opts.cookies_browser, True) and needed_drop
+
+    # DownloadOptions can't be hashed, so groups are compared with ==.
+    groups: list[tuple[DownloadOptions, list[str]]] = []
+    for url, opts, _, mode in attempted:
+        key = replace(opts, urls=[], playlist_mode=mode)
+        if opts.cookies_browser and drop[opts.cookies_browser]:
+            key.cookies_browser = None
+        for shown, urls in groups:
+            if shown == key:
+                urls.append(url)
+                break
+        else:
+            groups.append((key, [url]))
 
     print()
     print(f"{C.BOLD}{C.CYAN}{t('equiv_cmd')}{C.RESET}")
-    for mode, urls in by_mode.items():
-        command = equivalent.build(replace(shown, urls=urls, playlist_mode=mode))
+    for shown, urls in groups:
+        command = equivalent.build(replace(shown, urls=urls))
         print(f"  {C.DIM}{command}{C.RESET}")
 
 
@@ -370,36 +386,54 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(raw_argv)
     opts = options_from_args(args)
 
-    # Wizard
+    runs: list[tuple[str, DownloadOptions]] | None = None
+    refused: list[str] = []
     if should_run_wizard(args, raw_argv):
-        result = wizard.run(opts)
-        if result is None:
-            warn(t("cancelled"))
-            return 0
-        opts = result
+        if opts.list_formats:
+            result = wizard.run(opts)
+            if result is None:
+                warn(t("cancelled"))
+                return 0
+            opts = result
+        else:
+            walked = wizard.run_all(opts)
+            if walked is None:
+                warn(t("cancelled"))
+                return 0
+            runs = [(url, walk) for url, walk in walked if walk is not None]
+            refused = [url for url, walk in walked if walk is None]
+            if not runs:
+                warn(t("cancelled"))
+                return 0
 
-    # Direct mode without URL: try clipboard once (no prompt — just use it if found)
-    if not opts.urls:
-        clip = read_clipboard()
-        if clip:
-            print(f"{C.DIM}{t('from_clipboard')}{C.RESET} {clip}")
-            opts.urls.append(clip)
+    if runs is None:
+        # Direct mode without URL: try clipboard once (no prompt — just use it if found)
+        if not opts.urls:
+            clip = read_clipboard()
+            if clip:
+                print(f"{C.DIM}{t('from_clipboard')}{C.RESET} {clip}")
+                opts.urls.append(clip)
 
-    if not opts.urls:
-        die(t("url_required"))
+        if not opts.urls:
+            die(t("url_required"))
 
-    if opts.list_formats:
-        from yt_dlp.utils import DownloadError
+        if opts.list_formats:
+            from yt_dlp.utils import DownloadError
 
-        try:
-            return list_formats(opts.urls[0], opts)
-        except DownloadError as exc:
-            warn(t("failed", opts.urls[0]))
-            _hint_for_download_error(str(exc), opts)
-            return 1
+            try:
+                return list_formats(opts.urls[0], opts)
+            except DownloadError as exc:
+                warn(t("failed", opts.urls[0]))
+                _hint_for_download_error(str(exc), opts)
+                return 1
 
-    outcomes = [_download_one(url, opts) for url in opts.urls]
-    _print_equivalent(opts, outcomes)
+        runs = [(url, opts) for url in opts.urls]
+
+    outcomes = [_download_one(url, url_opts) for url, url_opts in runs]
+    for url in refused:
+        warn(t("wizard_skipped", url))
+    _print_equivalent(runs, outcomes)
+    # A URL the wizard refused never reached the download, so it doesn't count.
     return 0 if all(outcome.ok for outcome in outcomes) else 1
 
 
