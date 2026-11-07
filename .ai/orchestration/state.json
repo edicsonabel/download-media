@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T09:39:54-04:00",
+  "updated": "2026-11-07T09:56:34-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,9 +707,9 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
       "worktree": ".worktrees/fix-playlist-items-fix",
@@ -725,8 +725,11 @@
         "31b8a0d"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor tests/test_e2e.py:396 stale-count comment describes the old bug",
+          "minor selection.py:11 PlaylistEntries imported at module load; a yt-dlp rename crashes every command, tests would fail loudly"
+        ]
       },
       "history": [
         {
@@ -777,6 +780,20 @@
           "result": "done",
           "at": "2026-11-07T09:39:54-04:00",
           "note": "Round 1 closed. Nothing else reads the removed count. Mutation 3/7, 4 equivalent survivors. Added a multi_video case."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T09:56:34-04:00",
+          "note": "Gate exit 0, 1491 passed, 3 xfailed. Each commit stands alone. Upgrade from 0.2.0 tested: one new copy once, release note accurate; it isn't in PLAN.md's 0.3.0 list yet."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T09:56:34-04:00",
+          "note": "Merge decided by the roles under the human's overnight delegation. Local main only, no push."
         }
       ]
     }
