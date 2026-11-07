@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any
 
 from yt_dlp import YoutubeDL
+from yt_dlp.networking.exceptions import RequestError
 from yt_dlp.postprocessor.common import PostProcessor
+from yt_dlp.postprocessor.embedthumbnail import EmbedThumbnailPP
 from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP, FFmpegMetadataPP
 from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension, replace_extension
 
@@ -41,6 +43,8 @@ class DownloadResult:
     subs_not_embedded: tuple[str, ...] = ()
     # Files saved whole that ffmpeg couldn't write tags to.
     untagged: tuple[str, ...] = ()
+    # Audio files saved without the cover image they were meant to get.
+    no_cover: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -56,11 +60,43 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.errors: list[str] = []
+        # Thumbnail files this run wrote for the current item, and whether it lost its cover.
+        self.item_thumbs: list[str] = []
+        self.item_no_cover = False
         super().__init__(*args, **kwargs)
 
     def process_info(self, info_dict: Any) -> Any:
         self.item_errors = len(self.errors)
-        return super().process_info(info_dict)
+        self.item_thumbs, self.item_no_cover = [], False
+        try:
+            result = super().process_info(info_dict)
+        except BaseException:
+            # Without ignoreerrors, report_error raises from inside process_info.
+            self.drop_thumbs()
+            raise
+        if self.item_failed():
+            self.drop_thumbs()
+        return result
+
+    def _write_thumbnails(
+        self, label: Any, info_dict: Any, filename: Any, thumb_filename_base: Any = None
+    ) -> Any:
+        # yt-dlp only catches network errors here; a URL with no scheme (a relative og:image)
+        # raises before the media is fetched, and would lose the download over its cover.
+        try:
+            written = super()._write_thumbnails(label, info_dict, filename, thumb_filename_base)
+        except RequestError:
+            self.item_no_cover = True
+            return []
+        # All of them are this run's: overwrites is unset, so yt-dlp deletes a file already at
+        # the path instead of reusing it.
+        self.item_thumbs += [path for path, _ in written or []]
+        return written
+
+    def drop_thumbs(self) -> None:
+        for path in self.item_thumbs:
+            Path(path).unlink(missing_ok=True)
+        self.item_thumbs = []
 
     def item_failed(self) -> bool:
         # ignoreerrors reports a failed post-processing step, then runs the post hooks anyway.
@@ -120,14 +156,17 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
         ydl.update(
             {
                 "format": "bestaudio/best",
-                "writethumbnail": True,
+                # yt-dlp can't embed a cover in wav.
+                "writethumbnail": opts.audio_format != "wav",
+                # Nothing would embed or delete a list's own thumbnail.
+                "allow_playlist_files": False,
+                # download() adds the cover step (_EmbedCover) and the metadata step.
                 "postprocessors": [
                     {
                         "key": "FFmpegExtractAudio",
                         "preferredcodec": opts.audio_format,
                         "preferredquality": "0",
                     },
-                    {"key": "EmbedThumbnail"},
                 ],
             }
         )
@@ -330,6 +369,40 @@ class _TagSource(FFmpegMetadataPP):  # type: ignore[misc]
             return [], info
 
 
+class _EmbedCover(EmbedThumbnailPP):  # type: ignore[misc]
+    """yt-dlp's cover step, except that a cover it can't embed never fails the audio.
+
+    It raises for a body that isn't an image, a conversion ffmpeg can't do, and opus
+    without mutagen. Needs ``_Ydl``, which records the thumbnails the run wrote.
+    """
+
+    @classmethod
+    def pp_key(cls) -> str:
+        # Keeps the [EmbedThumbnail] tag it prints, and its postprocessor_args key.
+        return "EmbedThumbnail"
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        ydl = self._downloader
+        temp = Path(prepend_extension(info["filepath"], "temp"))
+        temp_was_there = temp.exists()
+        pngs = {Path(replace_extension(path, "png")) for path in ydl.item_thumbs}
+        pngs_there = {png for png in pngs if png.exists()}
+        try:
+            return super().run(info)  # type: ignore[no-any-return]
+        except PostProcessingError:
+            # Only what this step wrote: its temp file, and its conversion of our thumbnail.
+            if not temp_was_there:
+                temp.unlink(missing_ok=True)
+            for png in pngs - pngs_there:
+                png.unlink(missing_ok=True)
+            # fixup_webp may have renamed our thumbnail to .webp, and recorded the new path.
+            thumbs = info.get("thumbnails") or []
+            ydl.item_thumbs += [thumb["filepath"] for thumb in thumbs if thumb.get("filepath")]
+            ydl.drop_thumbs()
+            ydl.item_no_cover = True
+            return [], info
+
+
 def _skip_items_without_media(skipped: list[str]) -> Callable[..., str | None]:
     """``match_filter`` dropping carousel items yt-dlp has no formats for.
 
@@ -361,14 +434,19 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     ydl_opts = build_ydl_opts(opts, output_dir)
     ydl_opts["match_filter"] = _skip_items_without_media(skipped)
     untagged: list[str] = []
+    no_cover: list[str] = []
     with _Ydl(ydl_opts) as ydl:
 
         def keep(path: str) -> None:
             if not ydl.item_failed():
                 saved.append(path)
+                if ydl.item_no_cover:
+                    no_cover.append(Path(path).name)
 
         ydl.add_post_hook(keep)
         # Appended after the params' postprocessors: audio extraction comes first.
+        if ydl_opts.get("writethumbnail"):
+            ydl.add_post_processor(_EmbedCover(ydl), when="post_process")
         ydl.add_post_processor(_TagSource(ydl, untagged), when="post_process")
         final_ext = opts.audio_format if opts.audio_only else None
         ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
@@ -400,6 +478,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         subs_missing=opts.subs and not subs_seen,
         subs_not_embedded=tuple(not_embedded),
         untagged=tuple(untagged),
+        no_cover=tuple(no_cover),
     )
 
 

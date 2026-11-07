@@ -37,6 +37,22 @@ def test_audio_only_uses_extract_postprocessor() -> None:
     assert ydl["format"] == "bestaudio/best"
 
 
+@pytest.mark.parametrize("audio_format", ["mp3", "m4a", "opus", "wav"])
+def test_audio_asks_for_a_cover_only_where_one_can_go(audio_format: str) -> None:
+    opts = DownloadOptions(urls=["http://x"], audio_only=True, audio_format=audio_format)
+    ydl = build_ydl_opts(opts, Path("/tmp/out"))
+    assert ydl["writethumbnail"] is (audio_format != "wav")
+    # download() adds the cover step, which never fails the item.
+    assert "EmbedThumbnail" not in [pp["key"] for pp in ydl["postprocessors"]]
+    # Nothing would embed or delete a list's own thumbnail.
+    assert ydl["allow_playlist_files"] is False
+
+
+def test_video_asks_for_no_thumbnail() -> None:
+    ydl = build_ydl_opts(DownloadOptions(urls=["http://x"]), Path("/tmp/out"))
+    assert "writethumbnail" not in ydl
+
+
 def test_playlist_mode_changes_output_template() -> None:
     opts = DownloadOptions(urls=["http://x"], playlist_mode="yes", playlist_items="1-3,5")
     ydl = build_ydl_opts(opts, Path("/tmp/out"))
@@ -292,3 +308,31 @@ def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(
     # ffmpeg can't read the TTML track, so it fails before opening its temp file.
     assert not_embedded == ["Clip.mp4"]
     assert (tmp_path / "Clip.temp.mp4").read_text(encoding="utf-8") == "mine"
+
+
+def test_a_failed_cover_removes_its_thumbnail_and_nothing_it_did_not_write(
+    tmp_path: Path, media_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Driven directly: in a full run yt-dlp's metadata step takes the same temp name next.
+    from urllib.request import urlopen
+
+    from yt_dlp.postprocessor import embedthumbnail
+
+    from download_media.downloader import _EmbedCover, _Ydl
+
+    monkeypatch.setattr(embedthumbnail, "mutagen", None)  # opus needs it for the cover
+    audio, thumb = tmp_path / "Clip.opus", tmp_path / "Clip.jpg"
+    for path, name in ((audio, "tiny.opus"), (thumb, "tiny.jpg")):
+        with urlopen(f"{media_url}/{name}") as body:
+            path.write_bytes(body.read())
+    own = [tmp_path / "Clip.temp.opus", tmp_path / "Clip.png"]
+    for path in own:
+        path.write_text("mine", encoding="utf-8")
+    info = {"filepath": str(audio), "ext": "opus", "thumbnails": [{"filepath": str(thumb)}]}
+    with _Ydl({"quiet": True, "no_warnings": True}) as ydl:
+        ydl.item_thumbs = [str(thumb)]
+        assert _EmbedCover(ydl).run(info) == ([], info)
+        assert ydl.item_no_cover
+    assert not thumb.exists()
+    assert audio.exists()
+    assert [path.read_text(encoding="utf-8") for path in own] == ["mine", "mine"]
