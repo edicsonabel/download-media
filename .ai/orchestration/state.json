@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T08:07:13-04:00",
+  "updated": "2026-11-07T08:12:15-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -599,9 +599,9 @@
     "fix/audio-type-step": {
       "type": "fix",
       "title": "Wizard converts a video served as audio and drops its video",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/27-audio-type-step.md",
       "branch": "fix/audio-type-step",
       "worktree": ".worktrees/fix-audio-type-step",
@@ -610,7 +610,8 @@
         "295e603",
         "254af34",
         "e828336",
-        "f2ceff7"
+        "f2ceff7",
+        "cc4de64"
       ],
       "review": {
         "approved": true,
@@ -685,6 +686,13 @@
           "result": "approved",
           "at": "2026-11-07T08:07:13-04:00",
           "note": "Merge decided by the roles under the human's overnight delegation. Local main only, no push."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-07T08:12:15-04:00",
+          "note": "Merged as cc4de64, no conflicts. Gate exit 0, 1370 passed, 3 xfailed. Undo before any push: reset main to a78cb29."
         }
       ]
     }
