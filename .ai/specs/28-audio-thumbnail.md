@@ -1,6 +1,6 @@
 # 28 — Never fail an audio download over its cover image
 
-Status: approved
+Status: done
 Item: `fix/audio-thumbnail`
 
 > **For the human's review:** every decision below was taken by the architect under the human's delegation, on the option that loses no data and is easiest to undo. D1 changes shipped behaviour on purpose: an audio file saved without its cover now ends in `Done.`, exit 0, with a warning, where it ended in a traceback or `Download failed`, exit 1. D5 drops the cover request for `-f wav`, which can't hold one.
@@ -276,29 +276,29 @@ Fixtures, in `tests/conftest.py`, without new encoders (row 34):
 
 Real yt-dlp and ffmpeg, loopback:
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** The strict xfail `test_wizard_on_audio_with_a_relative_og_image_ends_without_a_traceback` loses its marker and becomes a success test (it may be renamed). The same answers as today (`generic(page, "", "", "", "")`) on `audio-relative-og.html`: exit 0, `t("done")` and `t("no_cover", saved)` in the output, exactly one `.mp3` in `~/Music`, no image left
-- [ ] **[fix]** `-y -a`, and `-y -a -p`, on `audio-relative-og.html`: exit 0, one `.mp3`, `t("no_cover", …)` once, `t("failed", url)` not, one history row
-- [ ] **[fix]** `-y -a` on the text-body thumbnail page: exit 0, one `.mp3`, the warning, no leftovers, and `_source_url` of the `.mp3` equals the URL (the metadata step ran)
-- [ ] **[fix]** `-y -a -f wav` on `audio.html`: exit 0, exactly one `.wav`, no image left, `no_cover` not said
-- [ ] **[fix]** `-y -a -f opus` without `mutagen`, parametrized over `audio.html` (jpg), the `.gif` page and the WebP-signature page: exit 0, exactly one `.opus`, the warning, no image left, no leftovers
-- [ ] **[fix]** `-y -a` (mp3, `mutagen` irrelevant) on the WebP-signature page: exit 0, exactly one `.mp3`, the warning, no `.webp` or `.png` left. This is the `fixup_webp` rename path
-- [ ] **[pin]** With a user's own `<name>.png` and `<name>.temp.opus` in the output folder (`<name>` being the saved file's stem), `-y -a -f opus` without `mutagen` on `audio.html`: both files byte-identical afterwards
-- [ ] **[fix]** `test_audio_item_whose_thumbnail_cannot_be_embedded` flips: with `-p`, exit 0, two files, `partial_result` not said, `t("no_cover", …)` exactly once; without `-p`, exit 0, `t("done")`, `t("failed", …)` not said
-- [ ] **[fix]** `-y -a --cookies brave` on the single `fake_site` item with the text-body thumbnail: exit 0, one file, `t("cookies_retry", "brave")` not said, `fake_site == [("brave",)]`
-- [ ] **[fix]** `-y -a` on the 404 page: exit 1, `t("failed", url)`, the output folder empty
-- [ ] **[fix]** `-y -a` on the `<video src="{JUNK}">` page: exit 1, `t("failed", url)`, no image left (the junk body itself may stay, Out)
-- [ ] **[fix]** `-y -a -p` on the `fake_site` carousel with a 404 item: `t("partial_result", 1, 2, 0, 1)`, exit 0, one audio file, no image left
-- [ ] **[fix]** `-y -a`, and `-y -a -p`, on `audios-og` and on `audios-relative-og`: exit 0, two `.mp3`, no image left, `no_cover` not said
-- [ ] **[fix]** `-y -a <audio-relative-og> <audio>` (two URLs): exit 0, both saved, two history rows
-- [ ] **[fix]** `-y -a` twice on the text-body thumbnail page, in one output folder: one file after each run, exit 0 both times
-- [ ] **[pin]** `-y -a` on `audio.html` (mp3, a working jpg): the `.mp3` holds an attached picture (`ffprobe` shows a `video` stream), no image left, `no_cover` not said. The same with `-f m4a`
-- [ ] **[pin]** `-y` (video) on `og-video.html`, which has an `og:image`: no image left beside the video
+- [x] `scripts/pre-release.sh --no-live` passes. Tech-lead's merge run on `787cfc8`: exit 0, 1661 passed, 2 xfailed (both row 25)
+- [x] **[fix]** The strict xfail `test_wizard_on_audio_with_a_relative_og_image_ends_without_a_traceback` loses its marker and becomes a success test (it may be renamed). The same answers as today (`generic(page, "", "", "", "")`) on `audio-relative-og.html`: exit 0, `t("done")` and `t("no_cover", saved)` in the output, exactly one `.mp3` in `~/Music`, no image left. → `tests/test_e2e.py::test_wizard_on_audio_with_a_relative_og_image_saves_it_without_a_cover`
+- [x] **[fix]** `-y -a`, and `-y -a -p`, on `audio-relative-og.html`: exit 0, one `.mp3`, `t("no_cover", …)` once, `t("failed", url)` not, one history row. → `tests/test_e2e.py::test_audio_with_a_relative_og_image_is_saved_without_a_cover` (`()`, `-p`, and `-P`)
+- [x] **[fix]** `-y -a` on the text-body thumbnail page: exit 0, one `.mp3`, the warning, no leftovers, and `_source_url` of the `.mp3` equals the URL (the metadata step ran). → `tests/test_e2e.py::test_audio_whose_thumbnail_is_not_an_image_is_saved_and_tagged`
+- [x] **[fix]** `-y -a -f wav` on `audio.html`: exit 0, exactly one `.wav`, no image left, `no_cover` not said. → `tests/test_e2e.py::test_wav_asks_for_no_cover`
+- [x] **[fix]** `-y -a -f opus` without `mutagen`, parametrized over `audio.html` (jpg), the `.gif` page and the WebP-signature page: exit 0, exactly one `.opus`, the warning, no image left, no leftovers. → `tests/test_e2e.py::test_opus_without_mutagen_is_saved_without_a_cover` (three pages)
+- [x] **[fix]** `-y -a` (mp3, `mutagen` irrelevant) on the WebP-signature page: exit 0, exactly one `.mp3`, the warning, no `.webp` or `.png` left. This is the `fixup_webp` rename path. → `tests/test_e2e.py::test_mp3_whose_thumbnail_is_renamed_to_webp_leaves_no_image`
+- [x] **[pin]** With a user's own `<name>.png` and `<name>.temp.opus` in the output folder (`<name>` being the saved file's stem), `-y -a -f opus` without `mutagen` on `audio.html`: both files byte-identical afterwards. **Not met as written:** the `.png` half is `tests/test_e2e.py::test_failed_cover_leaves_the_users_own_png_alone` (and `tests/test_e2e.py::test_failed_webp_conversion_leaves_the_users_own_png_alone`); the `.temp.opus` half moved to the unit test `tests/test_downloader.py::test_a_failed_cover_removes_its_thumbnail_and_nothing_it_did_not_write`, which drives `_EmbedCover` alone. In a full run yt-dlp's metadata step writes to the same `<name>.temp.opus` and moves it over the audio, so no end-to-end run can keep a user's file there; that is yt-dlp's step, not this item's (planner). Since the `.cover` rename, the e2e `.png` tests no longer reach the guard (QA minor, see Changes after approval)
+- [x] **[fix]** `test_audio_item_whose_thumbnail_cannot_be_embedded` flips: with `-p`, exit 0, two files, `partial_result` not said, `t("no_cover", …)` exactly once; without `-p`, exit 0, `t("done")`, `t("failed", …)` not said. → `tests/test_e2e.py::test_audio_item_whose_thumbnail_cannot_be_embedded` (`-p` and `()`)
+- [x] **[fix]** `-y -a --cookies brave` on the single `fake_site` item with the text-body thumbnail: exit 0, one file, `t("cookies_retry", "brave")` not said, `fake_site == [("brave",)]`. → `tests/test_e2e.py::test_cover_failure_with_cookies_is_not_downloaded_again`
+- [x] **[fix]** `-y -a` on the 404 page: exit 1, `t("failed", url)`, the output folder empty. → `tests/test_e2e.py::test_audio_whose_media_is_gone_leaves_no_thumbnail`
+- [x] **[fix]** `-y -a` on the `<video src="{JUNK}">` page: exit 1, `t("failed", url)`, no image left (the junk body itself may stay, Out). → `tests/test_e2e.py::test_failed_audio_extraction_leaves_no_thumbnail`
+- [x] **[fix]** `-y -a -p` on the `fake_site` carousel with a 404 item: `t("partial_result", 1, 2, 0, 1)`, exit 0, one audio file, no image left. → `tests/test_e2e.py::test_playlist_item_that_fails_after_its_thumbnail_leaves_none`
+- [x] **[fix]** `-y -a`, and `-y -a -p`, on `audios-og` and on `audios-relative-og`: exit 0, two `.mp3`, no image left, `no_cover` not said. → `tests/test_e2e.py::test_a_lists_own_thumbnail_is_never_written` (two pages × `()`, `-p`)
+- [x] **[fix]** `-y -a <audio-relative-og> <audio>` (two URLs): exit 0, both saved, two history rows. → `tests/test_e2e.py::test_several_urls_go_on_past_a_relative_og_image`
+- [x] **[fix]** `-y -a` twice on the text-body thumbnail page, in one output folder: one file after each run, exit 0 both times. → `tests/test_e2e.py::test_rerunning_audio_whose_cover_failed_keeps_one_file`
+- [x] **[pin]** `-y -a` on `audio.html` (mp3, a working jpg): the `.mp3` holds an attached picture (`ffprobe` shows a `video` stream), no image left, `no_cover` not said. The same with `-f m4a`. → `tests/test_e2e.py::test_a_working_cover_is_still_embedded` (`mp3`, `m4a`). **Not met as written for m4a:** the m4a row checks one file, no image and no warning, but not the attached picture. yt-dlp's metadata step runs after the cover's and, for m4a, maps with `-vn` (`FFmpegMetadataPP._options`, `postprocessor/ffmpeg.py:671-675` in 2026.10.26), which strips the cover. The order is the same on `main` before this item, so m4a never kept its cover: not a regression (planner)
+- [x] **[pin]** `-y` (video) on `og-video.html`, which has an `og:image`: no image left beside the video. → `tests/test_e2e.py::test_video_with_an_og_image_leaves_no_image`
 
 Unit:
 
-- [ ] `tests/test_downloader.py`: `build_ydl_opts` in audio mode sets `allow_playlist_files` to `False`, lists no `EmbedThumbnail` among its `postprocessors`, and sets `writethumbnail` to `False` for `wav` and `True` for the other three formats. Video mode sets no `writethumbnail`
-- [ ] `no_cover` is in both the `es` and the `en` blocks (`test_es_and_en_have_same_keys`)
+- [x] `tests/test_downloader.py`: `build_ydl_opts` in audio mode sets `allow_playlist_files` to `False`, lists no `EmbedThumbnail` among its `postprocessors`, and sets `writethumbnail` to `False` for `wav` and `True` for the other three formats. Video mode sets no `writethumbnail`. → `tests/test_downloader.py::test_audio_asks_for_a_cover_only_where_one_can_go` (four formats), `tests/test_downloader.py::test_video_asks_for_no_thumbnail`
+- [x] `no_cover` is in both the `es` and the `en` blocks (`tests/test_i18n.py::test_es_and_en_have_same_keys`); each language shown at run time in `tests/test_e2e.py::test_no_cover_in_both_languages`
 
 The pre-existing tests that change are the three flips seen on the prototype: the strict xfail and the two rows of `test_audio_item_whose_thumbnail_cannot_be_embedded`. Any other flip must be explained in the developer's report.
 
@@ -319,6 +319,29 @@ Not needed. Thumbnails are fetched by yt-dlp's core, not by a site extractor, an
 - `_write_thumbnails` is a private yt-dlp method (D2). The flipped xfail pins it.
 - A `mutagen` exception from a broken image in an opus file, on a machine that has `mutagen`, isn't a `PostProcessingError` and still fails the item. Not reproduced.
 - The `no_cover` warning has one wording for every cause. A user missing `mutagen` isn't told that installing it would bring covers to opus (D7, D10).
+- `_UnsafeExtensionError` is imported from `yt_dlp.utils._utils`, a private module. `YoutubeDL.py` takes it from there at both the floor and 2026.10.26. If it moves, `downloader.py` fails at import and every test with it, so it can't break silently.
+- Left open by QA, for the planner:
+  - Since the `.cover` rename, the end-to-end tests of a user's own `.png` (`test_failed_cover_leaves_the_users_own_png_alone`, `test_failed_webp_conversion_leaves_the_users_own_png_alone`) no longer reach the guard: the step's conversion is now `<name>.cover.png`, so `<name>.png` is never at risk there. The guard itself is still covered by the unit test `test_a_failed_cover_removes_its_thumbnail_and_nothing_it_did_not_write`.
+  - No fallback to a lower-preference thumbnail after a fetch error: yt-dlp writes only the first thumbnail, and when it raises, the override drops the cover instead of trying the next one.
+- Also for the planner (stage reports): a thumbnail that fails on the network (a 404, a reset) gives no `no_cover` warning, since yt-dlp drops it before the override sees anything; m4a never keeps its cover (acceptance criteria); `<name>.temp.<ext>` is consumed by yt-dlp's metadata step; a later item with the same title and an `.mp3` cover link deletes an earlier `X.cover.mp3` (per-item cover names would close it); `-a -p` may count an item twice when both extraction and metadata fail.
+
+## Changes after approval
+
+What shipped differs from the Design above in these points. Each came from a review round and is pinned by a test.
+
+- **`_UnsafeExtensionError` is caught alongside `RequestError`** (`1ae70f1`). yt-dlp takes a thumbnail's extension from its link and refuses one it deems unsafe (`thumb.php?id=`, an `.html` page): `replace_extension` raises before the media is fetched, and the run ended in exit 1 with nothing saved. It's now a dropped cover like a fetch error. Test: `test_a_thumbnail_link_with_an_unusual_extension_never_fails_the_audio`.
+- **Thumbnails are named `<name>.cover.<ext>`** (`dc78347`), in both the path yt-dlp writes and the one it would move to, through `_cover_name()` in the `_write_thumbnails` override. A link ending in the media's own extension (`.m4a`, `.mp3`) put the cover at the media's path: with `.m4a`, yt-dlp took the JPEG for the download, extraction failed, exit 1; with `.mp3`, the cover landed on the audio, and a rerun deleted the last run's audio before downloading again. The `outtmpl` `thumbnail` key wasn't used because it doesn't help: yt-dlp writes the thumbnail at the temp filename, built from the default template, and only moves it afterwards. A real JPEG behind an `.mp3` or `.m4a` link is now embedded like any cover. Tests: `test_a_thumbnail_named_like_the_audio_never_deletes_it`, `test_a_broken_thumbnail_named_like_the_audio_is_dropped_alone`, `test_a_rerun_never_writes_a_thumbnail_over_the_last_audio`, `test_a_thumbnail_named_like_the_downloaded_media_never_fails_the_audio`.
+- **The `item_media` guard was added, then removed.** Round 1 (`059c24a`) recorded every path the item's media took and kept the cleanup from deleting any of them, because a thumbnail at the audio's path made `drop_thumbs` delete the saved audio. The `.cover` rename made that collision impossible, so the guard could no longer match anything and was removed as dead code in `dc78347`.
+- **A user's own `<title>.jpg` is no longer deleted by `-a`.** This was listed under Out (Findings, A same-name image) as yt-dlp's behaviour. With the `.cover` part, yt-dlp writes to `<title>.cover.jpg`, so the user's `<title>.jpg` is left alone. yt-dlp still deletes a file already at `<title>.cover.jpg`, as `main` did to `<title>.jpg` (accepted by QA).
+- **A partial `.cover.jpg` at the yt-dlp floor only.** On 2024.10.07, a thumbnail body cut short (`test_other_thumbnail_links_never_fail_the_audio[audio-short-thumb]`) leaves the partial image in the folder; on 2026.10.26 the test passes. It was already there before the review rounds (`cbd49b2`), and the orchestrator ruled it a cosmetic leftover for its own planner row, not this item.
+
+## Validation
+
+On `main` at `cda9ff2` (merge `787cfc8`), yt-dlp 2026.10.26.
+
+- **Gate:** not rerun, on the orchestrator's instruction; the tech-lead's merge log shows `scripts/pre-release.sh --no-live` exit 0, 1661 passed, 9 deselected, 2 xfailed (both row 25, opus rerun).
+- **Acceptance criteria:** each one is mapped to its test above. Two weren't met as written, with the reasons given there: the m4a attached picture, and the `.temp.opus` pin, now a unit test.
+- **The reproduction, real console script:** `.venv/bin/download-media -y -a -o "$OUT" http://127.0.0.1:18938/rel.html` under `env -i`, with `HOME` and `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME` in a scratch folder, `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR` unset, `LANG=en_US.UTF-8`, an absolute `-o`, no cookies. `rel.html` holds `<audio src="tiny.m4a">` and `<meta property="og:image" content="tiny.jpg">`, served by `python -m http.server` on loopback. Output: `[EmbedThumbnail] There are no thumbnails on disk`, `rel (1).mp3: saved without a cover image.`, `Done.`, then the equivalent command; exit 0. On disk: only `rel (1).mp3`, no image or temp file; one history row (`audio`). Before the fix: a traceback, exit 1, nothing saved.
 
 ## Open decisions
 
