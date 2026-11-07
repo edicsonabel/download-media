@@ -388,6 +388,29 @@ def test_lazy_list_not_read_to_the_end_has_no_note(run: Any, out: Path) -> None:
     assert t("done") in output
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="the note is checked against the extractor's playlist_count, not the list yt-dlp read",
+)
+@pytest.mark.parametrize(
+    ("page", "spec", "saved", "notes"),
+    [
+        # Header says 3, item 3 is hidden: yt-dlp drops it, and nothing names it.
+        ("hidden-items", "2,3", ["02 - Clip [v2].mp4"], ["3"]),
+        # Header says 2, the list holds 3: item 3 is saved, and the note says it was skipped.
+        ("stale-count", "3", ["03 - Clip [v3].mp4"], []),
+    ],
+)
+def test_missing_items_follow_the_entries_not_the_declared_count(
+    run: Any, out: Path, page: str, spec: str, saved: list[str], notes: list[str]
+) -> None:
+    code, output = run("-y", "--playlist-items", spec, f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == saved
+    assert [note.rsplit(" ", 1)[-1] for note in not_found_notes(output)] == notes
+    assert t("done") in output
+
+
 def test_rerun_of_a_plain_video_in_playlist_mode_keeps_one_file(run: Any, out: Path) -> None:
     assert run("-y", "-p", VIDEO)[0] == 0
     code, output = run("-y", "-p", VIDEO)
