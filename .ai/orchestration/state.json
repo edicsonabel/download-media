@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T12:00:35-04:00",
+  "updated": "2026-11-07T12:10:11-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -934,6 +934,30 @@
           "result": "validated",
           "at": "2026-11-07T12:00:35-04:00",
           "note": "Criteria mapped to tests, real run embeds spa/eng in mp4 and keeps .vtt. Gate not re-run (battery), relies on tech-lead logs. GitHub CI not run. D1-D3 await the human."
+        }
+      ]
+    },
+    "fix/false-failure": {
+      "type": "fix",
+      "title": "Don't report Download failed when the file was saved",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/29-false-failure.md",
+      "branch": "fix/false-failure",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T12:10:11-04:00",
+          "note": "Planner's recommended next item, started under the human's delegation. main pushed at 3d9c913 under the same delegation: no docs or workflow changes, so only CI ran."
         }
       ]
     }
