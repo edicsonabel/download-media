@@ -443,6 +443,77 @@ class FakeSiteIE(InfoExtractor):
             return None
         return self.playlist_result(entries, "post", "Post")
 
+    def _edge_shape(self, page: str) -> dict[str, Any] | None:
+        """What an override of ``process_video_result`` gets before yt-dlp repairs or rejects it."""
+        follow = "https://fake.test/{}".format
+        gated, broken = self.url_result(follow("needs-cookies")), self.url_result(follow("drm"))
+        video, thumbnail = self._video("v2"), f"{self.media_url}/tiny.jpg"
+        # Extractors pass an API's text through: yt-dlp only makes it numeric later.
+        text_duration = {**self._instagram_image("i1"), "duration": "12"}
+        no_url = {**self._instagram_image("n1"), "formats": [{"format_id": "x", "ext": "mp4"}]}
+        # The generic extractor's id is the URL's last segment, unquoted. It only reaches this
+        # message on recent yt-dlp, so a loopback 404 can't show it at the floor.
+        missing = {"404-login": "login", "404-spaced": "private clip", "404-colon": "tag:private"}
+
+        def fails_at_once() -> Iterator[dict[str, Any]]:
+            self.raise_login_required()
+            yield video
+
+        def fails_midway() -> Iterator[dict[str, Any]]:
+            yield video
+            self.raise_login_required()
+
+        if page in missing:
+            raise ExtractorError(
+                "Unable to download webpage: HTTP Error 404: Not Found",
+                expected=True,
+                video_id=missing[page],
+                ie="generic",
+            )
+        if page == "text-duration-image":
+            return text_duration
+        if page == "text-duration-carousel":
+            return self.playlist_result([text_duration, video], "post", "Post")
+        if page == "live-video":
+            return {**self._video("v1"), "is_live": True, "thumbnail": thumbnail}
+        if page == "upcoming":
+            self.raise_no_formats("This live event will begin in 5 minutes", expected=True)
+            return {**self._instagram_image("m1"), "live_status": "is_upcoming"}
+        if page == "url-video":
+            return {**self._url_only("v1", "tiny.mp4", "mp4"), "thumbnail": thumbnail}
+        if page == "no-url-format":
+            return no_url
+        if page == "blank-error":
+            raise ExtractorError("", expected=True)
+        if page == "two-line-error":
+            raise ExtractorError("This post is gone\nIt was removed by the uploader", expected=True)
+        if page == "transparent-gated":
+            return {"_type": "url_transparent", "url": follow("needs-cookies"), "title": "Clip"}
+        if page == "lazy-gated":
+            return self.playlist_result(fails_at_once(), "post", "Post")
+        if page == "lazy-half":
+            return self.playlist_result(fails_midway(), "post", "Post")
+        if page == "nested-gated":
+            return self.playlist_result([self.url_result(follow("partial-gated"))], "post", "Post")
+        if page == "partial-drm":
+            return self.playlist_result([video, broken], "post", "Post")
+        if page == "partial-no-url":
+            return self.playlist_result([video, no_url], "post", "Post")
+        if page == "partial-first":
+            return self.playlist_result([gated, video, self._video("v3")], "post", "Post")
+        if page == "partial-all-but-one":
+            rest = [self.url_result(follow(p)) for p in ("extractor-bug", "rate-limited")]
+            return self.playlist_result([gated, rest[0], video, rest[1]], "post", "Post")
+        if page == "partial-private":
+            return self.playlist_result([video, self.url_result(follow("private"))], "post", "Post")
+        if page == "images-and-gated":
+            return self.playlist_result([self._image("i1"), gated], "post", "Post")
+        if page == "partial-rejected" and self._downloader.cookies_used:
+            raise ExtractorError("Failed to parse JSON", expected=True)
+        if page == "partial-rejected":
+            return self.playlist_result([video, gated], "post", "Post")
+        return None
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -455,7 +526,12 @@ class FakeSiteIE(InfoExtractor):
     def _real_extract(self, url: str) -> dict[str, Any]:
         page = self._match_id(url)
         cookies = self._downloader.cookies_used
-        shape = self._codec_shape(page) or self._failure_shape(page) or self._partial_shape(page)
+        shape = (
+            self._codec_shape(page)
+            or self._failure_shape(page)
+            or self._partial_shape(page)
+            or self._edge_shape(page)
+        )
         if shape is not None:
             return shape
         if page == "video":

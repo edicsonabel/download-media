@@ -9,6 +9,7 @@ import pytest
 from yt_dlp.utils import MEDIA_EXTENSIONS
 
 from download_media.downloader import _skip_items_without_media
+from download_media.i18n import _MESSAGES
 from download_media.probe import (
     ContentKind,
     _classify_entry,
@@ -396,6 +397,20 @@ def test_cookies_can_help(message: str) -> None:
 @pytest.mark.parametrize(
     "message",
     [
+        "[site] x: Account needed. Use --username and --password",
+        "[site] x: You need to log in to watch this",
+        "[site] x: This video is only available for registered users",
+        "[site] x: This video is for premium subscribers",
+    ],
+    ids=["password-hint", "log-in", "registered", "premium"],
+)
+def test_one_signal_alone_is_enough_to_offer_cookies(message: str) -> None:
+    assert is_auth_error(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
         "[Instagram] x: There is no video in this post",
         "[youtube] x: This content isn't available, try again later. The current session has "
         "been rate-limited by YouTube for up to an hour.",
@@ -415,6 +430,20 @@ def test_cookies_can_help(message: str) -> None:
     ],
 )
 def test_cookies_cannot_help(message: str) -> None:
+    assert is_auth_error(message) is False
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[site] x: The login rate-limit was exceeded",
+        "[site] x: The login rate limit was exceeded",
+        "[site] x: Too many requests to the login service",
+        "[site] x: The login service is down, try again later",
+    ],
+    ids=["hyphen", "space", "requests", "later"],
+)
+def test_a_limit_outranks_the_word_login(message: str) -> None:
     assert is_auth_error(message) is False
 
 
@@ -460,6 +489,58 @@ def test_cookies_cannot_help(message: str) -> None:
 )
 def test_short_reason_keeps_the_sites_words(message: str, shown: str) -> None:
     assert _short_reason(message) == shown
+
+
+@pytest.mark.parametrize(
+    "message,shown",
+    [
+        ("", ""),
+        ("[x] y: ", ""),
+        ("[x] y: first\nsecond\nthird", "first"),
+        ("[x] y: \tspread\t\tout   text  ", "spread out text"),
+        ("[x] y: Gone.\nUse --cookies for it", "Gone."),
+        ("[x] y: Failed; Please report nothing", "Failed; Please report nothing"),
+        ("[x] y: Bad range. Offset -1 is too low", "Bad range. Offset -1 is too low"),
+        ("[x] y: {} {0} {name} 100%", "{} {0} {name} 100%"),
+    ],
+    ids=["empty", "only-a-prefix", "lines", "spaces", "flag-line", "case", "minus", "braces"],
+)
+def test_short_reason_on_what_yt_dlp_can_hand_over(message: str, shown: str) -> None:
+    assert _short_reason(message) == shown
+
+
+@pytest.mark.parametrize("language", ["es", "en"])
+@pytest.mark.parametrize("key", ["auth_needed_retry", "probe_failed", "probe_partial"])
+def test_both_languages_frame_the_reason_as_it_comes(language: str, key: str) -> None:
+    reason = _short_reason("[x] y: {} {0} braces and a 100% sign; please report this")
+    assert reason == "{} {0} braces and a 100% sign"
+    assert _MESSAGES[language][key].format(reason).endswith(f": {reason}")
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[generic] private clip: Unable to download webpage: HTTP Error 404: Not Found",
+        "[generic] login page: Unable to download webpage: HTTP Error 404: Not Found",
+        "[generic] tag:private: Unable to download webpage: HTTP Error 404: Not Found",
+        "[generic] 'private-video' is not a valid URL. Set --default-search to search YouTube",
+        "[site] x: Unable to download webpage: Failed to resolve 'login.example.com'",
+    ],
+    ids=["space", "login", "colon", "not-a-url", "host"],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason="_SITE_PREFIX stops at a space or colon in the id, and only http(s) URLs are dropped, "
+    "so words the site never said ask for cookies",
+)
+def test_words_from_the_id_or_the_address_ask_for_nothing(message: str) -> None:
+    assert is_auth_error(message) is False
+
+
+@pytest.mark.xfail(strict=True, reason="_SITE_PREFIX stops at a space in the id, as above")
+def test_short_reason_drops_an_id_with_a_space() -> None:
+    message = "[generic] my clip: Unable to download webpage: HTTP Error 404: Not Found"
+    assert _short_reason(message) == "Unable to download webpage: HTTP Error 404: Not Found"
 
 
 def test_short_reason_keeps_something_when_a_flag_opens_the_message() -> None:
@@ -580,3 +661,112 @@ def test_a_carousel_with_every_entry_gated_is_a_failure(fake_site: Any) -> None:
     assert result.failed is True
     assert result.needs_cookies is True
     assert result.error_message == "Login required"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=TypeError,
+    reason="The override hands the entry back before yt-dlp makes duration numeric, and "
+    "_classify_entry compares it outside probe()'s try: probe() raises, the wizard crashes",
+)
+def test_a_text_duration_on_an_image_entry_cannot_break_the_probe(fake_site: Any) -> None:
+    result = probe("https://fake.test/text-duration-carousel")
+    assert [item.kind for item in result.items] == [IMAGE, VIDEO]
+
+
+def test_a_text_duration_on_a_lone_image_is_still_an_image(fake_site: Any) -> None:
+    assert probe("https://fake.test/text-duration-image").content_kind == IMAGE
+
+
+@pytest.mark.parametrize("page", ["live-video", "url-video"])
+def test_a_result_with_something_to_fetch_is_never_taken_for_an_image(
+    fake_site: Any, page: str
+) -> None:
+    result = probe(f"https://fake.test/{page}")
+    assert result.content_kind == VIDEO
+    assert result.failed is False
+
+
+def test_a_stream_that_has_not_started_says_so(fake_site: Any) -> None:
+    result = probe("https://fake.test/upcoming")
+    assert result.failed is True
+    assert result.needs_cookies is False
+    assert result.error_message == "This live event will begin in 5 minutes"
+
+
+def test_a_format_without_a_url_stays_a_failure(fake_site: Any) -> None:
+    result = probe("https://fake.test/no-url-format")
+    assert result.failed is True
+    assert result.error_message == "No video formats found!"
+
+
+@pytest.mark.parametrize(
+    "page,reason",
+    [
+        ("partial-drm", "This video is DRM protected"),
+        ("partial-no-url", "No video formats found!"),
+    ],
+)
+def test_an_entry_that_really_failed_is_not_handed_back(
+    fake_site: Any, page: str, reason: str
+) -> None:
+    result = probe(f"https://fake.test/{page}")
+    assert result.failed is False
+    assert result.needs_cookies is False
+    assert result.error_message == reason
+    assert [item.kind for item in result.items] == [VIDEO, ContentKind.UNKNOWN]
+    assert [item.supported for item in result.items] == [True, False]
+
+
+def test_failures_are_read_at_their_own_position(fake_site: Any) -> None:
+    result = probe("https://fake.test/partial-first")
+    assert [item.kind for item in result.items] == [ContentKind.UNKNOWN, VIDEO, VIDEO]
+    assert result.items[0].title == "(item #1)"
+
+
+def test_a_redirect_to_a_gated_page_asks_for_cookies(fake_site: Any) -> None:
+    result = probe("https://fake.test/transparent-gated")
+    assert result.failed is True
+    assert result.needs_cookies is True
+
+
+def test_a_list_that_fails_while_it_is_read_is_a_failure(fake_site: Any) -> None:
+    # YouTube tabs and profiles build their entries lazily, so nothing fails at extraction.
+    result = probe("https://fake.test/lazy-gated")
+    assert result.failed is True
+    assert result.needs_cookies is True
+    assert "registered users" in (result.error_message or "")
+
+
+def test_a_list_that_fails_halfway_keeps_what_it_read(fake_site: Any) -> None:
+    result = probe("https://fake.test/lazy-half")
+    assert result.failed is False
+    assert result.needs_cookies is True
+    assert [item.kind for item in result.items] == [VIDEO, ContentKind.UNKNOWN]
+
+
+def test_a_gated_entry_inside_a_nested_list_counts(fake_site: Any) -> None:
+    result = probe("https://fake.test/nested-gated")
+    assert result.needs_cookies is True
+    assert result.error_message == "Login required"
+
+
+def test_an_error_with_no_words_reports_no_reason(fake_site: Any) -> None:
+    result = probe("https://fake.test/blank-error")
+    assert result.failed is True
+    assert result.needs_cookies is False
+    assert not result.error_message
+
+
+def test_only_the_first_line_of_an_error_is_the_reason(fake_site: Any) -> None:
+    assert probe("https://fake.test/two-line-error").error_message == "This post is gone"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="The bare text of a mistyped URL is matched as if the site had said it, as above",
+)
+def test_a_mistyped_url_with_a_login_word_asks_for_nothing() -> None:
+    result = probe("private-video")  # The generic extractor refuses it before any request.
+    assert result.failed is True
+    assert result.needs_cookies is False

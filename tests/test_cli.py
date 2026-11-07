@@ -353,6 +353,24 @@ def test_hint_stays_quiet_when_cookies_cannot_help(capsys, message: str) -> None
     assert _hint(capsys, message, []) == ""
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="is_auth_error strips the [site] id: prefix only at the very start, and a DownloadError "
+    "reads 'ERROR: [site] id: ...', or joins one error per line under -p, so the id gets matched",
+)
+@pytest.mark.parametrize(
+    "message",
+    [
+        "ERROR: [generic] login: Unable to download webpage: HTTP Error 404: Not Found",
+        "\x1b[0;31mERROR:\x1b[0m [generic] login: Unable to download webpage: HTTP Error 404",
+        "[fakesite] a: HTTP Error 404: Not Found\n[fakesite] login: HTTP Error 404: Not Found",
+    ],
+    ids=["plain", "coloured", "second-error"],
+)
+def test_hint_ignores_the_id_of_a_real_download_error(capsys, message: str) -> None:
+    assert _hint(capsys, message, []) == ""
+
+
 def test_keyring_hint_only_when_it_can_help(capsys) -> None:
     assert "+gnomekeyring" in _hint(capsys, "boom", ["--cookies", "brave"])
     assert _hint(capsys, "boom", ["--cookies", "brave+kwallet6"]) == ""
