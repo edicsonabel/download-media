@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T03:46:10-04:00",
+  "updated": "2026-11-07T04:08:03-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -368,9 +368,9 @@
     "fix/probe-auth": {
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
       "worktree": ".worktrees/fix-probe-auth",
@@ -389,8 +389,15 @@
         "e69dda4"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor cli.py:335 under -p a joined error with a rate limit beside a login error prints no hint",
+          "minor probe.py:180 reason can show a yt-dlp flag download-media doesn't accept",
+          "minor probe.py:139 rule parses text yt-dlp exposes as orig_msg and cause.status",
+          "minor probe.py:139 a site sentence before ': Unable to' loses its words from the reason",
+          "minor 8ab163c scope says cli, commit changes probe.py",
+          "minor probe.py:296 test gap N33: first error of a totally failed probe"
+        ]
       },
       "history": [
         {
@@ -455,6 +462,20 @@
           "result": "done",
           "at": "2026-11-07T03:46:10-04:00",
           "note": "Round 2 confirmed on real runs. Mutation 2/2. Accepted tradeoff: a site sentence with a login hint before ': Unable to' no longer counts as auth; late cookies step still covers it."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T04:08:03-04:00",
+          "note": "Gate exit 0, 1156 passed, 2 xfailed. Live step 1 passed; steps 2, 3 and the gated post SKIPPED, variables not set. Floor: 1 failure, test_yt_dlp_can_impersonate, when run with curl_cffi 0.17; main fails it the same way."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T04:08:03-04:00",
+          "note": "Merge decided by the roles under the human's delegation: 'Decidan todo entre los roles y cualquier cosa, yo reviso mañana'. Local main only. No push and no release in that delegation. Human reviews this in the morning."
         }
       ]
     }
