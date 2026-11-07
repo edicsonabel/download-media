@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T05:17:36-04:00",
+  "updated": "2026-11-07T05:35:53-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -505,13 +505,15 @@
     "fix/wizard-multi-url": {
       "type": "fix",
       "title": "Wizard drops every URL after the first",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/19-wizard-multi-url.md",
       "branch": "fix/wizard-multi-url",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-wizard-multi-url",
+      "commits": [
+        "74e9670"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -523,6 +525,20 @@
           "result": "approved",
           "at": "2026-11-07T05:17:36-04:00",
           "note": "Next P1 in PLAN.md, started under the human's overnight delegation: 'Sigue trabajando y aceptando nuevos features. Decidan todo entre los roles'."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T05:35:53-04:00",
+          "note": "Reproduced. Decisions D1-D7. A scratch run wrote Clip.mp4 into a ~/Videos folder it created; the architect deleted both. The user's real folders are ~/Vídeos and ~/Música, checked intact. Cause: isolated_env doesn't set HOME."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T05:35:53-04:00",
+          "note": "Spec approved under the human's delegation, every recommended option. Added to scope: isolated_env sets HOME, first commit, before any new wizard test runs. Human reviews in the morning."
         }
       ]
     }
