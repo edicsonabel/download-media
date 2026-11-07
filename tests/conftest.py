@@ -214,6 +214,7 @@ ANONYMOUS_LIMIT = (
 )
 FOLLOWERS_ONLY = "This content is only available for registered users who follow this account"
 GEO_BLOCK = "The uploader has not made this video available in your country"
+HTTP_404 = "Unable to download webpage: HTTP Error 404: Not Found"
 SUBSCRIBERS_ONLY = "This post requires a subscription"
 SESSION_RATE_LIMIT = (
     "This content isn't available, try again later. The current session has been rate-limited "
@@ -588,6 +589,11 @@ class FakeSiteIE(InfoExtractor):
             raise ExtractorError("Login required", expected=True)
         if page == "needs-cookies":
             return self._video("v1", page="needs-cookies")
+        if page == "hidden-404" and not cookies:
+            # Sites hide private content this way, and yt-dlp can't tell it from a dead link.
+            raise ExtractorError(HTTP_404, expected=True)
+        if page == "hidden-404":
+            return self._video("v1", page="hidden-404")
         if page == "gated-carousel" and not cookies:
             self.raise_login_required(FOLLOWERS_ONLY)
         if page == "gated-carousel":

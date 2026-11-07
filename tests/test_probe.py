@@ -584,8 +584,10 @@ def test_only_the_sites_own_words_can_ask_for_cookies(message: str) -> None:
     [
         "[generic] tag: private: Unable to download webpage: HTTP Error {}: Not Found",
         "[site] x: Unable to download webpage: HTTP Error {}: Login Required",
+        # No extractor words this today: those that read a 404 as a login raise without the status.
+        "[site] x: HTTP Error {}: Not Found. " + HINT,
     ],
-    ids=["id-the-prefix-cannot-read", "server-reason-phrase"],
+    ids=["id-the-prefix-cannot-read", "server-reason-phrase", "login-hint"],
 )
 def test_a_status_that_is_no_login_outranks_the_rest_of_its_line(shape: str, status: int) -> None:
     assert is_auth_error(shape.format(status)) is False
@@ -601,8 +603,18 @@ def test_a_status_that_is_no_login_outranks_the_rest_of_its_line(shape: str, sta
         f"[site] x: HTTP Error 403: Forbidden. {HINT}",
         "[site] tag:x: Private video",
         "[site] a: HTTP Error 404: Not Found\n[site] b: Login required",
+        "[site] x: Login required (caused by <HTTPError 404: Not Found>)",
     ],
-    ids=["id-with-space", "id-with-colon", "no-id", "d4", "hint-on-403", "private", "one-of-two"],
+    ids=[
+        "id-with-space",
+        "id-with-colon",
+        "no-id",
+        "d4",
+        "hint-on-403",
+        "private",
+        "one-of-two",
+        "404-only-as-the-cause",
+    ],
 )
 def test_what_the_site_said_still_asks_past_the_id(message: str) -> None:
     assert is_auth_error(message) is True

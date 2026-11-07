@@ -17,7 +17,7 @@ from download_media import cli, i18n
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.i18n import t
 
-from .conftest import GEO_BLOCK
+from .conftest import GEO_BLOCK, HTTP_404
 
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
@@ -2864,6 +2864,22 @@ def test_direct_mode_does_not_blame_a_refused_connection_on_login(
 ) -> None:
     assert cli.main(["-y", "http://127.0.0.1:1/login"]) == 1
     assert GIVE_UP not in capfd.readouterr().out
+
+
+def test_a_404_hiding_a_private_video_is_rescued_by_the_late_cookies_step(
+    wizard_on: Any, out: Path
+) -> None:
+    # A 404 never asks up front, so this step is all such a site has left.
+    *steps, _ = SINGLE_WALK
+    code, output = wizard_on("https://fake.test/hidden-404", *steps, FIRST_BROWSER, "")
+    assert code == 0
+    assert asked_for_login() not in output
+    assert t("probe_failed", HTTP_404) in output
+    assert output.count(t("ask_cookies")) == 1
+    assert names(out) == ["Clip.mp4"]
+    assert len(history_rows()) == 1
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
 
 
 @pytest.mark.parametrize("page", ["404-login", "404-spaced"])
