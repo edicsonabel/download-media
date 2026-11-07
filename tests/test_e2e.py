@@ -2124,6 +2124,253 @@ def test_the_note_on_a_file_labelled_as_audio_in_both_languages(
     assert i18n._MESSAGES[lang]["audio_may_hold_video"] in output
 
 
+# Spec 27, from the outside: what must not get the type step, what must, and the
+# answers around it.
+# URL, format, folder, cookies: real audio keeps today's flow.
+AUDIO_WALK = ("",) * 4
+
+REAL_AUDIO_THAT_SAYS_SO = [
+    "tiny.mp3",
+    "tiny.opus",
+    "tiny.flac",
+    "tiny.aac",
+    "audio-mp3.html",
+    # An <audio> whose <source> names its codec: something looked at the stream.
+    "audio-source-vorbis.html",
+    # No extension in the URL: yt-dlp takes it from the Content-Type.
+    "typed/audio/mpeg/tiny.mp3/stream",
+    "typed/audio/mp4/tiny.m4a/stream",
+    "typed/audio/x-wav/tiny.wav/stream",
+    "typed/audio/aac/tiny.aac/stream",
+    "typed/audio/mpeg/tiny.mp3/get?file=a.mp3",
+]
+
+
+@pytest.mark.parametrize("page", REAL_AUDIO_THAT_SAYS_SO)
+def test_wizard_keeps_the_audio_flow_for_audio_that_says_so(
+    generic: Any, media_url: str, home: Path, page: str
+) -> None:
+    code, output = generic(page, *AUDIO_WALK)
+    assert code == 0
+    assert detected("kind_audio") in output
+    assert t("audio_may_hold_video") not in output
+    assert t("ask_type") not in output
+    assert names(home / "Videos") == []
+    [saved] = names(home / "Music")
+    assert saved.endswith(".mp3")
+    assert commands(output) == [f"download-media -y -a {shlex.quote(f'{media_url}/{page}')}"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Spec 27: _ext_says_audio compares the extension as written, and yt-dlp keeps the "
+    "URL's case, so real audio at an uppercase .MP3, .M4A, .WAV or .FLAC is flagged: a type "
+    "step that main didn't ask, and Enter saves the raw file in ~/Videos.",
+)
+@pytest.mark.parametrize(
+    "page",
+    [
+        "typed/audio/mpeg/tiny.mp3/TINY.MP3",
+        "typed/audio/mp4/tiny.m4a/TINY.M4A",
+        "typed/audio/x-wav/tiny.wav/TINY.WAV",
+        "typed/audio/flac/tiny.flac/TINY.FLAC",
+    ],
+)
+def test_wizard_keeps_the_audio_flow_for_an_uppercase_audio_extension(
+    generic: Any, home: Path, page: str
+) -> None:
+    code, output = generic(page, *AUDIO_WALK)
+    assert code == 0
+    assert t("audio_may_hold_video") not in output
+    assert names(home / "Videos") == []
+    [saved] = names(home / "Music")
+    assert saved.endswith(".mp3")
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "theora.ogg?token=1",
+        "typed/audio/ogg/theora.ogg/THEORA.OGG",
+        # No extension: the Content-Type names a container that can hold a video.
+        "typed/audio/ogg/theora.ogg/stream",
+        "typed/audio/webm/tiny.webm/stream",
+        # <source> with a type but no codecs is still only a label.
+        "audio-source-ogg.html",
+    ],
+)
+def test_wizard_offers_the_video_of_other_labelled_shapes(
+    generic: Any,
+    pasted: Any,
+    media_url: str,
+    home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    page: str,
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert t("audio_may_hold_video") in output
+    assert t("done") in output
+    assert names(home / "Music") == []
+    [saved] = names(home / "Videos")
+    assert "video" in streams(home / "Videos" / saved)
+    [line] = commands(output)
+    assert line == f"download-media -y {shlex.quote(f'{media_url}/{page}')}"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == [saved]
+    assert "video" in streams(elsewhere / "Videos" / saved)
+
+
+def test_hls_in_an_audio_tag_reads_as_video_and_keeps_it(generic: Any, home: Path) -> None:
+    # An <audio> tag on a playlist doesn't reach its formats: no label, no flag.
+    code, output = generic("audio-hls.html", *SINGLE_WALK)
+    assert code == 0
+    assert detected("kind_video") in output
+    assert t("audio_may_hold_video") not in output
+    [saved] = names(home / "Videos")
+    assert "video" in streams(home / "Videos" / saved)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Spec 27 flags ext 'unknown_video', which yt-dlp gives an <audio src> with no "
+    "extension. Enter then takes the video path on real audio: the raw "
+    "'audio-no-ext (1).unknown_video', 'Download failed' and exit 1, where main saved an .mp3 "
+    "with exit 0. The failure itself is -y's (row 29), now on the wizard's Enter.",
+)
+def test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds(
+    media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    answers(*SINGLE_WALK)  # Enough Enters for either flow: with or without the type step.
+    code = cli.main([f"{media_url}/audio-no-ext.html"])
+    captured = capfd.readouterr()
+    output = captured.out + captured.err
+    assert code == 0
+    assert t("done") in output
+    assert t("failed", f"{media_url}/audio-no-ext.html") not in output
+    saved = [*names(home / "Music"), *names(home / "Videos")]
+    assert len(saved) == 1
+    assert not saved[0].endswith(".unknown_video")
+
+
+@pytest.mark.parametrize(
+    ("page", "replies", "music", "videos"),
+    [
+        # Type, quality, container, folder, cookies after the URL.
+        ("site-audio-label", SINGLE_WALK, [], ["Clip.ogg"]),
+        # The extractor named the codec: no type step, as before.
+        ("site-audio-named", AUDIO_WALK, ["Clip.mp3"], []),
+    ],
+)
+def test_wizard_on_a_site_extractor_s_audio_follows_what_it_named(
+    wizard_urls: Any,
+    home: Path,
+    page: str,
+    replies: tuple[str, ...],
+    music: list[str],
+    videos: list[str],
+) -> None:
+    code, output, asked = wizard_urls([f"https://fake.test/{page}"], *replies)
+    assert code == 0
+    assert asked == len(replies)
+    assert (t("audio_may_hold_video") in output) is bool(videos)
+    assert names(home / "Music") == music
+    assert names(home / "Videos") == videos
+    for name in videos:
+        assert "video" in streams(home / "Videos" / name)
+
+
+def test_audio_answer_on_a_labelled_file_replays_the_same_mp3(
+    generic: Any, pasted: Any, home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    code, output = generic("theora.ogg", "", "2", "", "", "")
+    assert code == 0
+    assert names(home / "Music") == ["theora.mp3"]
+    assert streams(home / "Music" / "theora.mp3") == {"audio"}
+    [line] = commands(output)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Music") == ["theora.mp3"]
+    assert names(elsewhere / "Videos") == []
+    assert streams(elsewhere / "Music" / "theora.mp3") == {"audio"}
+
+
+@pytest.mark.parametrize(
+    ("flags", "replies", "music", "videos", "command"),
+    [
+        # -f is an audio choice, not a type: the step still opens at video, and the
+        # command drops what the video path doesn't use.
+        (("-i", "-f", "m4a"), SINGLE_WALK, [], ["theora.ogg"], "-y"),
+        (("-i", "-f", "m4a"), ("", "2", "", "", ""), ["theora.m4a"], [], "-y -a -f m4a"),
+        (("-i", "--video-format", "mkv"), SINGLE_WALK, [], ["theora.ogg"], "-y --video-format mkv"),
+        (("-i", "-a", "-f", "m4a"), (*AUDIO_WALK, ""), ["theora.m4a"], [], "-y -a -f m4a"),
+        # -i -a, then 1 at the type step: the video is still there to keep.
+        (("-i", "-a"), ("", "1", "", "", "", ""), [], ["theora.ogg"], "-y"),
+    ],
+    ids=["format", "format-then-audio", "container", "audio-and-format", "audio-then-video"],
+)
+def test_interactive_flags_preset_the_steps_around_the_type_step(
+    generic: Any,
+    media_url: str,
+    home: Path,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    music: list[str],
+    videos: list[str],
+    command: str,
+) -> None:
+    code, output = generic("theora.ogg", *replies, flags=flags)
+    assert code == 0
+    assert t("ask_type") in output
+    assert names(home / "Music") == music
+    assert names(home / "Videos") == videos
+    for name in videos:
+        assert "video" in streams(home / "Videos" / name)
+    assert commands(output) == [f"download-media {command} {media_url}/theora.ogg"]
+
+
+def test_back_at_the_type_step_of_a_labelled_file_asks_it_again(generic: Any, home: Path) -> None:
+    # URL, b, then type, quality, container, folder, cookies.
+    code, output = generic("theora.ogg", "", "b", *[""] * 5)
+    assert code == 0
+    assert output.count(t("ask_type")) == 2
+    assert names(home / "Videos") == ["theora.ogg"]
+    assert "video" in streams(home / "Videos" / "theora.ogg")
+
+
+def test_cancel_at_the_type_step_of_a_labelled_file_saves_nothing(generic: Any, home: Path) -> None:
+    code, output = generic("theora.ogg", "", "c")
+    assert code == 0
+    assert t("ask_type") in output
+    assert t("cancelled") in output
+    assert names(home / "Videos") == []
+    assert names(home / "Music") == []
+    assert commands(output) == []
+    assert history_rows() == []
+
+
+def test_a_page_of_labelled_audio_items_keeps_the_carousel_flow(generic: Any, home: Path) -> None:
+    # Two <audio>: Theora and Vorbis. The flag is for a single result: the picker's
+    # type step already defaults to video, and nothing converts.
+    code, output = generic("audios-theora-and-vorbis.html", *PICKER_WALK)
+    assert code == 0
+    assert t("audio_may_hold_video") not in output
+    assert output.count(tag("kind_audio")) == 2
+    assert names(home / "Music") == []
+    saved = names(home / "Videos")
+    assert len(saved) == 2
+    assert all(name.endswith(".ogg") for name in saved)
+    assert sorted("video" in streams(home / "Videos" / name) for name in saved) == [False, True]
+
+
 def test_wizard_on_a_generic_page_with_every_kind(
     generic: Any, pasted: Any, media_url: str, home: Path, tmp_path: Path, monkeypatch: Any
 ) -> None:
@@ -3184,6 +3431,42 @@ def test_wizard_gives_a_file_labelled_as_audio_its_type_step_among_several_urls(
     assert names(home / "Music") == ["audio (1).mp3"]
     assert kinds_and_urls() == [["video", ogg], ["audio", audio]]
     assert commands(output) == [f"download-media -y {ogg}", f"download-media -y -a {audio}"]
+
+
+@pytest.mark.parametrize(
+    ("first", "replies", "music", "videos"),
+    [
+        # Audio first: its walk sets audio, and the next walk must start at video again.
+        ("audio.html", (*AUDIO_WALK, *SINGLE_WALK), ["audio (1).mp3"], ["theora.ogg"]),
+        # The labelled file answered 2: the next URL keeps its own default.
+        ("theora.ogg", ("", "2", "", "", "", *SINGLE_WALK), ["theora.mp3"], ["tiny.mp4"]),
+    ],
+    ids=["audio-then-labelled", "labelled-as-audio-then-video"],
+)
+def test_a_file_labelled_as_audio_among_several_urls_shares_no_answer(
+    media_url: str,
+    home: Path,
+    answers: Any,
+    capfd: pytest.CaptureFixture[str],
+    first: str,
+    replies: tuple[str, ...],
+    music: list[str],
+    videos: list[str],
+) -> None:
+    second = "theora.ogg" if first == "audio.html" else "tiny.mp4"
+    urls = [f"{media_url}/{first}", f"{media_url}/{second}"]
+    prompts = answers(*replies)
+    code = cli.main(urls)
+    captured = capfd.readouterr()
+    output = captured.out + captured.err
+    assert len(prompts) == len(replies)
+    assert code == 0
+    assert output.count(t("audio_may_hold_video")) == 1
+    assert names(home / "Music") == music
+    assert names(home / "Videos") == videos
+    assert "video" in streams(home / "Videos" / videos[0])
+    assert kinds_and_urls() == [["audio", urls[0]], ["video", urls[1]]]
+    assert commands(output) == [f"download-media -y -a {urls[0]}", f"download-media -y {urls[1]}"]
 
 
 def test_wizard_asks_for_cookies_on_the_second_url_s_login_wall(

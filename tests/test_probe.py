@@ -312,6 +312,51 @@ def test_a_playlist_of_labelled_audio_is_not_flagged() -> None:
     assert result.may_hold_video is False
 
 
+@pytest.mark.parametrize(
+    "formats,flagged",
+    [
+        # yt-dlp always sets ext after processing, but a missing one says nothing either.
+        ([{"vcodec": "none"}], True),
+        ([{"vcodec": "none", "ext": "OGG"}], True),
+        (
+            [
+                {"vcodec": "none", "ext": "ogg"},
+                {"vcodec": "none", "acodec": "vorbis", "ext": "ogg"},
+            ],
+            True,
+        ),
+        ([{"vcodec": "none", "acodec": "vorbis", "ext": "ogg"}], False),
+        ([{"vcodec": "none", "acodec": "mp4a.40.2", "ext": "mp4"}], False),
+        (
+            [{"vcodec": "none", "acodec": "aac", "ext": "m4a"}, {"vcodec": "none", "ext": "mp3"}],
+            False,
+        ),
+    ],
+)
+def test_the_flag_reads_every_format_of_an_audio_result(
+    formats: list[dict[str, Any]], flagged: bool
+) -> None:
+    assert may_hold_video(*formats) is flagged
+
+
+@pytest.mark.parametrize("ext", EXT_SAYS_AUDIO)
+def test_a_url_only_result_whose_extension_says_audio_is_not_flagged(ext: str) -> None:
+    data = {"id": "i", "title": "t", "url": "http://x/f", "vcodec": "none", "ext": ext}
+    result = _read_result("http://x/f", "generic", data, [])
+    assert result.content_kind == AUDIO
+    assert result.may_hold_video is False
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Spec 27: _ext_says_audio compares the extension as written, and yt-dlp keeps "
+    "the URL's case (determine_ext), so an uppercase audio extension raises the flag.",
+)
+@pytest.mark.parametrize("ext", ["MP3", "M4A", "WAV", "FLAC", "Opus"])
+def test_an_uppercase_extension_that_says_audio_is_not_flagged(ext: str) -> None:
+    assert may_hold_video({"vcodec": "none", "acodec": None, "ext": ext}) is False
+
+
 KINDS_WEAKEST_FIRST = [
     (IMAGE, STORYBOARD),
     (UNKNOWN, {"vcodec": None, "acodec": None, "ext": "jpg"}),
