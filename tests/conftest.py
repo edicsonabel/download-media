@@ -31,11 +31,13 @@ from download_media import probe as probe_module
 def isolated_env(
     request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Keep tests away from the real history log and browser flag files."""
+    """Keep tests away from the real history log, browser flag files and home folder."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     # Live tests exist to exercise the real browser setup.
     if "live" not in request.keywords:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+        # xdg_dir() falls back to $HOME/Videos and $HOME/Music.
+        monkeypatch.setenv("HOME", str(tmp_path / "isolated-home"))
 
 
 @pytest.fixture
