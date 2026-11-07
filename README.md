@@ -63,6 +63,7 @@ sudo pacman -R download-media
 ```bash
 download-media                    # asks everything, including URL
 download-media <url>              # URL preset, asks the rest
+download-media url1 url2 url3     # one walk per URL, then all the downloads
 ```
 
 The wizard walks through: URL → video/audio → quality and container (or audio format) → output folder → optional browser cookies. Every prompt shows the choices made so far and accepts `b` to go back one step. If a page can't be inspected, the wizard says why, and if it needs a login it offers browser cookies right after the URL.
@@ -76,7 +77,7 @@ download-media -a -f opus <url>           # opus audio
 download-media --video-format mkv <url>   # mkv container (keeps VP9/AV1, up to 4K)
 download-media -s --sub-langs en <url>    # English subtitles embedded
 download-media --cookies firefox <url>    # use Firefox cookies
-download-media url1 url2 url3             # multiple URLs in one run
+download-media -a url1 url2 url3          # several URLs, same options
 download-media -l <url>                   # list available formats
 download-media -p <url>                   # force full playlist
 download-media -P <url>                   # force single video (ignore playlist)
