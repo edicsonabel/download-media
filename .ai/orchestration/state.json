@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T17:19:38-04:00",
+  "updated": "2026-11-07T17:24:53-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,9 +940,9 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
       "worktree": ".worktrees/fix-false-failure",
@@ -954,7 +954,8 @@
         "3a0c5d7",
         "c58f7ef",
         "0310713",
-        "f8ef735"
+        "f8ef735",
+        "f08a7c2"
       ],
       "review": {
         "approved": true,
@@ -1032,6 +1033,13 @@
           "result": "approved",
           "at": "2026-11-07T17:19:38-04:00",
           "note": "Gate exit 0, 1603 passed, 3 xfailed. One minor. Mutation 3/3. Merge and push pre-approved by the human."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-07T17:24:53-04:00",
+          "note": "Merged as f08a7c2, no conflicts. Gate exit 0, 1603 passed, 3 xfailed. Pushed by the orchestrator, as the human approved."
         }
       ]
     }
