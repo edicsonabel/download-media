@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T23:48:13-04:00",
+  "updated": "2026-11-07T00:00:46-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,12 +251,12 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
-      "worktree": ".worktrees/fix-probe-no-codec",
+      "worktree": null,
       "commits": [
         "fe91ce0",
         "5ec306b",
@@ -264,7 +264,8 @@
         "bec654d",
         "875030f",
         "0343274",
-        "16d2b5c"
+        "16d2b5c",
+        "2ff1372"
       ],
       "review": {
         "approved": true,
@@ -354,6 +355,13 @@
           "result": "merged",
           "at": "2026-11-06T23:48:13-04:00",
           "note": "Merged as 16d2b5c, no conflicts. Gate exit 0, 798 passed, 2 xfailed."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T00:00:46-04:00",
+          "note": "All 27 criteria hold on main. GitHub CI not run yet; the push comes at the end of the run. Not decided by the human: aiff, alac, ape, wav lose a renamed video the same way as the seven accepted."
         }
       ]
     }
