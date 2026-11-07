@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T08:57:52-04:00",
+  "updated": "2026-11-07T09:16:46-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,9 +707,9 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
       "worktree": ".worktrees/fix-playlist-items-fix",
@@ -718,11 +718,15 @@
         "ad09d7b",
         "68a11fb",
         "3bc48d2",
-        "ce926e6"
+        "ce926e6",
+        "fab0a23",
+        "21c228f"
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "medium downloader.py:217-229 missing items checked against the extractor's declared playlist_count, not the entries read; YouTube's count includes hidden videos. Too high: item dropped silently; too low: saved item reported as skipped."
+        ]
       },
       "history": [
         {
@@ -752,6 +756,13 @@
           "result": "done",
           "at": "2026-11-07T08:57:52-04:00",
           "note": "Gate exit 0, 1389 passed, 3 xfailed. Floor yt-dlp passes this item's tests. 0.3.0 note goes to the planner for PLAN.md. Planner: the yt-dlp floor and an unpinned curl_cffi don't work together."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-07T09:16:46-04:00",
+          "note": "Round 1. 1483 passed, 5 xfailed (2 new strict). Mutation 18/18. missing_items matches yt-dlp's slicing on 72 checks. One medium finding."
         }
       ]
     }
