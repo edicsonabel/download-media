@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T17:31:16-04:00",
+  "updated": "2026-11-07T17:49:22-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,13 +1054,15 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-audio-thumbnail",
+      "commits": [
+        "e2c7144"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -1072,6 +1074,20 @@
           "result": "approved",
           "at": "2026-11-07T17:31:16-04:00",
           "note": "Next P1, under the human's standing delegation (goal still active)."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T17:49:22-04:00",
+          "note": "Reproduced, wider than the row: -a -f wav fails on any source with a thumbnail; -a -f opus fails without mutagen; broken images fail with a saved mp3; playlist leaves <list>.jpg; -P crashes on the playlist thumbnail. Size S to M. Planner: catch-all row for non-DownloadError in _download_one; mutagen dependency decision."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T17:49:22-04:00",
+          "note": "Spec approved under the human's delegation, D1-D10 A. D1 and D5 change shipped behaviour; flagged for review."
         }
       ]
     }
