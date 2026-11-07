@@ -2332,6 +2332,156 @@ def test_an_untaggable_file_with_chapters_leaves_no_chapters_file(run: Any, out:
     assert t("untagged", "Clip.ogx") in output
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="_TagSource deletes <name>.meta and <name>.temp.<ext> even when yt-dlp never wrote them",
+)
+@pytest.mark.parametrize("own", ["Clip.meta", "Clip.temp.ogx"])
+def test_an_untaggable_file_leaves_the_users_own_files_alone(run: Any, out: Path, own: str) -> None:
+    # No chapters, so yt-dlp writes no .meta; ffmpeg has no .ogx muxer, so it opens no temp file.
+    out.mkdir(parents=True)
+    (out / own).write_text("mine", encoding="utf-8")
+    code, output = run("-y", "https://fake.test/ogx")
+    assert code == 0
+    assert t("untagged", "Clip.ogx") in output
+    assert (out / own).read_text(encoding="utf-8") == "mine"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="_has_media_streams passes a relative '-…' path to ffprobe, which reads it as an option",
+)
+def test_an_untaggable_file_in_a_relative_folder_starting_with_a_dash(
+    generic: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    code, output = generic("theora.ogx", flags=("-y", "--output=-clips"))
+    assert names(work / "-clips") == ["theora.ogx"]
+    assert code == 0
+    assert t("untagged", "theora.ogx") in output
+
+
+def test_untaggable_subtitled_file_warns_twice_and_keeps_both_files(run: Any, out: Path) -> None:
+    # yt-dlp only embeds subtitles in mp4, webm, mkv and mov: spec 21's warning still follows.
+    code, output = run("-y", "-s", "https://fake.test/ogx-subs")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.ogx"]
+    assert t("untagged", "Clip.ogx") in output
+    assert t("subs_not_embedded", "Clip.ogx") in output
+    assert t("done") in output
+    assert step_leftovers(out) == []
+
+
+def test_playlist_items_on_the_untaggable_item_alone(generic: Any, out: Path) -> None:
+    flags = ("-y", "--playlist-items", "1", "-o", str(out))
+    code, output = generic("ogx-and-mp4.html", flags=flags)
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".ogx")
+    assert t("untagged", saved) in output
+    assert untagged_warnings(output) == 1
+    assert not said_partial_result(output)
+
+
+def several(media_url: str, out: Path, capfd: pytest.CaptureFixture[str], *pages: str) -> Any:
+    code = cli.main(["-y", "-o", str(out), *(f"{media_url}/{page}" for page in pages)])
+    captured = capfd.readouterr()
+    return code, captured.out + captured.err
+
+
+def test_several_urls_with_one_untaggable_all_count_as_done(
+    media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    code, output = several(media_url, out, capfd, "theora.ogx", "tiny.mp4")
+    assert code == 0
+    assert names(out) == ["theora.ogx", "tiny.mp4"]
+    # The whole line: the warning names the file, not its path.
+    assert t("untagged", "theora.ogx") in output.splitlines()
+    assert untagged_warnings(output) == 1
+    # Both files go through yt-dlp's step, under its own tag.
+    assert output.count("[Metadata] Adding metadata") == 2
+    assert output.count(t("done")) == 2
+    assert len(history_rows()) == 2
+
+
+def test_several_urls_an_untaggable_one_and_a_broken_one(
+    media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    code, output = several(media_url, out, capfd, "theora.ogx", JUNK)
+    assert code == 1
+    assert t("untagged", "theora.ogx") in output
+    assert untagged_warnings(output) == 1
+    assert output.count(t("done")) == 1
+    assert t("failed", f"{media_url}/{JUNK}") in output
+    assert t("failed", f"{media_url}/theora.ogx") not in output
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_untagged_and_broken_in_both_languages(
+    generic: Any, media_url: str, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    said = i18n._MESSAGES[lang]
+    code, output = generic("theora.ogx", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert said["untagged"].format("theora.ogx") in output
+    other = i18n._MESSAGES["en" if lang == "es" else "es"]["untagged"]
+    assert other.split("{}")[1][:20] not in output
+    assert said["done"] in output
+    code, output = generic(JUNK, flags=("-y", "-o", str(out)))
+    assert code == 1
+    assert said["failed"].format(f"{media_url}/{JUNK}") in output
+    assert said["untagged"].split("{}")[1] not in output
+
+
+def test_playlist_where_no_item_is_media_with_cookies_still_fails(
+    run: Any, out: Path, fake_site: list[Any]
+) -> None:
+    # A total -p failure now raises, so the cookie fallback retries it once, and fails again.
+    code, output = run("-y", "-p", "--cookies", "brave", "https://fake.test/junk-carousel")
+    assert code == 1
+    assert output.count(t("cookies_retry", "brave")) == 1
+    assert t("failed", "https://fake.test/junk-carousel") in output
+    assert t("done") not in output
+    assert fake_site == [("brave",), None]
+    assert history_rows() == []
+
+
+@pytest.mark.parametrize(
+    ("flags", "says"),
+    [
+        (("-p",), ("partial_result", 1, 2, 0, 1)),
+        ((), ("failed", "https://fake.test/junk-thumb-carousel")),
+    ],
+)
+def test_audio_item_whose_thumbnail_cannot_be_embedded(
+    run: Any, out: Path, flags: tuple[str, ...], says: tuple[Any, ...]
+) -> None:
+    # D6: under -p an item with any failed step counts as failed only, as single mode says.
+    code, output = run("-y", "-a", *flags, "https://fake.test/junk-thumb-carousel")
+    assert t(*says) in output
+    assert untagged_warnings(output) == 0
+    assert code == (0 if flags else 1)
+
+
+@pytest.mark.parametrize(
+    "page", ["typed/audio/webm/audio.webm/clip.weba", "typed/audio/ogg/tiny.mp4/clip.oga"]
+)
+def test_rerun_of_an_untaggable_file_under_p_counts_each_run_once(
+    generic: Any, out: Path, page: str
+) -> None:
+    for count in (1, 2, 2):
+        code, output = generic(page, flags=("-y", "-p", "-o", str(out)))
+        assert code == 0
+        assert untagged_warnings(output) == 1
+        assert not said_partial_result(output)
+        assert len(names(out)) == count
+        assert step_leftovers(out) == []
+
+
 @pytest.mark.parametrize(
     ("page", "saved"),
     [

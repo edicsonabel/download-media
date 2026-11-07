@@ -452,13 +452,30 @@ class FakeSiteIE(InfoExtractor):
             # A site extractor's audio with no codec named: 71 modules build this shape.
             label = {"format_id": "a", "url": f"{self.media_url}/theora.ogg", "ext": "ogg"}
             return self._with_formats("a1", {**label, "vcodec": "none"})
-        if page in ("ogx", "ogx-chapters"):
+        if page in ("ogx", "ogx-chapters", "ogx-subs"):
             # A format ffmpeg can read but has no muxer for, so it can't write tags to it.
             ogx = {"format_id": "o", "url": f"{self.media_url}/theora.ogx", "ext": "ogx"}
             video = self._with_formats("x1", ogx)
             if page == "ogx-chapters":
                 video["chapters"] = [{"start_time": 0, "end_time": 0.1, "title": "Start"}]
+            if page == "ogx-subs":
+                video["subtitles"] = self._subtitles("en.vtt")
             return video
+        if page == "junk-carousel":
+            # Text bodies served as videos: every item fails its metadata step.
+            junk = [
+                f"{self.media_url}/typed/video/mp4/{name}/junk.mp4" for name in ("en.vtt", "es.vtt")
+            ]
+            entries = [
+                self._with_formats(f"j{n}", {"format_id": "j", "url": url, "ext": "mp4"})
+                for n, url in enumerate(junk, 1)
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "junk-thumb-carousel":
+            # A text body as the first item's thumbnail: -a can't embed it.
+            thumb = f"{self.media_url}/typed/image/jpeg/en.vtt/t.jpg"
+            entries = [{**self._video("t1"), "thumbnail": thumb}, self._video("t2")]
+            return self.playlist_result(entries, "post", "Post")
         if page == "site-audio-named":
             named = {"format_id": "a", "url": f"{self.media_url}/tiny.ogg", "ext": "ogg"}
             return self._with_formats("a1", {**named, "vcodec": "none", "acodec": "vorbis"})
