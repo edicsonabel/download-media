@@ -382,8 +382,8 @@ def _build_post_probe_plan(
     steps: list[str] = []
     if probe_result.is_playlist:
         steps.append("select")
-    # SINGLE_AUDIO sources don't get a video/audio choice — they're audio.
-    if probe_result.content_kind != ContentKind.SINGLE_AUDIO:
+    # SINGLE_AUDIO sources don't get a video/audio choice, unless only a label says audio.
+    if probe_result.content_kind != ContentKind.SINGLE_AUDIO or probe_result.may_hold_video:
         steps.append("type")
     # We list both branches; the runner skips the inapplicable one based on
     # opts.audio_only at run-time.
@@ -563,7 +563,9 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
             warn(t("no_supported_items"))
             raise _Refused
         _print_detection(probe_result)
-        if probe_result.content_kind == ContentKind.SINGLE_AUDIO:
+        if probe_result.may_hold_video:
+            warn(t("audio_may_hold_video"))
+        elif probe_result.content_kind == ContentKind.SINGLE_AUDIO:
             opts.audio_only = True
     else:
         warn(t("probe_failed", probe_result.error_message or "unknown"))

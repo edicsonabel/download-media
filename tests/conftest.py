@@ -30,17 +30,27 @@ from download_media import probe as probe_module
 @pytest.fixture(autouse=True)
 def isolated_env(
     request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Keep tests away from the real history log, browser flag files and home folder."""
+) -> Iterator[None]:
+    """Keep tests away from the real history log, browser flag files, home and working folder."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     # Live tests exist to exercise the real browser setup.
-    if "live" not in request.keywords:
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-        # xdg_dir() falls back to $HOME/Videos and $HOME/Music.
-        monkeypatch.setenv("HOME", str(tmp_path / "isolated-home"))
-        # Desktops export these, and some xdg-user-dir builds read them first.
-        for kind in ("VIDEOS", "MUSIC"):
-            monkeypatch.delenv(f"XDG_{kind}_DIR", raising=False)
+    if "live" in request.keywords:
+        yield
+        return
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    # xdg_dir() falls back to $HOME/Videos and $HOME/Music.
+    monkeypatch.setenv("HOME", str(tmp_path / "isolated-home"))
+    # Desktops export these, and some xdg-user-dir builds read them first.
+    for kind in ("VIDEOS", "MUSIC"):
+        monkeypatch.delenv(f"XDG_{kind}_DIR", raising=False)
+    # A scripted wizard answer that drifts by one step can become a relative folder:
+    # it lands here instead of the checkout, and the test fails instead of passing.
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    yield
+    stray = sorted(p.name for p in cwd.iterdir())
+    assert not stray, f"a test wrote to the working folder: {stray}"
 
 
 @pytest.fixture
@@ -87,8 +97,33 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         ".wma": "audio/x-ms-wma",
     }
 
+    # /as-audio/<file> serves <file> under an audio/* label, as some servers do for video.
+    _AS_AUDIO: ClassVar[dict[str, str]] = {
+        ".asf": "audio/x-ms-asf",
+        ".mp4": "audio/mp4",
+        ".webm": "audio/webm",
+    }
+
     def log_message(self, format: str, *args: Any) -> None:
         pass
+
+    # /typed/<type>/<subtype>/<file>/<name> serves <file> as <type>/<subtype> under any last
+    # segment: an uppercase extension, or none at all.
+    _TYPED = re.compile(r"/typed/(?P<mime>[\w.+-]+/[\w.+-]+)/(?P<file>[^/?]+)/[^/?]+(?:\?.*)?")
+
+    def translate_path(self, path: str) -> str:
+        typed = self._TYPED.fullmatch(path)
+        if typed:
+            path = f"/{typed['file']}"
+        return super().translate_path(path.removeprefix("/as-audio"))
+
+    def guess_type(self, path: Any) -> str:
+        typed = self._TYPED.fullmatch(self.path)
+        if typed:
+            return typed["mime"]
+        if self.path.startswith("/as-audio/"):
+            return self._AS_AUDIO[Path(path).suffix]
+        return super().guess_type(path)
 
     def send_head(self) -> Any:
         status = re.fullmatch(r"/status/(\d{3})(?:/.*)?", self.path)  # A sub-path names the id.
@@ -136,6 +171,14 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "video-tag-audio-ogg": '<video src="tiny.ogg"></video>',
         "video-tag-audio-m4b": '<video src="tiny.m4b"></video>',
         "audio-theora-ogg": '<audio src="theora.ogg"></audio>',
+        "audio-mp4": '<audio src="tiny.mp4"></audio>',
+        "audio-webm": '<audio src="tiny.webm"></audio>',
+        "audio-mp3": '<audio src="tiny.mp3"></audio>',
+        "audio-no-ext": '<audio src="typed/audio/mpeg/tiny.mp3/stream"></audio>',
+        "audio-source-vorbis": """<audio><source src="tiny.ogg" type='audio/ogg; codecs="vorbis"'></audio>""",
+        "audio-source-ogg": """<audio><source src="theora.ogg" type="audio/ogg"></audio>""",
+        "audio-hls": '<audio src="tiny.m3u8"></audio>',
+        "audios-theora-and-vorbis": '<audio src="theora.ogg"></audio><audio src="tiny.ogg"></audio>',
         "ogg-video-and-audio": '<video src="theora.ogg"></video><audio src="tiny.ogg"></audio>',
         "everything": (
             '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
@@ -183,6 +226,12 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     subprocess.run([*source, "-vn", "-c:a", "copy", str(root / "tiny.m4a")], check=True)
     subprocess.run([*source, "-vn", "-c:a", "libvorbis", str(root / "tiny.ogg")], check=True)
     subprocess.run([*source, "-vn", str(root / "tiny.wav")], check=True)
+    # Real audio under the extensions that say audio (spec 27 must not flag them).
+    for ext, codec in (("mp3", "libmp3lame"), ("flac", "flac"), ("opus", "libopus")):
+        subprocess.run([*source, "-vn", "-c:a", codec, str(root / f"tiny.{ext}")], check=True)
+    subprocess.run(
+        [*source, "-vn", "-c:a", "copy", "-f", "adts", str(root / "tiny.aac")], check=True
+    )
     subprocess.run(
         [*source, "-c:v", "libvpx", "-c:a", "libvorbis", str(root / "tiny.webm")], check=True
     )
@@ -353,6 +402,13 @@ class FakeSiteIE(InfoExtractor):
             return self._with_formats("a1", self._thumbnail_format(), audio)
         if page == "image-format":
             return self._with_formats("i1", image_format)
+        if page == "site-audio-label":
+            # A site extractor's audio with no codec named: 71 modules build this shape.
+            label = {"format_id": "a", "url": f"{self.media_url}/theora.ogg", "ext": "ogg"}
+            return self._with_formats("a1", {**label, "vcodec": "none"})
+        if page == "site-audio-named":
+            named = {"format_id": "a", "url": f"{self.media_url}/tiny.ogg", "ext": "ogg"}
+            return self._with_formats("a1", {**named, "vcodec": "none", "acodec": "vorbis"})
         if page == "split-streams":
             video_only = {**plain_video, "acodec": "none"}
             return self._with_formats("v1", video_only, audio)
