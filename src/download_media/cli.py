@@ -295,6 +295,8 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         warn(t("partial_result", result.saved, result.total, result.skipped, result.failed))
     for name in result.subs_not_embedded:
         warn(t("subs_not_embedded", name))
+    for name in result.untagged:
+        warn(t("untagged", name))
     if result.subs_missing:
         warn(t("subs_none", effective.sub_langs))
     ok(t("done"))

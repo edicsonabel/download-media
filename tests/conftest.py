@@ -133,6 +133,13 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         return super().send_head()
 
 
+# A text file served as a video: ffmpeg finds no stream in it.
+JUNK = "typed/video/mp4/en.vtt/junk.mp4"
+JUNK_2 = "typed/video/mp4/es.vtt/junk-2.mp4"
+# yt-dlp names a link with no extension and no media type .unknown_video.
+NO_EXT_VIDEO = "typed/application/octet-stream/tiny.mp4/stream"
+
+
 def _write_generic_pages(root: Path, base: str) -> None:
     """Pages for yt-dlp's real generic extractor, which leaves codecs unknown."""
     og_image = f'<meta property="og:image" content="{base}/tiny.jpg">'
@@ -184,6 +191,11 @@ def _write_generic_pages(root: Path, base: str) -> None:
             '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
         ),
         "no-video": '<video src="tiny.jpg"></video><audio src="a1.m4a"></audio>',
+        # ffmpeg can't write tags to an .ogx, and can't read a text body at all.
+        "ogx-and-mp4": '<video src="theora.ogx"></video><video src="tiny.mp4"></video>',
+        "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
+        "all-junk": f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>',
+        "audio-no-ext-video": f'<audio src="{NO_EXT_VIDEO}"></audio>',
     }
     for name, body in pages.items():
         (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")
@@ -263,6 +275,8 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     subprocess.run(
         [*source, "-c:v", "libvpx", "-c:a", "libvorbis", str(root / "tiny.webm")], check=True
     )
+    audio_webm = ["ffmpeg", "-v", "error", "-i", str(root / "tiny.webm"), "-vn", "-c:a", "copy"]
+    subprocess.run([*audio_webm, str(root / "audio.webm")], check=True)
     # Containers yt-dlp lists as audio, holding a video.
     subprocess.run(
         [*source, "-c:v", "libtheora", "-c:a", "libvorbis", str(root / "theora.ogg")], check=True
@@ -438,6 +452,30 @@ class FakeSiteIE(InfoExtractor):
             # A site extractor's audio with no codec named: 71 modules build this shape.
             label = {"format_id": "a", "url": f"{self.media_url}/theora.ogg", "ext": "ogg"}
             return self._with_formats("a1", {**label, "vcodec": "none"})
+        if page in ("ogx", "ogx-chapters", "ogx-subs"):
+            # A format ffmpeg can read but has no muxer for, so it can't write tags to it.
+            ogx = {"format_id": "o", "url": f"{self.media_url}/theora.ogx", "ext": "ogx"}
+            video = self._with_formats("x1", ogx)
+            if page == "ogx-chapters":
+                video["chapters"] = [{"start_time": 0, "end_time": 0.1, "title": "Start"}]
+            if page == "ogx-subs":
+                video["subtitles"] = self._subtitles("en.vtt")
+            return video
+        if page == "junk-carousel":
+            # Text bodies served as videos: every item fails its metadata step.
+            junk = [
+                f"{self.media_url}/typed/video/mp4/{name}/junk.mp4" for name in ("en.vtt", "es.vtt")
+            ]
+            entries = [
+                self._with_formats(f"j{n}", {"format_id": "j", "url": url, "ext": "mp4"})
+                for n, url in enumerate(junk, 1)
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "junk-thumb-carousel":
+            # A text body as the first item's thumbnail: -a can't embed it.
+            thumb = f"{self.media_url}/typed/image/jpeg/en.vtt/t.jpg"
+            entries = [{**self._video("t1"), "thumbnail": thumb}, self._video("t2")]
+            return self.playlist_result(entries, "post", "Post")
         if page == "site-audio-named":
             named = {"format_id": "a", "url": f"{self.media_url}/tiny.ogg", "ext": "ogg"}
             return self._with_formats("a1", {**named, "vcodec": "none", "acodec": "vorbis"})

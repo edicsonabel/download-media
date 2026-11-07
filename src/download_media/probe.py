@@ -196,14 +196,7 @@ def _audio_by_label_only(fmt: dict[str, Any]) -> bool:
     # nothing looked at the stream, and the container can hold a video.
     ext = fmt.get("ext")
     ext = ext.lower() if isinstance(ext, str) else ext  # yt-dlp keeps the URL's case.
-    # Not unknown_video (an <audio src> with no extension): its video path fails
-    # today (roadmap row 29), so the step would only turn working audio into a failure.
-    return (
-        fmt.get("vcodec") == "none"
-        and fmt.get("acodec") is None
-        and ext != "unknown_video"
-        and not _ext_says_audio(ext)
-    )
+    return fmt.get("vcodec") == "none" and fmt.get("acodec") is None and not _ext_says_audio(ext)
 
 
 def _format_kind(fmt: dict[str, Any]) -> ContentKind:

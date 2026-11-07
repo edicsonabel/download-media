@@ -7,6 +7,7 @@ what we mean to hand to it.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -201,3 +202,93 @@ def test_result_total() -> None:
     from download_media.downloader import DownloadResult
 
     assert DownloadResult(saved=1, skipped=2, failed=3).total == 6
+
+
+@pytest.mark.parametrize("audio_only", [False, True])
+def test_metadata_step_is_added_in_download_not_in_the_options(audio_only: bool) -> None:
+    # download() adds a metadata step that tells an untagged file from a broken one.
+    opts = DownloadOptions(urls=["http://x"], audio_only=audio_only)
+    keys = [pp["key"] for pp in build_ydl_opts(opts, Path("/tmp/out"))["postprocessors"]]
+    assert "FFmpegMetadata" not in keys
+
+
+def fake_ffprobe(folder: Path, script: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Put an ``ffprobe`` running ``script`` first and alone on PATH."""
+    folder.mkdir()
+    ffprobe = folder / "ffprobe"
+    ffprobe.write_text(f"#!/bin/sh\n{script}\n", encoding="utf-8")
+    ffprobe.chmod(0o755)
+    monkeypatch.setenv("PATH", str(folder))
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        ("echo video", True),
+        ("echo audio", True),
+        ("printf 'data\\nvideo\\n'", True),
+        # A file holding no audio or video doesn't count as saved.
+        ("printf 'subtitle\\ndata\\nattachment\\n'", False),
+        ("true", False),
+        # ffprobe failed: its output can't be trusted.
+        ("echo video; exit 1", False),
+    ],
+)
+def test_media_streams_by_what_ffprobe_says(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str, expected: bool
+) -> None:
+    from download_media.downloader import _has_media_streams
+
+    fake_ffprobe(tmp_path / "bin", script, monkeypatch)
+    assert _has_media_streams(str(tmp_path / "clip.ogx")) is expected
+
+
+def test_no_ffprobe_means_no_media(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from download_media.downloader import _has_media_streams
+
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    assert _has_media_streams(str(tmp_path / "clip.ogx")) is False
+
+
+def test_a_hung_ffprobe_is_given_up_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    from download_media.downloader import _has_media_streams
+
+    fake_ffprobe(tmp_path / "bin", "exec sleep 30", monkeypatch)
+    real_run = subprocess.run
+
+    def short_run(*args: Any, **kwargs: Any) -> Any:
+        assert kwargs.get("timeout"), "without a timeout, a hung ffprobe hangs the download"
+        return real_run(*args, **{**kwargs, "timeout": 0.5})
+
+    monkeypatch.setattr(subprocess, "run", short_run)
+    assert _has_media_streams(str(tmp_path / "clip.ogx")) is False
+
+
+def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(
+    tmp_path: Path, media_url: str
+) -> None:
+    # Driven directly: in a full run yt-dlp's metadata step goes first and takes the same name.
+    from urllib.request import urlopen
+
+    from yt_dlp import YoutubeDL
+
+    from download_media.downloader import _EmbedSubtitles
+
+    video, track = tmp_path / "Clip.mp4", tmp_path / "Clip.en.ttml"
+    for path, name in ((video, "tiny.mp4"), (track, "en.ttml")):
+        with urlopen(f"{media_url}/{name}") as body:
+            path.write_bytes(body.read())
+    (tmp_path / "Clip.temp.mp4").write_text("mine", encoding="utf-8")
+    info = {
+        "filepath": str(video),
+        "ext": "mp4",
+        "requested_subtitles": {"en": {"ext": "ttml", "filepath": str(track)}},
+    }
+    not_embedded: list[str] = []
+    with YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+        _EmbedSubtitles(ydl, not_embedded).run(info)
+    # ffmpeg can't read the TTML track, so it fails before opening its temp file.
+    assert not_embedded == ["Clip.mp4"]
+    assert (tmp_path / "Clip.temp.mp4").read_text(encoding="utf-8") == "mine"
