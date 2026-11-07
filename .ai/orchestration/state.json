@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T13:59:02-04:00",
+  "updated": "2026-11-07T17:05:29-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1009,6 +1009,13 @@
           "result": "done",
           "at": "2026-11-07T13:59:02-04:00",
           "note": "Round 1 closed. Mutation 5/5. A user's Clip.meta with chapters is lost either way (yt-dlp overwrites it). A pre-existing temp ffmpeg opens and fails on stays as 0 bytes; not a regression."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "blocked",
+          "at": "2026-11-07T17:05:29-04:00",
+          "note": "No report: the laptop lost power mid-review. Repo and worktree intact (git fsck clean, trees clean). QA relaunched."
         }
       ]
     }
