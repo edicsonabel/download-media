@@ -2580,7 +2580,14 @@ def test_wizard_asks_for_cookies_on_a_real_401(generic: Any) -> None:
 
 
 @pytest.mark.parametrize(
-    "status,reason", [(403, "Forbidden"), (404, "Not Found"), (429, "Too Many Requests")]
+    "status,reason",
+    [
+        (403, "Forbidden"),
+        (404, "Not Found"),
+        (410, "Gone"),
+        (429, "Too Many Requests"),
+        (503, "Service Unavailable"),
+    ],
 )
 def test_wizard_explains_a_real_http_error_without_a_prompt(
     generic: Any, status: int, reason: str
@@ -2816,7 +2823,14 @@ def test_direct_mode_keeps_quiet_when_cookies_cannot_help(run: Any, page: str) -
 
 @pytest.mark.parametrize(
     "page,hint",
-    [("status/401", True), ("status/403", False), ("status/404", False), ("status/429", False)],
+    [
+        ("status/401", True),
+        ("status/403", False),
+        ("status/404", False),
+        ("status/410", False),
+        ("status/429", False),
+        ("status/503", False),
+    ],
 )
 def test_direct_mode_hint_on_real_http_errors(generic: Any, page: str, hint: bool) -> None:
     code, output = generic(page, flags=("-y",))
@@ -2824,11 +2838,17 @@ def test_direct_mode_hint_on_real_http_errors(generic: Any, page: str, hint: boo
     assert (GIVE_UP in output) is hint
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The id of a 404 reaches is_auth_error behind 'ERROR: ', so the page's name reads as a "
-    "login error. main printed no hint on /login",
-)
+@pytest.mark.parametrize("page", ["login", "private%20clip", "tag:private"])
+def test_a_real_404_named_after_a_login_asks_for_nothing(generic: Any, page: str) -> None:
+    code, output = generic(page, flags=("-y",))
+    assert code == 1
+    assert GIVE_UP not in output
+    code, output = generic(page, *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+    assert t("probe_failed", "Unable to download webpage: HTTP Error 404: File not found") in output
+
+
 @pytest.mark.parametrize("page", ["404-login", "404-spaced"])
 def test_direct_mode_does_not_blame_a_404_on_login(run: Any, page: str) -> None:
     code, output = run("-y", f"https://fake.test/{page}")
@@ -2836,11 +2856,6 @@ def test_direct_mode_does_not_blame_a_404_on_login(run: Any, page: str) -> None:
     assert GIVE_UP not in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_SITE_PREFIX stops at a space or a colon in the id, so its words read as the site's: "
-    "a plain 404 ends in 'This content needs a login'",
-)
 @pytest.mark.parametrize("page", ["404-spaced", "404-colon"])
 def test_wizard_does_not_ask_for_cookies_on_a_404_named_after_a_login(
     wizard_on: Any, page: str

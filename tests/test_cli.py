@@ -353,11 +353,6 @@ def test_hint_stays_quiet_when_cookies_cannot_help(capsys, message: str) -> None
     assert _hint(capsys, message, []) == ""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="is_auth_error strips the [site] id: prefix only at the very start, and a DownloadError "
-    "reads 'ERROR: [site] id: ...', or joins one error per line under -p, so the id gets matched",
-)
 @pytest.mark.parametrize(
     "message",
     [

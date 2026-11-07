@@ -132,16 +132,27 @@ _AUTH_ERROR_HINTS = (
     "premium",
     "http error 401",
 )
-_SITE_PREFIX = re.compile(r"^\[[^\]]+\] (?:[^\s:]+: )?")
+# The generic extractor's id is the URL's last segment, unquoted, so it can hold spaces. At
+# the floor it has no id at all, and "Unable to download webpage: " is the site's sentence.
+_SITE_PREFIX = re.compile(r"^\[[^\]]+\] (?:\S+: |.*?: (?=Unable to |Failed to ))?")
+# These speak of the address, so anything else in them came from it, even a flag-like id.
+_NEVER_A_LOGIN = re.compile(r"HTTP Error (?:404|410|5\d\d)\b|is not a valid URL", re.IGNORECASE)
+_ADDRESS = re.compile(r"\S+://\S+|[\w-]+(?:\.[\w-]+)+\S*")
 _NAMES_A_FLAG = re.compile(r"(?:^|[\s`])--?[a-z]")
 _REASON_TAILS = ("; please report", ", please report", " (caused by")
 _REASON_LENGTH = 200
 
 
+def _site_words(message: str) -> str:
+    """What the site said: an id or an address can say "private" and mean nothing by it."""
+    lines = _SITE_PREFIX.sub("", message).splitlines()
+    kept = [line for line in lines if not _NEVER_A_LOGIN.search(line)]
+    return _ADDRESS.sub("", "\n".join(kept)).lower()
+
+
 def is_auth_error(message: str) -> bool:
     """Whether browser cookies are the user's next move after this yt-dlp error."""
-    # An id or a URL can say "private" or "login" and mean nothing by it.
-    words = re.sub(r"https?://\S+", "", _SITE_PREFIX.sub("", message)).lower()
+    words = _site_words(message)
     if any(hint in words for hint in _LOGIN_HINTS):
         return True
     if any(hint in words for hint in _NOT_AUTH_ERRORS):

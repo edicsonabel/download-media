@@ -528,19 +528,86 @@ def test_both_languages_frame_the_reason_as_it_comes(language: str, key: str) ->
     ],
     ids=["space", "login", "colon", "not-a-url", "host"],
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason="_SITE_PREFIX stops at a space or colon in the id, and only http(s) URLs are dropped, "
-    "so words the site never said ask for cookies",
-)
 def test_words_from_the_id_or_the_address_ask_for_nothing(message: str) -> None:
     assert is_auth_error(message) is False
 
 
-@pytest.mark.xfail(strict=True, reason="_SITE_PREFIX stops at a space in the id, as above")
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[generic] login: Unable to download webpage: HTTP Error 410: Gone",
+        "[generic] login: Unable to download webpage: HTTP Error 500: Internal Server Error",
+        "[generic] private: Unable to download webpage: HTTP Error 503: Service Unavailable",
+        "[generic] --cookies: Unable to download webpage: HTTP Error 404: Not Found",
+        "[generic] my clip: Failed to download MPD manifest: HTTP Error 404: Not Found",
+        "[generic] private clip: Failed to parse JSON",
+        "[generic] 'private video' is not a valid URL",
+        "[generic] '--cookies' is not a valid URL",
+        "[generic] 'private-video' is not a valid URL. Set --default-search \"ytsearch\" (or run  "
+        "yt-dlp \"ytsearch:private-video\" ) to search YouTube",
+        "Unsupported URL: ftp://example.com/private/page",
+        "[generic] x: Unable to download webpage: "
+        "HTTPSConnectionPool(host='login.example.com', port=443): Read timed out",
+        "[generic] x: Failed to perform, curl: (6) Could not resolve host: private.example.com",
+    ],
+    ids=[
+        "410",
+        "500",
+        "503",
+        "flag-in-the-id",
+        "manifest",
+        "failed-to",
+        "not-a-url-with-a-space",
+        "flag-as-a-url",
+        "not-a-url-at-the-floor",
+        "other-scheme",
+        "quoted-host",
+        "bare-host",
+    ],
+)
+def test_only_the_sites_own_words_can_ask_for_cookies(message: str) -> None:
+    assert is_auth_error(message) is False
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[generic] login page: Unable to download webpage: HTTP Error 401: Unauthorized",
+        "[generic] tag:x: Unable to download webpage: HTTP Error 401: Unauthorized",
+        "[generic] Unable to download webpage: HTTP Error 401: Unauthorized",
+        f"[Instagram] my clip: {ANONYMOUS_LIMIT}. {HINT}",
+        f"[site] x: HTTP Error 403: Forbidden. {HINT}",
+        "[site] tag:x: Private video",
+        "[site] a: HTTP Error 404: Not Found\n[site] b: Login required",
+    ],
+    ids=["id-with-space", "id-with-colon", "no-id", "d4", "hint-on-403", "private", "one-of-two"],
+)
+def test_what_the_site_said_still_asks_past_the_id(message: str) -> None:
+    assert is_auth_error(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[generic] tag:x: Unable to download webpage: HTTP Error 404: Not Found",
+        "[generic] x: Unable to download webpage: HTTP Error 404: Not Found",
+        "[generic] Unable to download webpage: HTTP Error 404: Not Found",
+    ],
+    ids=["colon", "plain", "floor-without-an-id"],
+)
+def test_short_reason_drops_an_id_and_nothing_else(message: str) -> None:
+    assert _short_reason(message) == "Unable to download webpage: HTTP Error 404: Not Found"
+
+
 def test_short_reason_drops_an_id_with_a_space() -> None:
     message = "[generic] my clip: Unable to download webpage: HTTP Error 404: Not Found"
     assert _short_reason(message) == "Unable to download webpage: HTTP Error 404: Not Found"
+
+
+def test_short_reason_keeps_a_message_with_a_colon_and_no_id() -> None:
+    assert _short_reason("[site] Video gone: removed by the owner") == (
+        "Video gone: removed by the owner"
+    )
 
 
 def test_short_reason_keeps_something_when_a_flag_opens_the_message() -> None:
@@ -800,10 +867,6 @@ def test_only_the_first_line_of_an_error_is_the_reason(fake_site: Any) -> None:
     assert probe("https://fake.test/two-line-error").error_message == "This post is gone"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The bare text of a mistyped URL is matched as if the site had said it, as above",
-)
 def test_a_mistyped_url_with_a_login_word_asks_for_nothing() -> None:
     result = probe("private-video")  # The generic extractor refuses it before any request.
     assert result.failed is True
