@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T12:52:33-04:00",
+  "updated": "2026-11-07T13:18:19-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,9 +940,9 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
       "worktree": ".worktrees/fix-false-failure",
@@ -950,11 +950,15 @@
         "037a6f6",
         "24f2bd1",
         "53db2ca",
-        "35e5cd8"
+        "35e5cd8",
+        "3a0c5d7"
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "medium _TagSource.run deletes <name>.meta and <name>.temp.<ext> even when yt-dlp never wrote them; a user's own files go",
+          "low _has_media_streams passes a path starting with - to ffprobe as an option; same in _subtitle_streams"
+        ]
       },
       "history": [
         {
@@ -984,6 +988,13 @@
           "result": "done",
           "at": "2026-11-07T12:52:33-04:00",
           "note": "Gate exit 0, 1579 passed, 3 xfailed. Floor yt-dlp passes 126 targeted tests. Note: _TagSource deletes <name>.meta next to an untaggable file even without chapters."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-07T13:18:19-04:00",
+          "note": "Round 1. 1598 passed, 6 xfailed (3 new strict). Mutation 16/16. Orchestrator direction: also guard _EmbedSubtitles' temp cleanup (spec 21), same data-safety class, since it's small."
         }
       ]
     }
