@@ -4631,13 +4631,15 @@ def test_wizard_carries_sub_langs_alone_and_prints_them(run: Any, out: Path, ans
         (
             "es",
             "No se pudo guardar ningún subtítulo en es,en; el contenido se guardó sin ellos.",
-            "Clip.mp4: no se pudieron incrustar todos los subtítulos; "
+            "Clip.mp4: uno o más subtítulos no se pudieron incrustar; "
             "todos se conservan como archivos aparte.",
         ),
         (
             "en",
             "No subtitles in es,en could be saved; the media was saved without them.",
-            "Clip.mp4: not every subtitle could be embedded; they are all kept as separate files.",
+            # The page's only track is TTML: none was embedded, and the message must hold.
+            "Clip.mp4: one or more subtitles couldn't be embedded; "
+            "all of them are kept as separate files.",
         ),
     ],
 )

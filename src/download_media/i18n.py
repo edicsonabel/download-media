@@ -64,7 +64,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "partial_result": "{} de {} items descargados ({} sin medio descargable, {} con error).",
         "subs_none": "No se pudo guardar ningún subtítulo en {}; el contenido se guardó sin ellos.",
         "subs_not_embedded": (
-            "{}: no se pudieron incrustar todos los subtítulos; todos se conservan como archivos aparte."
+            "{}: uno o más subtítulos no se pudieron incrustar; todos se conservan como archivos aparte."
         ),
         "equiv_cmd": "Comando equivalente para repetir esta descarga:",
         "yes_chars": "ys",
@@ -148,7 +148,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "partial_result": "{} of {} items downloaded ({} without downloadable media, {} failed).",
         "subs_none": "No subtitles in {} could be saved; the media was saved without them.",
         "subs_not_embedded": (
-            "{}: not every subtitle could be embedded; they are all kept as separate files."
+            "{}: one or more subtitles couldn't be embedded; all of them are kept as separate files."
         ),
         "equiv_cmd": "Equivalent command to repeat this download:",
         "yes_chars": "y",
