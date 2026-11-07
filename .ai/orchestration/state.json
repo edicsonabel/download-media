@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T00:22:50-04:00",
+  "updated": "2026-11-07T00:50:18-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -369,12 +369,14 @@
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "65fbbcb"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -386,6 +388,13 @@
           "result": "approved",
           "at": "2026-11-07T00:22:50-04:00",
           "note": "Human asked to start /fix probe-auth."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T00:50:18-04:00",
+          "note": "Reproduced. ignore_no_formats_error can't be used: it hides age gates, private and geo errors. Spec needs decisions D1-D5. Live check needs DM_LIVE_IG_GATED, DM_LIVE_AGE_GATED, DM_LIVE_IG_IMAGE from the human. Planner follow-ups: CookieLoadError traceback with a browser not installed; b, Enter, b raises _Back at the up-front prompt; unrecoverable failures still walk the manual flow; summary omits early cookies; keyring hint after a missing browser."
         }
       ]
     }
