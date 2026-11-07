@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T03:36:49-04:00",
+  "updated": "2026-11-07T03:43:58-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -368,9 +368,9 @@
     "fix/probe-auth": {
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
       "worktree": ".worktrees/fix-probe-auth",
@@ -385,7 +385,8 @@
         "581500a",
         "4120f18",
         "ffd96a1",
-        "c505a19"
+        "c505a19",
+        "e69dda4"
       ],
       "review": {
         "approved": false,
@@ -442,6 +443,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T03:36:49-04:00",
           "note": "Round 2. Round 1 findings closed. Status rule kept: no true positive lost; a generic site hiding private content behind a 404 keeps the late cookies step. One low finding with a measured one-line fix. 1148 passed, 10 xfailed. Mutation 28/30, 2 equivalent."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T03:43:58-04:00",
+          "note": "Round 2 finding fixed with the measured regex. 1156 passed, 2 xfailed; floor passes in es and en."
         }
       ]
     }
