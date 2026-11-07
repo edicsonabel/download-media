@@ -1,8 +1,8 @@
-"""Build the direct-mode command equivalent to a wizard run.
+"""Build the direct-mode command equivalent to a finished run.
 
-The user can copy-paste this command to repeat the download without going
-through the wizard again. Flags that match defaults are omitted to keep the
-output short and readable.
+The user can copy-paste this command to repeat the download without the wizard
+or any prompt, so it always carries ``-y``. Flags that match defaults are
+omitted to keep the output short and readable.
 """
 
 from __future__ import annotations
@@ -21,8 +21,14 @@ from .config import (
 from .selection import is_playlist_url
 
 
+def _free_text(flag: str, value: str) -> list[str]:
+    quoted = shlex.quote(value)
+    # As its own token, argparse can take a value starting with - for a flag.
+    return [f"{flag}={quoted}"] if value.startswith("-") else [flag, quoted]
+
+
 def build(opts: DownloadOptions) -> str:
-    parts: list[str] = ["download-media"]
+    parts: list[str] = ["download-media", "-y"]
 
     if opts.audio_only:
         parts.append("-a")
@@ -43,16 +49,18 @@ def build(opts: DownloadOptions) -> str:
         parts.extend(["--cookies", opts.cookies_browser])
 
     if opts.subs:
+        parts.append("-s")  # --sub-langs alone doesn't enable subtitles.
         if opts.sub_langs != DEFAULT_SUB_LANGS:
-            parts.extend(["--sub-langs", opts.sub_langs])
-        else:
-            parts.append("-s")
+            parts.extend(_free_text("--sub-langs", opts.sub_langs))
 
     if opts.playlist_mode == "yes":
-        parts.append("-p")
+        if opts.playlist_items:
+            parts.extend(_free_text("--playlist-items", opts.playlist_items))
+        else:
+            parts.append("-p")
     elif opts.playlist_mode == "no" and any(is_playlist_url(u) for u in opts.urls):
-        # Only URLs that look like playlists/carousels trigger the "single or
-        # all?" question in direct mode; anywhere else -P is just noise.
+        # Records the decision on URLs that look like playlists/carousels;
+        # anywhere else -P is just noise.
         parts.append("-P")
 
     for url in opts.urls:

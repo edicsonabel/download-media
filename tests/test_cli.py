@@ -23,6 +23,32 @@ def test_minimal_args_produce_defaults() -> None:
     assert opts.playlist_mode == "auto"
 
 
+def test_playlist_items_implies_playlist_mode() -> None:
+    opts = parse(["--playlist-items", "2,4", "http://x"])
+    assert opts.playlist_mode == "yes"
+    assert opts.playlist_items == "2,4"
+
+
+def test_no_playlist_items_by_default() -> None:
+    assert parse(["-p", "http://x"]).playlist_items is None
+
+
+@pytest.mark.parametrize("argv", [["--playlist-items", "2"], ["--playlist-items=2"]])
+def test_playlist_items_is_an_intent_flag(argv: list[str]) -> None:
+    from download_media.cli import should_run_wizard
+
+    full = [*argv, "http://x"]
+    assert should_run_wizard(build_parser().parse_args(full), full) is False
+
+
+@pytest.mark.parametrize("flag", ["-p", "-P"])
+def test_playlist_items_excludes_the_other_playlist_flags(flag: str, capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        parse([flag, "--playlist-items", "2", "http://x"])
+    assert exc.value.code == 2
+    assert "--playlist-items" in capsys.readouterr().err
+
+
 def test_audio_flag_and_format() -> None:
     opts = parse(["-a", "-f", "opus", "http://x"])
     assert opts.audio_only is True
@@ -121,31 +147,78 @@ def test_cookie_fallback_reports_cookies_kept_when_they_work(monkeypatch) -> Non
     assert calls == ["brave"]
 
 
-def _run_main(monkeypatch, capsys, argv: list[str], results: list[tuple[bool, bool]]) -> str:
+def _run_main(monkeypatch, capsys, argv: list[str], results: list) -> str:
     from download_media import cli
 
-    outcomes = iter(results)
+    outcomes = iter(cli._Outcome(*result) for result in results)
     monkeypatch.setattr(cli, "_download_one", lambda url, opts: next(outcomes))
     cli.main(argv)
-    return capsys.readouterr().out.strip().splitlines()[-1]
+    return capsys.readouterr().out
 
 
 def test_equivalent_drops_cookies_when_every_url_needed_the_retry(monkeypatch, capsys) -> None:
-    line = _run_main(
-        monkeypatch, capsys, ["-y", "--cookies", "brave", "a", "b"], [(True, True)] * 2
+    output = _run_main(
+        monkeypatch, capsys, ["-y", "--cookies", "brave", "a", "b"], [(True, True, "no")] * 2
     )
-    assert "--cookies" not in line
+    assert "--cookies" not in output
 
 
 def test_equivalent_keeps_cookies_when_some_url_used_them(monkeypatch, capsys) -> None:
-    results = [(True, True), (True, False)]
-    line = _run_main(monkeypatch, capsys, ["-y", "--cookies", "brave", "a", "b"], results)
-    assert "--cookies brave" in line
+    results = [(True, True, "no"), (True, False, "no")]
+    output = _run_main(monkeypatch, capsys, ["-y", "--cookies", "brave", "a", "b"], results)
+    assert "--cookies brave" in output
 
 
 def test_equivalent_keeps_cookies_when_a_download_failed(monkeypatch, capsys) -> None:
-    line = _run_main(monkeypatch, capsys, ["-y", "--cookies", "brave", "a"], [(False, False)])
-    assert "--cookies brave" in line
+    output = _run_main(
+        monkeypatch, capsys, ["-y", "--cookies", "brave", "a"], [(False, False, "no")]
+    )
+    assert "--cookies brave" in output
+
+
+def test_equivalent_cookie_rule_ignores_urls_never_attempted(monkeypatch, capsys) -> None:
+    results = [(False, False, None), (True, True, "no")]
+    output = _run_main(monkeypatch, capsys, ["-y", "--cookies", "brave", "a", "b"], results)
+    assert "--cookies" not in output
+    assert output.strip().splitlines()[-1].strip() == "download-media -y b"
+
+
+def test_equivalent_is_silent_when_nothing_was_attempted(monkeypatch, capsys) -> None:
+    from download_media.i18n import t
+
+    output = _run_main(monkeypatch, capsys, ["-y", "a", "b"], [(False, False, None)] * 2)
+    assert t("equiv_cmd") not in output
+
+
+def test_equivalent_groups_urls_by_mode_in_first_seen_order(monkeypatch, capsys) -> None:
+    from download_media.i18n import t
+
+    results = [(True, False, "yes"), (True, False, "no"), (True, False, "yes")]
+    output = _run_main(monkeypatch, capsys, ["-y", "a", "b", "c"], results)
+    assert output.count(t("equiv_cmd")) == 1
+    assert [line.strip() for line in output.strip().splitlines()[-2:]] == [
+        "download-media -y -p a c",
+        "download-media -y b",
+    ]
+
+
+def test_playlist_items_excludes_both_playlist_flags(capsys) -> None:
+    import pytest
+
+    for flag in ("-p", "-P"):
+        with pytest.raises(SystemExit) as exc:
+            parse([flag, "--playlist-items", "2", "http://x"])
+        assert exc.value.code == 2
+        assert "--playlist-items" in capsys.readouterr().err
+
+
+def test_playlist_items_equals_form_is_an_intent_flag() -> None:
+    from download_media import cli
+
+    argv = ["--playlist-items=2", "http://x"]
+    assert cli.should_run_wizard(cli.build_parser().parse_args(argv), argv) is False
+    assert parse(argv).playlist_items == "2"
+    assert parse(argv).playlist_mode == "yes"
 
 
 def test_cookies_accepts_keyring_spec() -> None:
@@ -200,7 +273,8 @@ def test_cancelling_playlist_question_stops_the_url(answers, capsys) -> None:
     from download_media import cli
 
     answers(EOFError)
-    assert cli._download_one("https://site.test/playlist", parse(["-a", "x"])) == (False, False)
+    outcome = cli._download_one("https://site.test/playlist", parse(["-a", "x"]))
+    assert outcome == cli._Outcome(ok=False, cookies_dropped=False, mode=None)
 
 
 def test_high_quality_mp4_warns_about_h264_cap(monkeypatch, capsys, tmp_path) -> None:
@@ -210,7 +284,7 @@ def test_high_quality_mp4_warns_about_h264_cap(monkeypatch, capsys, tmp_path) ->
 
     monkeypatch.setattr(cli, "download", lambda url, opts: DownloadResult(saved=1))
     opts = parse(["-y", "-q", "2160", "-o", str(tmp_path), "http://x"])
-    assert cli._download_one("http://x", opts) == (True, False)
+    assert cli._download_one("http://x", opts) == cli._Outcome(True, False, "no")
     assert t("mp4_h264_cap", "2160") in capsys.readouterr().out
 
 
@@ -267,7 +341,8 @@ def test_main_without_url_uses_clipboard(monkeypatch, capsys) -> None:
 
     urls: list[str] = []
     monkeypatch.setattr(cli, "read_clipboard", lambda: "http://clip")
-    monkeypatch.setattr(cli, "_download_one", lambda url, opts: (urls.append(url), (True, False))[1])
+    outcome = cli._Outcome(True, False, "no")
+    monkeypatch.setattr(cli, "_download_one", lambda url, opts: (urls.append(url), outcome)[1])
     assert cli.main(["-y"]) == 0
     assert urls == ["http://clip"]
 
