@@ -526,6 +526,11 @@ class FakeSiteIE(InfoExtractor):
             yield video
             self.raise_login_required()
 
+        def two_lazily() -> Iterator[dict[str, Any]]:
+            # Most paged extractors: yt-dlp only learns the size by reading to the end.
+            yield video
+            yield self._video("v3")
+
         if page in missing:
             raise ExtractorError(
                 "Unable to download webpage: HTTP Error 404: Not Found",
@@ -562,6 +567,8 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result(fails_midway(), "post", "Post")
         if page == "nested-gated":
             return self.playlist_result([self.url_result(follow("partial-gated"))], "post", "Post")
+        if page == "lazy-carousel":
+            return self.playlist_result(two_lazily(), "post", "Post")
         if page == "partial-drm":
             return self.playlist_result([video, broken], "post", "Post")
         if page == "partial-no-url":
