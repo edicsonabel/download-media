@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T13:18:19-04:00",
+  "updated": "2026-11-07T13:46:20-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,9 +940,9 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
       "worktree": ".worktrees/fix-false-failure",
@@ -951,7 +951,10 @@
         "24f2bd1",
         "53db2ca",
         "35e5cd8",
-        "3a0c5d7"
+        "3a0c5d7",
+        "c58f7ef",
+        "0310713",
+        "f8ef735"
       ],
       "review": {
         "approved": false,
@@ -995,6 +998,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T13:18:19-04:00",
           "note": "Round 1. 1598 passed, 6 xfailed (3 new strict). Mutation 16/16. Orchestrator direction: also guard _EmbedSubtitles' temp cleanup (spec 21), same data-safety class, since it's small."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T13:46:20-04:00",
+          "note": "Round 1 fixed: cleanup only removes files the step created (.meta only with chapters); _EmbedSubtitles same rule; ffprobe gets absolute paths. 1603 passed, 3 xfailed. Planner: _source_url has the same relative '-' path gap. Developer used a named stash push and pop; stash list is empty."
         }
       ]
     }
