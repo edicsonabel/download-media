@@ -1,6 +1,6 @@
 # 19 — Stop the wizard dropping every URL after the first
 
-Status: approved
+Status: done
 Item: `fix/wizard-multi-url`
 
 ## Problem
@@ -181,22 +181,22 @@ The refusal warnings themselves keep their text, "Cancelling." included. In a mu
 
 Every behaviour-change criterion fails on `main` (the scratch tests did, measured), and the developer proves it by reverting the fix. Tests that can reach a default folder use the `home` fixture or answer the folder prompt.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] e2e: `cli.main([video, carousel])` with 6 and then 7 replies, the folder answered: exactly 13 prompts, `Clip.mp4` and both carousel items on disk, history rows `video` then `carousel`, exit 0, `commands(output)` equals the two commands in Cases, `equiv_cmd` printed once, `wizard_title (2/2)` in the output
-- [ ] e2e, generic loopback pages: an audio page and `tiny.mp4` under `home`: 10 prompts, `Music/audio (1).mp3`, `Videos/tiny.mp4`, history kinds `audio` then `video`, commands `-y -a <audio>` and `-y <video>`
-- [ ] e2e: `video needs-cookies`, picking brave at the second walk's cookie prompt: 12 prompts, two files, the second command carries `--cookies brave` and the first doesn't
-- [ ] e2e: `video ig-image`: 7 prompts, `Clip.mp4` only, `image_only_skipped` and `wizard_skipped` for the image in the output, exit 0, one command listing the video only
-- [ ] e2e: `ig-image only-images`: 2 prompts, both refusal warnings, `Cancelled.`, exit 0, no command
-- [ ] e2e: `c` at the second walk's picker: 8 prompts, nothing on disk, no history row, `Cancelled.`, exit 0, no command
-- [ ] e2e: no URL, `"<video> <carousel>"` typed: 12 prompts in all, all three files saved
-- [ ] e2e: `video private` with the preview accepted: 13 prompts, exit 1, `Clip.mp4` only, one history row, `Download failed` for `private`, one command with both URLs
-- [ ] e2e: `-i -o <dir> video carousel`, all Enter: all three files in `<dir>`
-- [ ] **[pin]** e2e: `-l video video-b`: 6 prompts, exit 0, `video-b` never extracted. Passes on `main` too: row 22 changes it
-- [ ] unit (`test_wizard_flow.py`, scripted probes): `run_all` with two URLs returns two pairs; a refusal gives `None` options and the walk goes on; a cancel returns `None`; a typed `"a  b"` gives two URLs, and the second isn't prompted
-- [ ] unit (`test_cli.py`): `_print_equivalent` gives one command for two URLs with equal options and mode, and two for different options; the cookie-drop rule is applied per browser
-- [ ] `test_main_cancelled_wizard_exits_clean` patches the new entry point, with its assertions unchanged. No other existing test changes
-- [ ] `wizard_skipped` exists in both the `es` and `en` blocks
-- [ ] `AGENTS.md` and `README.md` say what Docs says
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] e2e: `cli.main([video, carousel])` with 6 and then 7 replies, the folder answered: exactly 13 prompts, `Clip.mp4` and both carousel items on disk, history rows `video` then `carousel`, exit 0, `commands(output)` equals the two commands in Cases, `equiv_cmd` printed once, `wizard_title (2/2)` in the output
+- [x] e2e, generic loopback pages: an audio page and `tiny.mp4` under `home`: 10 prompts, `Music/audio (1).mp3`, `Videos/tiny.mp4`, history kinds `audio` then `video`, commands `-y -a <audio>` and `-y <video>`
+- [x] e2e: `video needs-cookies`, picking brave at the second walk's cookie prompt: 12 prompts, two files, the second command carries `--cookies brave` and the first doesn't
+- [x] e2e: `video ig-image`: 7 prompts, `Clip.mp4` only, `image_only_skipped` and `wizard_skipped` for the image in the output, exit 0, one command listing the video only
+- [x] e2e: `ig-image only-images`: 2 prompts, both refusal warnings, `Cancelled.`, exit 0, no command
+- [x] e2e: `c` at the second walk's picker: 8 prompts, nothing on disk, no history row, `Cancelled.`, exit 0, no command
+- [x] e2e: no URL, `"<video> <carousel>"` typed: 12 prompts in all, all three files saved
+- [x] e2e: `video private` with the preview accepted: 13 prompts, exit 1, `Clip.mp4` only, one history row, `Download failed` for `private`, one command with both URLs
+- [x] e2e: `-i -o <dir> video carousel`, all Enter: all three files in `<dir>`
+- [x] **[pin]** e2e: `-l video video-b`: 6 prompts, exit 0, `video-b` never extracted. Passes on `main` too: row 22 changes it
+- [x] unit (`test_wizard_flow.py`, scripted probes): `run_all` with two URLs returns two pairs; a refusal gives `None` options and the walk goes on; a cancel returns `None`; a typed `"a  b"` gives two URLs, and the second isn't prompted
+- [x] unit (`test_cli.py`): `_print_equivalent` gives one command for two URLs with equal options and mode, and two for different options; the cookie-drop rule is applied per browser
+- [x] `test_main_cancelled_wizard_exits_clean` patches the new entry point, with its assertions unchanged. No other existing test changes
+- [x] `wizard_skipped` exists in both the `es` and `en` blocks
+- [x] `AGENTS.md` and `README.md` say what Docs says
 
 ## Live check
 
@@ -205,6 +205,27 @@ Not needed. No extractor, format or network behaviour changes: each URL goes thr
 ## SemVer
 
 `fix(wizard)`. Nothing is breaking: no flag, default or on-disk path changes, and a single URL behaves as before. Under D5's recommended option it adds one message, which `AGENTS.md` counts as a minor. 0.3.0 is already a minor (`PLAN.md`, "Next release"), so the next version doesn't change. Without the message it's a patch.
+
+## Changes after approval
+
+Each change has its own test, and the gate covers them.
+
+**`isolated_env` moves `HOME` and clears the exported user dirs** (`c30cd3b`, `58d8170`). Added to scope on approval, after a planning scratch run wrote into the real `~/Videos`. Outside the live tests, the autouse fixture now sets `HOME` to `tmp_path / "isolated-home"`, so `xdg_dir()`'s fallback lands under `tmp_path`. It also deletes any exported `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR`: KDE exports them, and some `xdg-user-dir` builds read them before `HOME`. Live tests keep the real home. Tests: `tests/test_isolation.py`, `test_default_folders_resolve_under_tmp_path`, `test_exported_user_dirs_cannot_send_tests_to_the_real_folders`, `test_live_tests_keep_the_real_home`.
+
+**Files outside the table.** `tests/conftest.py` (the fixture above) and the new `tests/test_isolation.py`. Both are test-only. Nothing else outside `.ai/` changed beyond the Files table.
+
+**Extra URLs typed after `b` at the first cookies prompt are queued** (`41df9b2`). The Design covered a split at the first URL prompt only. On a site that always needs cookies, `b` at that prompt goes back to the URL prompt, and the answer typed there can hold several URLs too. `run_all` keeps the first for the current walk and queues the rest, not asked again, in order. Test: `test_run_all_splits_urls_typed_after_back_from_the_first_cookies_prompt`.
+
+## Validation
+
+On `main` at `8c037e3` (merge `59096fb`), yt-dlp 2026.10.26, Python 3.14.9. GitHub CI hasn't run on this code: nothing has been pushed.
+
+- **Gate:** `timeout 400 scripts/pre-release.sh --no-live`, exit 0. Lint and types clean. 1225 passed, 9 deselected, 2 xfailed in each of its two runs, coverage 98.43%. The two xfails are known and not from this item: the `opus` rerun, and spec 17's D4, the relative `og:image` traceback.
+- **Criteria,** each by name, all passing: `test_wizard_walks_every_url_then_downloads_them_all`; `test_wizard_gives_each_url_the_steps_of_its_own_kind`; `test_wizard_asks_for_cookies_on_the_second_url_s_login_wall`; `test_wizard_skips_a_refused_url_and_says_so_at_the_end`; `test_wizard_with_every_url_refused_is_cancelled`; `test_cancel_in_the_second_walk_cancels_the_whole_run`; `test_urls_typed_together_are_walked_one_by_one`; `test_wizard_failure_on_one_url_keeps_the_other`; `test_interactive_flags_preset_every_walk`; the pin, `test_list_formats_still_walks_and_lists_only_the_first_url`. Unit: `test_run_all_walks_each_url`, `test_run_all_records_a_refusal_and_goes_on`, `test_run_all_cancel_in_a_later_walk_cancels_everything`, `test_run_all_splits_urls_typed_together`; `test_equivalent_shares_one_command_between_equal_wizard_walks`, `test_equivalent_gives_different_wizard_walks_a_command_each`, `test_equivalent_cookie_drop_is_decided_per_browser`. `test_main_cancelled_wizard_exits_clean` patches `cli.wizard.run_all`, the one line removed from an existing test; no other existing test lost a line. `wizard_skipped` is in both blocks (`i18n.py:91`, `:168`). `AGENTS.md` and `README.md` say what Docs says.
+- **Reverting the fix:** not repeated here. QA reported 65 failures with it reverted, and the test-engineer's mutation run was 20/21, the survivor equivalent.
+- **Reproduction:** the Problem section's command, with the real console script against a loopback `http.server` serving two copies of a tiny mp4, under `env -i` with `HOME` and `XDG_*` in a temp folder, `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR` unset, no clipboard. Two URLs, 12 replies: `Download wizard (1/2)`, then `(2/2)`, two downloads, two `Done.`, exit 0, `a.mp4` and `b.mp4` in the folder, history rows `a.mp4` then `b.mp4`, one command with both URLs. `-i -o <folder> a b`, all Enter: the same. Both typed at the URL prompt: the second walk starts after its probe, the same files, history and command, exit 0. Nothing landed in the temp home's `Videos`. The full matrix was QA's and isn't repeated.
+- **Scope:** outside `.ai/`, the diff `2cc8157..59096fb` touches the eight files in the Files table plus `tests/conftest.py` and `tests/test_isolation.py`. No change to `pyproject.toml`, `PKGBUILD` or the version.
+- **Open for the planner:** QA's three minor findings. Walks split from one typed answer never show their URL, and the first walk has no counter (seen in the reproduction: `Download wizard`, then `(2/2)`). Nothing marks the end of the walks before the downloads start. `[no soportado]` is hardcoded Spanish in `wizard.py`, which predates this item.
 
 ## Open decisions
 
