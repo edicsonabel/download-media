@@ -60,6 +60,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
             "{}: guardado, pero ffmpeg no pudo escribir sus metadatos, así que al repetir la "
             "descarga no se reconocerá y puede guardarse otra copia."
         ),
+        "no_cover": "{}: guardado sin imagen de portada.",
         "failed": "Falló la descarga: {}",
         "cookies_retry": "Falló con las cookies de {}. Reintentando sin cookies...",
         "cookies_bad_spec": "valor inválido {!r}: usa NAVEGADOR[+KEYRING] (navegadores: {}; keyrings: {})",
@@ -148,6 +149,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
             "{}: saved, but ffmpeg couldn't write its metadata, so a rerun won't recognize it "
             "and may save another copy."
         ),
+        "no_cover": "{}: saved without a cover image.",
         "failed": "Download failed: {}",
         "cookies_retry": "Failed with {} cookies. Retrying without cookies...",
         "cookies_bad_spec": "invalid value {!r}: use BROWSER[+KEYRING] (browsers: {}; keyrings: {})",

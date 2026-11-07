@@ -7,6 +7,7 @@ Mocks can't catch what these tests are for: how yt-dlp reacts to carousels,
 
 from __future__ import annotations
 
+import base64
 import builtins
 import functools
 import http.server
@@ -126,6 +127,19 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         return super().guess_type(path)
 
     def send_head(self) -> Any:
+        if self.path.startswith("/loop/"):  # Redirects to itself.
+            self.send_response(302)
+            self.send_header("Location", self.path)
+            self.end_headers()
+            return None
+        if self.path.startswith("/short/"):  # A JPEG cut off long before its stated length.
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", "100000")
+            self.end_headers()
+            self.wfile.write(b"\xff\xd8\xff\xe0" + b"\0" * 60)
+            self.close_connection = True
+            return None
         status = re.fullmatch(r"/status/(\d{3})(?:/.*)?", self.path)  # A sub-path names the id.
         if status:
             self.send_error(int(status[1]))
@@ -138,11 +152,23 @@ JUNK = "typed/video/mp4/en.vtt/junk.mp4"
 JUNK_2 = "typed/video/mp4/es.vtt/junk-2.mp4"
 # yt-dlp names a link with no extension and no media type .unknown_video.
 NO_EXT_VIDEO = "typed/application/octet-stream/tiny.mp4/stream"
+# Thumbnails ffmpeg can't embed: a text body, and a WebP signature with nothing after it,
+# which yt-dlp renames to .webp and then fails to convert.
+JUNK_IMAGE = "typed/image/jpeg/en.vtt/t.jpg"
+WEBP_IMAGE = "typed/image/jpeg/webp-signature.bin/t.jpg"
+# A real JPEG under link names yt-dlp turns into the thumbnail's extension.
+JPEG_AS = "typed/image/jpeg/tiny.jpg/cover.{}"
 
 
 def _write_generic_pages(root: Path, base: str) -> None:
     """Pages for yt-dlp's real generic extractor, which leaves codecs unknown."""
     og_image = f'<meta property="og:image" content="{base}/tiny.jpg">'
+    relative_og = '<meta property="og:image" content="tiny.jpg">'
+
+    def og(path: str) -> str:
+        return f'<meta property="og:image" content="{base}/{path}">'
+
+    two_audios = '<audio src="a1.m4a"></audio><audio src="a2.m4a"></audio>'
     videos = "".join(f'<video src="v{i}.mp4"></video>' for i in range(1, 5))
     codecs = """<source src="tiny.mp4" type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"'>"""
     pages = {
@@ -165,7 +191,31 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "jpg-alone": '<video src="tiny.jpg"></video>',
         "audio-ogg": '<audio src="tiny.ogg"></audio>',
         "audio-wav": '<audio src="tiny.wav"></audio>',
-        "audio-relative-og": '<audio src="tiny.m4a"></audio><meta property="og:image" content="tiny.jpg">',
+        "audio-relative-og": f'<audio src="tiny.m4a"></audio>{relative_og}',
+        "audio-gone": f'<audio src="missing.m4a"></audio>{og_image}',
+        "video-junk-og": f'<video src="{JUNK}"></video>{og_image}',
+        "audio-junk-thumb": f'<audio src="tiny.m4a"></audio>{og(JUNK_IMAGE)}',
+        "audio-gif-thumb": f'<audio src="tiny.m4a"></audio>{og("tiny.gif")}',
+        "audio-webp-thumb": f'<audio src="tiny.m4a"></audio>{og(WEBP_IMAGE)}',
+        "audios-og": f"{two_audios}{og_image}",
+        "audios-relative-og": f"{two_audios}{relative_og}",
+        # Thumbnail links of other shapes.
+        "audio-php-thumb": f'<audio src="tiny.m4a"></audio>{og(JPEG_AS.format("php"))}',
+        "audio-html-thumb": f'<audio src="tiny.m4a"></audio>{og("audio.html")}',
+        "audio-mp3-thumb": f'<audio src="tiny.m4a"></audio>{og(JPEG_AS.format("mp3"))}',
+        # A text body under a link ending in .mp3: a cover that fails, named like the audio.
+        "audio-mp3-junk-thumb": f'<audio src="tiny.m4a"></audio>{og("typed/image/jpeg/en.vtt/t.mp3")}',
+        # Named like the media itself, so yt-dlp finds the cover where the download goes.
+        "audio-m4a-thumb": f'<audio src="tiny.m4a"></audio>{og(JPEG_AS.format("m4a"))}',
+        "audio-file-thumb": (
+            f'<audio src="tiny.m4a"></audio><meta property="og:image" content="file://{root}/tiny.jpg">'
+        ),
+        "audio-data-thumb": (
+            '<audio src="tiny.m4a"></audio><meta property="og:image" content="data:image/jpeg;base64,'
+            f'{base64.b64encode((root / "tiny.jpg").read_bytes()).decode()}">'
+        ),
+        "audio-loop-thumb": f'<audio src="tiny.m4a"></audio>{og("loop/t.jpg")}',
+        "audio-short-thumb": f'<audio src="tiny.m4a"></audio>{og("short/t.jpg")}',
         "video-ogg": '<video src="theora.ogg"></video>',
         "video-ogg-codecs": (
             """<video><source src="theora.ogg" type='video/ogg; codecs="theora, vorbis"'></video>"""
@@ -297,6 +347,8 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         shutil.copy(root / "tiny.m4a", root / f"{copy}.m4a")
     for name, text in _SUBTITLES.items():
         (root / name).write_text(text, encoding="utf-8")
+    # Enough for imghdr to say webp, and for ffmpeg to fail on it.
+    (root / "webp-signature.bin").write_bytes(b"RIFF\0\0\0\0WEBP")
     handler = functools.partial(_QuietHandler, directory=str(root))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -475,6 +527,20 @@ class FakeSiteIE(InfoExtractor):
             # A text body as the first item's thumbnail: -a can't embed it.
             thumb = f"{self.media_url}/typed/image/jpeg/en.vtt/t.jpg"
             entries = [{**self._video("t1"), "thumbnail": thumb}, self._video("t2")]
+            return self.playlist_result(entries, "post", "Post")
+        if page in ("junk-media-carousel", "junk-media-relative-carousel"):
+            # Both items have a thumbnail; the first one's audio extraction fails.
+            thumb = "tiny.jpg" if "relative" in page else f"{self.media_url}/tiny.jpg"
+            broken = self._video("t1", path=JUNK)
+            entries = [{**item, "thumbnail": thumb} for item in (broken, self._video("t2"))]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "junk-thumb":
+            thumb = f"{self.media_url}/{JUNK_IMAGE}"
+            return {**self._video("t1", page="junk-thumb"), "thumbnail": thumb}
+        if page == "thumb-404-carousel":
+            # The first item's thumbnail is written before its media turns out to be gone.
+            broken = self._video("t1", path="status/404/t1")
+            entries = [{**broken, "thumbnail": f"{self.media_url}/tiny.jpg"}, self._video("t2")]
             return self.playlist_result(entries, "post", "Post")
         if page == "site-audio-named":
             named = {"format_id": "a", "url": f"{self.media_url}/tiny.ogg", "ext": "ogg"}
