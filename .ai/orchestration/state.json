@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T19:49:40-04:00",
+  "updated": "2026-11-07T19:53:41-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,12 +1054,12 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
-      "worktree": ".worktrees/fix-audio-thumbnail",
+      "worktree": null,
       "commits": [
         "e2c7144",
         "38c1931",
@@ -1068,7 +1068,8 @@
         "1ae70f1",
         "c15be77",
         "dc78347",
-        "787cfc8"
+        "787cfc8",
+        "ca73e53"
       ],
       "review": {
         "approved": true,
@@ -1161,6 +1162,13 @@
           "result": "merged",
           "at": "2026-11-07T19:49:40-04:00",
           "note": "Merged as 787cfc8, no conflicts. Gate exit 0, 1661 passed, 2 xfailed. Pushed by the orchestrator under delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T19:53:41-04:00",
+          "note": "19 criteria mapped; two not met as written with reasons (m4a cover stripped by yt-dlp; .temp.opus pin as unit test). Reproduction fixed. D1 and D5 await the human's review."
         }
       ]
     }
