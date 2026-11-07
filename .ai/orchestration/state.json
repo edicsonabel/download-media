@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T11:21:43-04:00",
+  "updated": "2026-11-07T11:40:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -816,9 +816,9 @@
     "fix/subs-as-documented": {
       "type": "fix",
       "title": "Subtitles behave as documented",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/21-subs-as-documented.md",
       "branch": "fix/subs-as-documented",
       "worktree": ".worktrees/fix-subs-as-documented",
@@ -827,7 +827,10 @@
         "f6ce695",
         "d3c371b",
         "749e7d0",
-        "f30b945"
+        "f30b945",
+        "e3aa3f3",
+        "734c061",
+        "8d77191"
       ],
       "review": {
         "approved": true,
@@ -887,6 +890,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T11:21:43-04:00",
           "note": "Human didn't answer the merge question; the overnight delegation still stands. Roles chose D1 option b: keep embed + files, but don't mark a default subtitle track in mkv and webm (mp4 can't avoid it). Plus QA's wording and release-note minors. Push stays with the human."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T11:40:48-04:00",
+          "note": "No default subtitle track in mkv and webm (mp4 unchanged, 1,0), English warning reworded, README line. 1558 passed, 3 xfailed; floor passes."
         }
       ]
     }
