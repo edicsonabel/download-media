@@ -497,13 +497,26 @@ def test_short_reason_keeps_the_sites_words(message: str, shown: str) -> None:
         ("", ""),
         ("[x] y: ", ""),
         ("[x] y: first\nsecond\nthird", "first"),
+        ("[x] y: \nLogin required\nsecond", "Login required"),
+        ("\nLogin required", "Login required"),
         ("[x] y: \tspread\t\tout   text  ", "spread out text"),
         ("[x] y: Gone.\nUse --cookies for it", "Gone."),
         ("[x] y: Failed; Please report nothing", "Failed; Please report nothing"),
         ("[x] y: Bad range. Offset -1 is too low", "Bad range. Offset -1 is too low"),
         ("[x] y: {} {0} {name} 100%", "{} {0} {name} 100%"),
     ],
-    ids=["empty", "only-a-prefix", "lines", "spaces", "flag-line", "case", "minus", "braces"],
+    ids=[
+        "empty",
+        "only-a-prefix",
+        "lines",
+        "blank-first-line",
+        "leading-newline",
+        "spaces",
+        "flag-line",
+        "case",
+        "minus",
+        "braces",
+    ],
 )
 def test_short_reason_on_what_yt_dlp_can_hand_over(message: str, shown: str) -> None:
     assert _short_reason(message) == shown

@@ -168,7 +168,7 @@ def _short_reason(message: str) -> str:
 
     Its hints name its own flags: ``--cookies`` is a file there and a browser here.
     """
-    text = _SITE_PREFIX.sub("", message.split("\n")[0])
+    text = _SITE_PREFIX.sub("", message).strip().split("\n")[0]
     for tail in _REASON_TAILS:
         text = text.partition(tail)[0]
     kept: list[str] = []
