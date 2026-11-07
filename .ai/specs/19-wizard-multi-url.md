@@ -1,6 +1,6 @@
 # 19 — Stop the wizard dropping every URL after the first
 
-Status: draft
+Status: approved
 Item: `fix/wizard-multi-url`
 
 ## Problem
@@ -207,6 +207,8 @@ Not needed. No extractor, format or network behaviour changes: each URL goes thr
 `fix(wizard)`. Nothing is breaking: no flag, default or on-disk path changes, and a single URL behaves as before. Under D5's recommended option it adds one message, which `AGENTS.md` counts as a minor. 0.3.0 is already a minor (`PLAN.md`, "Next release"), so the next version doesn't change. Without the message it's a patch.
 
 ## Open decisions
+
+Resolved by the roles under the human's overnight delegation, each on the recommended option: D1 C, D2 split on whitespace, D3 command-line options for every URL, D4 cancel the whole run, D5 warning plus `wizard_skipped`, D6 refused URL does not count, D7 `-l` unchanged. Also in scope: `isolated_env` sets HOME, so no wizard test can write into the real home folder. The human reviews this.
 
 The human delegated the night's decisions to the roles. Each one has a recommendation, chosen to be easy to undo and to change as little as possible of what already works.
 
