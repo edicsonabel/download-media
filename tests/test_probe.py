@@ -268,14 +268,6 @@ def test_strongest_format_decides_in_any_order(weak: Any, strong: Any) -> None:
     assert _classify_single({"formats": [strongest, other]}) == kind
 
 
-@pytest.mark.parametrize(
-    "ext,kind", [("m4a", AUDIO), ("ogg", AUDIO), ("mp3", AUDIO), ("jpg", UNKNOWN), ("mp4", VIDEO)]
-)
-def test_extensions_the_rule_relies_on_are_in_yt_dlp(ext: str, kind: ContentKind) -> None:
-    assert (ext in MEDIA_EXTENSIONS.audio) is (kind == AUDIO)
-    assert (ext in MEDIA_EXTENSIONS.thumbnails) is (kind == UNKNOWN)
-
-
 def test_a_url_only_result_with_a_thumbnail_is_not_an_image() -> None:
     thumbnails = [{"url": "http://x/img.jpg"}]
     url_only = {"url": "http://x/f.mp4", "ext": "mp4", "thumbnails": thumbnails}

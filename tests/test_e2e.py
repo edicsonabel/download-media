@@ -2071,15 +2071,9 @@ def test_wizard_on_real_shapes_with_partial_codec_info(
 
 def test_split_streams_with_unknown_codecs_are_merged(run: Any, out: Path, answers: Any) -> None:
     answers(*SINGLE_WALK)
-    run("-i", "https://fake.test/split-streams")
-    probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0"]
-    streams = subprocess.run(
-        [*probe_cmd, str(out / "Clip.mp4")],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
-    assert sorted(streams) == ["audio", "video"]
+    code, _ = run("-i", "https://fake.test/split-streams")
+    assert code == 0
+    assert streams(out / "Clip.mp4") == {"audio", "video"}
 
 
 @pytest.mark.parametrize("page", ["storyboard-only", "image-format", "ig-image"])

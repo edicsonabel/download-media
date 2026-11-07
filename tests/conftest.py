@@ -15,7 +15,7 @@ import subprocess
 import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 import yt_dlp
@@ -60,6 +60,27 @@ def answers(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[str]]:
 
 
 class _QuietHandler(http.server.SimpleHTTPRequestHandler):
+    # yt-dlp's generic extractor branches on Content-Type, and anything missing here
+    # comes from the host's MIME database: without /etc/mime.types, Python below 3.14
+    # doesn't send .ogg as audio/*.
+    extensions_map: ClassVar[dict[str, str]] = {
+        ".asf": "video/x-ms-asf",
+        ".gif": "image/gif",
+        ".html": "text/html",
+        ".jpg": "image/jpeg",
+        ".m3u8": "application/vnd.apple.mpegurl",
+        ".m4a": "audio/mp4",
+        ".m4b": "audio/mp4",
+        ".mp4": "video/mp4",
+        ".ogg": "audio/ogg",
+        ".ogx": "application/ogg",
+        ".png": "image/png",
+        ".ts": "video/mp2t",
+        ".wav": "audio/x-wav",
+        ".webm": "video/webm",
+        ".wma": "audio/x-ms-wma",
+    }
+
     def log_message(self, format: str, *args: Any) -> None:
         pass
 
