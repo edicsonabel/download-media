@@ -49,7 +49,7 @@ def build(opts: DownloadOptions) -> str:
         parts.extend(["--cookies", opts.cookies_browser])
 
     if opts.subs:
-        parts.append("-s")  # --sub-langs alone doesn't enable subtitles.
+        parts.append("-s")  # Older versions need it: there --sub-langs alone did nothing.
         if opts.sub_langs != DEFAULT_SUB_LANGS:
             parts.extend(_free_text("--sub-langs", opts.sub_langs))
 

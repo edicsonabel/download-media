@@ -16,7 +16,8 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 from yt_dlp.postprocessor.common import PostProcessor
-from yt_dlp.utils import DownloadError
+from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP
+from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension
 
 from .config import DownloadOptions
 from .cookies import ydl_cookies
@@ -34,6 +35,10 @@ class DownloadResult:
     # --playlist-items segments that select nothing; not counted in total.
     missing: tuple[str, ...] = ()
     playlist_count: int | None = None
+    # Subtitles were asked for, and no saved item got a subtitle file.
+    subs_missing: bool = False
+    # Files holding fewer subtitle streams than subtitle files saved for them.
+    subs_not_embedded: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -96,8 +101,6 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
                 "writesubtitles": True,
                 "writeautomaticsub": True,
                 "subtitleslangs": [s.strip() for s in opts.sub_langs.split(",") if s.strip()],
-                "embedsubtitles": True,
-                "postprocessors": [{"key": "FFmpegEmbedSubtitle"}],
             }
         )
 
@@ -192,6 +195,73 @@ class _PlaylistCount(PostProcessor):  # type: ignore[misc]
         return [], info
 
 
+def _subtitle_files(info: dict[str, Any]) -> list[str]:
+    """Subtitle files yt-dlp wrote, or found already written, for this item."""
+    tracks = (info.get("requested_subtitles") or {}).values()
+    paths = (track.get("filepath") for track in tracks)
+    return [path for path in paths if path and Path(path).is_file()]
+
+
+def _subtitle_streams(path: str) -> int | None:
+    try:
+        cmd = ["ffprobe", "-v", "error", "-select_streams", "s", "-show_entries", "stream=index"]
+        cmd += ["-of", "csv=p=0", path]
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return len(done.stdout.split()) if done.returncode == 0 else None
+
+
+class _SubtitlesSeen(PostProcessor):  # type: ignore[misc]
+    """Record whether an item that reached post-processing got any subtitle file."""
+
+    def __init__(self, seen: list[bool]) -> None:
+        super().__init__()
+        self._seen = seen
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        if _subtitle_files(info):
+            self._seen.append(True)
+        return [], info
+
+
+class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
+    """Embed the subtitle files in the video, keep them, and never fail the item over it.
+
+    yt-dlp's step raises on any ffmpeg error (a TTML track, say), which would report a
+    video already on disk as a failed download.
+    """
+
+    def __init__(self, downloader: Any, not_embedded: list[str]) -> None:
+        super().__init__(downloader, already_have_subtitle=True)
+        self._not_embedded = not_embedded
+
+    @classmethod
+    def pp_key(cls) -> str:
+        # yt-dlp derives it from the class name; keep the [EmbedSubtitle] tag it prints.
+        return "EmbedSubtitle"
+
+    def run_ffmpeg_multiple_files(
+        self, input_paths: list[str], out_path: str, opts: list[str], **kwargs: Any
+    ) -> Any:
+        # ffmpeg marks the first track default, so players would show the first --sub-langs
+        # language (es) unasked. mkv and webm obey this; the mp4 muxer ignores it.
+        opts = [*opts, "-disposition:s", "0"]
+        return super().run_ffmpeg_multiple_files(input_paths, out_path, opts, **kwargs)
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        files = _subtitle_files(info)
+        try:
+            super().run(info)
+        except PostProcessingError:
+            Path(prepend_extension(info["filepath"], "temp")).unlink(missing_ok=True)
+        # Covers the failure above, containers that can't hold subtitles, srt in webm, json.
+        streams = _subtitle_streams(info["filepath"]) if files else None
+        if streams is not None and streams < len(files):
+            self._not_embedded.append(Path(info["filepath"]).name)
+        return [], info
+
+
 def _skip_items_without_media(skipped: list[str]) -> Callable[..., str | None]:
     """``match_filter`` dropping carousel items yt-dlp has no formats for.
 
@@ -231,6 +301,13 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         ydl.count_entries = bool(items)
         if items:
             ydl.add_post_processor(_PlaylistCount(counts), when="playlist")
+        subs_seen: list[bool] = []
+        not_embedded: list[str] = []
+        if opts.subs:
+            # After the params' postprocessors, so FFmpegMetadata's source URL tag stays.
+            ydl.add_post_processor(_SubtitlesSeen(subs_seen), when="post_process")
+            if not opts.audio_only:
+                ydl.add_post_processor(_EmbedSubtitles(ydl, not_embedded), when="post_process")
         returncode = int(ydl.download([url]))
     # ignoreerrors turns a total failure into a bare return code.
     if returncode != 0 and not saved:
@@ -244,6 +321,8 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         failed=len(ydl.errors),
         missing=missing,
         playlist_count=count,
+        subs_missing=opts.subs and not subs_seen,
+        subs_not_embedded=tuple(not_embedded),
     )
 
 

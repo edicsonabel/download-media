@@ -77,6 +77,18 @@ def test_every_choice_is_applied(walk: Any, tmp_path: Path) -> None:
     assert opts.cookies_browser == "firefox"
 
 
+def test_subtitles_from_the_command_line_pass_through_unasked(walk: Any) -> None:
+    # No subtitle step: -i -s and -i --sub-langs keep their values (spec 21, D5).
+    preset = DownloadOptions(urls=[URL], subs=True, sub_langs="fr")
+    opts = walk(video_probe(), "", "", "", "", "", "", opts=preset)
+    assert opts.subs is True
+    assert opts.sub_langs == "fr"
+
+
+def test_plain_walk_leaves_subtitles_off(walk: Any) -> None:
+    assert walk(video_probe(), "", "", "", "", "", "").subs is False
+
+
 def test_audio_branch_skips_quality_and_container(walk: Any) -> None:
     opts = walk(video_probe(), "", "2", "2", "", "")
     assert opts.audio_only is True

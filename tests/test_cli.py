@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from download_media.cli import build_parser, options_from_args
+from download_media.cli import build_parser, options_from_args, should_run_wizard
+from download_media.config import DEFAULT_SUB_LANGS
 
 
 def parse(argv: list[str]):
@@ -66,6 +67,61 @@ def test_cookies_and_subs() -> None:
     assert opts.cookies_browser == "firefox"
     assert opts.subs is True
     assert opts.sub_langs == "en"
+
+
+def test_sub_langs_alone_turns_subtitles_on() -> None:
+    opts = parse(["--sub-langs", "fr", "http://x"])
+    assert opts.subs is True
+    assert opts.sub_langs == "fr"
+
+
+def test_no_subtitle_flag_leaves_subtitles_off() -> None:
+    opts = parse(["http://x"])
+    assert opts.subs is False
+    assert opts.sub_langs == DEFAULT_SUB_LANGS
+
+
+def test_sub_langs_set_to_the_default_still_turns_subtitles_on() -> None:
+    opts = parse(["--sub-langs", DEFAULT_SUB_LANGS, "http://x"])
+    assert opts.subs is True
+    assert opts.sub_langs == DEFAULT_SUB_LANGS
+
+
+def test_s_alone_uses_the_default_languages() -> None:
+    opts = parse(["-s", "http://x"])
+    assert opts.subs is True
+    assert opts.sub_langs == DEFAULT_SUB_LANGS
+
+
+@pytest.mark.parametrize(
+    ("argv", "langs"),
+    [
+        (["-a", "--sub-langs", "en", "http://x"], "en"),
+        (["--sub-langs=-live_chat", "http://x"], "-live_chat"),
+        (["-i", "--sub-langs", "en", "http://x"], "en"),
+    ],
+    ids=["audio", "dash-led", "interactive"],
+)
+def test_sub_langs_turns_subtitles_on_with_other_flags(argv: list[str], langs: str) -> None:
+    opts = parse(argv)
+    assert opts.subs is True
+    assert opts.sub_langs == langs
+
+
+@pytest.mark.parametrize("argv", [["--sub-langs", "en", "u"], ["--sub-langs=en", "u"]])
+def test_sub_langs_alone_skips_the_wizard(argv: list[str]) -> None:
+    args = build_parser().parse_args(argv)
+    assert should_run_wizard(args, argv) is False
+
+
+def test_help_describes_subtitles(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        parse(["--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    assert "Download subtitles, embed them in videos and keep them as files." in text
+    assert (
+        f"Subtitle languages, comma-separated; implies -s (default: {DEFAULT_SUB_LANGS})." in text
+    )
 
 
 def test_playlist_modes_are_mutually_exclusive() -> None:

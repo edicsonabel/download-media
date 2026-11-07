@@ -189,6 +189,34 @@ def _write_generic_pages(root: Path, base: str) -> None:
         (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")
 
 
+_VTT = "WEBVTT\n\n00:00:00.000 --> 00:00:00.200\n{}\n"
+# TTML is a real subtitle format, but ffmpeg can't read it: embedding it fails.
+_TTML = (
+    '<?xml version="1.0" encoding="utf-8"?><tt xmlns="http://www.w3.org/ns/ttml"><body><div>'
+    '<p begin="00:00:00.000" end="00:00:00.200">Hello</p></div></body></tt>'
+)
+_SUBTITLES = {
+    "en.vtt": _VTT.format("Hello"),
+    "es.vtt": _VTT.format("Hola"),
+    "fr.vtt": _VTT.format("Bonjour"),
+    "en.srt": "1\n00:00:00,000 --> 00:00:00,200\nHello\n",
+    "en.ttml": _TTML,
+    "en.ass": (
+        "[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+        "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        "Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,"
+        "0,0,1,1,0,2,10,10,10,1\n\n[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "Dialogue: 0,0:00:00.00,0:00:00.20,Default,,0,0,0,,Hello\n"
+    ),
+    # Broken files under a subtitle extension; missing.vtt is never written (a 404).
+    "empty.vtt": "",
+    "garbage.vtt": "\x00\x01 not a subtitle \xff\xfe\n" * 8,
+}
+
+
 @pytest.fixture(scope="session")
 def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     """Base URL of a loopback server hosting tiny real media and generic pages."""
@@ -245,12 +273,16 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     shutil.copy(root / "tiny.mp4", root / "clip.m4b")
     shutil.copy(root / "tiny.mp4", root / "clip.m4a")
     shutil.copy(root / "tiny.m4a", root / "tiny.m4b")
+    # A container yt-dlp can't embed subtitles in, by stream copy: no new encoder.
+    subprocess.run([*source, "-c", "copy", str(root / "tiny.flv")], check=True)
     hls = ["-c", "copy", "-f", "hls", "-hls_playlist_type", "vod", str(root / "tiny.m3u8")]
     subprocess.run([*source, *hls], check=True)
     for copy in ("v1", "v2", "v3", "v4"):
         shutil.copy(root / "tiny.mp4", root / f"{copy}.mp4")
     for copy in ("a1", "a2"):
         shutil.copy(root / "tiny.m4a", root / f"{copy}.m4a")
+    for name, text in _SUBTITLES.items():
+        (root / name).write_text(text, encoding="utf-8")
     handler = functools.partial(_QuietHandler, directory=str(root))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -606,6 +638,107 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result([video, gated], "post", "Post")
         return None
 
+    def _subtitles(self, *files: str) -> dict[str, list[dict[str, str]]]:
+        """``lang.ext`` files on the media server, keyed by language."""
+        tracks: dict[str, list[dict[str, str]]] = {}
+        for name in files:
+            lang, ext = name.split(".")
+            tracks[lang] = [{"url": f"{self.media_url}/{name}", "ext": ext}]
+        return tracks
+
+    def _subtitled(
+        self, video: dict[str, Any], *files: str, auto: tuple[str, ...] = ()
+    ) -> dict[str, Any]:
+        return {
+            **video,
+            "subtitles": self._subtitles(*files),
+            "automatic_captions": self._subtitles(*auto),
+        }
+
+    def _subtitle_shape(self, page: str) -> dict[str, Any] | None:
+        """Pages whose videos carry subtitles and auto-captions, as YouTube's do."""
+        webm = {"format_id": "w", "url": f"{self.media_url}/tiny.webm", "ext": "webm"}
+        webm_video = self._with_formats("w1", {**webm, "vcodec": "vp8", "acodec": "vorbis"})
+        if page == "subs":
+            return self._subtitled(self._video("v1", page="subs"), "en.vtt", auto=("es.vtt",))
+        if page == "subs-en":
+            return self._subtitled(self._video("v1", page="subs-en"), "en.vtt")
+        if page == "subs-merged":
+            return self._subtitled(self._merged_video("v1", "subs-merged"), "en.vtt", "es.vtt")
+        if page == "subs-fr":
+            return self._subtitled(self._video("v1", page="subs-fr"), "fr.vtt")
+        if page == "subs-ttml":
+            return self._subtitled(self._video("v1", page="subs-ttml"), "en.ttml")
+        if page == "subs-webm":
+            return self._subtitled(webm_video, "en.vtt")
+        if page == "subs-webm-srt":
+            return self._subtitled(webm_video, "en.srt")
+        if page == "subs-webm-two":
+            return self._subtitled(webm_video, "en.vtt", "es.vtt")
+        if page == "subs-carousel":
+            entries = [self._subtitled(self._video("s1"), "en.vtt"), self._video("s2")]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-ttml-carousel":
+            entries = [
+                self._subtitled(self._video("s1"), "en.vtt"),
+                self._subtitled(self._video("s2"), "en.ttml"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        return None
+
+    def _tracks(self, **files: str) -> dict[str, Any]:
+        """Subtitles keyed by language, each pointing at any file on the media server."""
+        return {
+            lang: [{"url": f"{self.media_url}/{name}", "ext": name.rsplit(".", 1)[1]}]
+            for lang, name in files.items()
+        }
+
+    def _subtitle_attack_shape(self, page: str) -> dict[str, Any] | None:
+        """Subtitle tracks that break the embed step, one page each."""
+        webm = {"format_id": "w", "url": f"{self.media_url}/tiny.webm", "ext": "webm"}
+        webm_video = self._with_formats("w1", {**webm, "vcodec": "vp8", "acodec": "vorbis"})
+        flv = {"format_id": "f", "url": f"{self.media_url}/tiny.flv", "ext": "flv"}
+        flv_video = self._with_formats("f1", {**flv, "vcodec": "h264", "acodec": "aac"})
+        tracks: dict[str, dict[str, str]] = {
+            "subs-empty": {"en": "empty.vtt"},
+            "subs-garbage": {"en": "garbage.vtt"},
+            "subs-one-broken": {"en": "en.vtt", "es": "en.ttml"},
+            "subs-404": {"en": "missing.vtt"},
+            "subs-srt": {"en": "en.srt"},
+            "subs-ass": {"en": "en.ass"},
+        }
+        if page in tracks:
+            return {**self._video("v1", page=page), "subtitles": self._tracks(**tracks[page])}
+        if page in ("subs-merged-srt", "subs-merged-ass"):
+            name = "en.srt" if page.endswith("srt") else "en.ass"
+            return {**self._merged_video("v1", page), "subtitles": self._tracks(en=name)}
+        if page == "subs-webm-ass":
+            return {**webm_video, "subtitles": self._tracks(en="en.ass")}
+        if page == "subs-webm-mixed":
+            return {**webm_video, "subtitles": self._tracks(en="en.vtt", es="en.srt")}
+        if page == "subs-webm-wrong-media":
+            # A video served as a vtt: ffmpeg opens the temp file, then can't write it.
+            wrong = [{"url": f"{self.media_url}/tiny.mp4", "ext": "vtt"}]
+            return {**webm_video, "subtitles": {"en": wrong}}
+        if page == "subs-flv":
+            return {**flv_video, "subtitles": self._tracks(en="en.vtt")}
+        if page == "subs-404-carousel":
+            entries = [
+                {**self._video("s1"), "subtitles": self._tracks(en="missing.vtt")},
+                self._video("s2"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-image-carousel":
+            entries = [
+                self._image("i1"),
+                {**self._video("s1"), "subtitles": self._tracks(en="en.vtt")},
+                self._image("i2"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "nosubs-carousel":
+            return self.playlist_result([self._video("s1"), self._video("s2")], "post", "Post")
+        return None
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -623,6 +756,8 @@ class FakeSiteIE(InfoExtractor):
             or self._failure_shape(page)
             or self._partial_shape(page)
             or self._edge_shape(page)
+            or self._subtitle_shape(page)
+            or self._subtitle_attack_shape(page)
         )
         if shape is not None:
             return shape
