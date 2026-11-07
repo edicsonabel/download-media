@@ -84,6 +84,17 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "jpg-video": '<video src="tiny.jpg"></video><video src="v1.mp4"></video>',
         "gone": '<video src="missing.mp4" poster="tiny.jpg"></video>',
         "half-gone": '<video src="v1.mp4"></video><video src="missing.mp4"></video>',
+        "webm": '<video src="tiny.webm" poster="tiny.jpg"></video>',
+        "hls": '<video src="tiny.m3u8" poster="tiny.jpg"></video>',
+        "jpg-alone": '<video src="tiny.jpg"></video>',
+        "audio-ogg": '<audio src="tiny.ogg"></audio>',
+        "audio-wav": '<audio src="tiny.wav"></audio>',
+        "audio-relative-og": '<audio src="tiny.m4a"></audio><meta property="og:image" content="tiny.jpg">',
+        "video-ogg": '<video src="theora.ogg"></video>',
+        "everything": (
+            '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
+        ),
+        "no-video": '<video src="tiny.jpg"></video><audio src="a1.m4a"></audio>',
     }
     for name, body in pages.items():
         (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")
@@ -121,7 +132,21 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     )
     source = ["ffmpeg", "-v", "error", "-i", str(root / "tiny.mp4")]
     subprocess.run([*source, "-frames:v", "1", str(root / "tiny.jpg")], check=True)
+    subprocess.run([*source, "-frames:v", "1", str(root / "tiny.png")], check=True)
+    subprocess.run([*source, "-frames:v", "1", str(root / "tiny.gif")], check=True)
     subprocess.run([*source, "-vn", "-c:a", "copy", str(root / "tiny.m4a")], check=True)
+    subprocess.run([*source, "-vn", "-c:a", "libvorbis", str(root / "tiny.ogg")], check=True)
+    subprocess.run([*source, "-vn", str(root / "tiny.wav")], check=True)
+    subprocess.run(
+        [*source, "-c:v", "libvpx", "-c:a", "libvorbis", str(root / "tiny.webm")], check=True
+    )
+    # Containers yt-dlp lists as audio, holding a video.
+    subprocess.run(
+        [*source, "-c:v", "libtheora", "-c:a", "libvorbis", str(root / "theora.ogg")], check=True
+    )
+    subprocess.run([*source, "-c:v", "wmv2", "-c:a", "wmav2", str(root / "clip.asf")], check=True)
+    hls = ["-c", "copy", "-f", "hls", "-hls_playlist_type", "vod", str(root / "tiny.m3u8")]
+    subprocess.run([*source, *hls], check=True)
     for copy in ("v1", "v2", "v3", "v4"):
         shutil.copy(root / "tiny.mp4", root / f"{copy}.mp4")
     for copy in ("a1", "a2"):
@@ -189,6 +214,112 @@ class FakeSiteIE(InfoExtractor):
         ]
         return video
 
+    def _instagram_video(self, item: str, **codecs: str) -> dict[str, Any]:
+        """``_extract_product_media`` when the post has no ``video_codec`` or DASH manifest."""
+        video = self._video(item)
+        video["formats"] = [
+            {"format_id": "101", "url": f"{self.media_url}/tiny.mp4", "height": 64, **codecs}
+        ]
+        return video
+
+    def _instagram_image(self, item: str) -> dict[str, Any]:
+        """Same function on an image: no formats, but thumbnails."""
+        thumbnail = {"url": f"{self.media_url}/tiny.jpg", "width": 64, "height": 64}
+        return {**self._image(item), "duration": None, "thumbnails": [thumbnail]}
+
+    def _storyboard(self) -> dict[str, Any]:
+        url = f"{self.media_url}/tiny.jpg"
+        return {
+            "format_id": "sb0",
+            "format_note": "storyboard",
+            "url": url,
+            "ext": "mhtml",
+            "protocol": "mhtml",
+            "vcodec": "none",
+            "acodec": "none",
+            "width": 48,
+            "height": 27,
+            "rows": 1,
+            "columns": 1,
+            "fragments": [{"url": url, "duration": 1}],
+        }
+
+    def _thumbnail_format(self, **codecs: str) -> dict[str, Any]:
+        url = f"{self.media_url}/tiny.jpg"
+        return {"format_id": "t", "format_note": "thumbnail", "url": url, "ext": "jpg", **codecs}
+
+    def _with_formats(self, item: str, *formats: dict[str, Any]) -> dict[str, Any]:
+        video = self._video(item)
+        video["formats"] = list(formats)
+        return video
+
+    def _codec_shape(self, page: str) -> dict[str, Any] | None:
+        """Shapes real extractors produce, one page each."""
+        plain_video = {"format_id": "v", "url": f"{self.media_url}/tiny.mp4", "ext": "mp4"}
+        plain_audio = {"format_id": "a", "url": f"{self.media_url}/tiny.m4a", "ext": "m4a"}
+        audio = {**plain_audio, "vcodec": "none"}
+        image_format = self._thumbnail_format(vcodec="none", acodec="none")
+        if page == "jpg":
+            return self._url_only("p1", "tiny.jpg", "jpg")
+        if page == "ig-image":
+            return self._instagram_image("i1")
+        if page == "ig-video":
+            return self._instagram_video("v1")
+        if page == "ig-carousel":
+            entries = [
+                self._instagram_image("i1"),
+                self._instagram_video("v1"),
+                self._instagram_video("v2", acodec="none"),
+                self._instagram_image("i2"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "storyboard-video":
+            return self._with_formats("v1", self._storyboard(), plain_video)
+        if page == "storyboard-audio":
+            return self._with_formats("a1", self._storyboard(), audio)
+        if page == "storyboard-only":
+            return self._with_formats("s1", self._storyboard())
+        if page == "thumbnail-video":
+            return self._with_formats("v1", self._thumbnail_format(), plain_video)
+        if page == "thumbnail-audio":
+            return self._with_formats("a1", self._thumbnail_format(), audio)
+        if page == "image-format":
+            return self._with_formats("i1", image_format)
+        if page == "split-streams":
+            video_only = {**plain_video, "acodec": "none"}
+            return self._with_formats("v1", video_only, audio)
+        if page == "query-carousel":
+            entries = [
+                {"id": "a1", "title": "Clip", "url": f"{self.media_url}/tiny.m4a?token=1"},
+                {"id": "p1", "title": "Clip", "url": f"{self.media_url}/tiny.jpg?w=100"},
+                {"id": "v1", "title": "Clip", "url": f"{self.media_url}/tiny.mp4?token=1"},
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "undownloadable-carousel":
+            entries = [
+                self._with_formats("i1", image_format),
+                self._with_formats("s1", self._storyboard()),
+                {**self._url_only("e1", "tiny.mp4", "mp4"), "formats": []},
+                self._bare_video("v1"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "mixed-carousel":
+            entries = [
+                self._instagram_image("i1"),
+                self._url_only("p1", "tiny.jpg", "jpg"),
+                self._bare_video("v1"),
+                self._audio("a1"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "no-video-carousel":
+            entries = [
+                self._instagram_image("i1"),
+                self._url_only("p1", "tiny.jpg", "jpg"),
+                self._audio("a1"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        return None
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -201,6 +332,9 @@ class FakeSiteIE(InfoExtractor):
     def _real_extract(self, url: str) -> dict[str, Any]:
         page = self._match_id(url)
         cookies = self._downloader.cookies_used
+        shape = self._codec_shape(page)
+        if shape is not None:
+            return shape
         if page == "video":
             return self._video("v1", page="video")
         if page == "video-b":

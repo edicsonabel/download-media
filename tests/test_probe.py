@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from itertools import combinations
 from typing import Any
 
 import pytest
+from yt_dlp.utils import MEDIA_EXTENSIONS
 
+from download_media.downloader import _skip_items_without_media
 from download_media.probe import (
     ContentKind,
     _classify_entry,
     _classify_single,
     _is_auth_error,
+    _media_kind,
     detect_site,
     site_likely_needs_cookies,
 )
@@ -178,6 +182,92 @@ def test_strongest_format_decides(formats: list[dict[str, Any]], kind: ContentKi
     assert item.kind == kind
     assert item.supported is True
     assert _classify_single({"formats": formats}) == kind
+
+
+@pytest.mark.parametrize(
+    "fmt,kind",
+    [
+        ({"vcodec": "none"}, AUDIO),
+        ({"vcodec": "none", "ext": "jpg"}, AUDIO),
+        ({"acodec": "none"}, VIDEO),
+        ({"acodec": "none", "ext": "jpg"}, UNKNOWN),
+        ({"acodec": "aac", "ext": "png"}, UNKNOWN),
+        ({"vcodec": "", "acodec": "", "ext": "mp4"}, VIDEO),
+        ({"vcodec": "", "acodec": "", "ext": "m4a"}, AUDIO),
+        ({"vcodec": None, "acodec": None, "ext": "wav"}, AUDIO),
+        ({"vcodec": None, "acodec": None, "ext": "opus"}, AUDIO),
+        ({"vcodec": None, "acodec": None, "ext": "oga"}, AUDIO),
+        ({"vcodec": None, "acodec": None, "ext": "aac"}, AUDIO),
+        ({"vcodec": None, "acodec": None, "ext": "ogv"}, VIDEO),
+        ({"vcodec": None, "acodec": None, "ext": "unknown_video"}, VIDEO),
+        ({"vcodec": None, "acodec": None, "ext": None}, VIDEO),
+        ({"vcodec": "vp9", "acodec": "none", "ext": "m4a"}, VIDEO),
+        ({"vcodec": "none", "acodec": "none", "ext": "mhtml", "format_note": "storyboard"}, IMAGE),
+        ({"vcodec": "none", "acodec": "none", "ext": "jpg", "format_note": "thumbnail"}, IMAGE),
+        ({"vcodec": None, "acodec": None, "ext": "jpg", "format_note": "thumbnail"}, UNKNOWN),
+    ],
+)
+def test_format_with_one_codec_set_or_neither(fmt: dict[str, Any], kind: ContentKind) -> None:
+    assert _classify_single({"formats": [fmt]}) == kind
+
+
+KINDS_WEAKEST_FIRST = [
+    (IMAGE, STORYBOARD),
+    (UNKNOWN, {"vcodec": None, "acodec": None, "ext": "jpg"}),
+    (AUDIO, {"vcodec": "none", "acodec": None, "ext": "m4a"}),
+    (VIDEO, {"vcodec": None, "acodec": None, "ext": "mp4"}),
+]
+
+
+@pytest.mark.parametrize("weak,strong", list(combinations(KINDS_WEAKEST_FIRST, 2)))
+def test_strongest_format_decides_in_any_order(weak: Any, strong: Any) -> None:
+    kind, strongest = strong
+    other = weak[1]
+    assert _classify_single({"formats": [other, strongest]}) == kind
+    assert _classify_single({"formats": [strongest, other]}) == kind
+
+
+@pytest.mark.parametrize(
+    "ext,kind", [("m4a", AUDIO), ("ogg", AUDIO), ("mp3", AUDIO), ("jpg", UNKNOWN), ("mp4", VIDEO)]
+)
+def test_extensions_the_rule_relies_on_are_in_yt_dlp(ext: str, kind: ContentKind) -> None:
+    assert (ext in MEDIA_EXTENSIONS.audio) is (kind == AUDIO)
+    assert (ext in MEDIA_EXTENSIONS.thumbnails) is (kind == UNKNOWN)
+
+
+def test_a_url_only_result_with_a_thumbnail_is_not_an_image() -> None:
+    thumbnails = [{"url": "http://x/img.jpg"}]
+    url_only = {"url": "http://x/f.mp4", "ext": "mp4", "thumbnails": thumbnails}
+    assert _classify_single(url_only) == VIDEO
+    assert _classify_single({"url": "", "thumbnails": thumbnails}) == IMAGE
+    assert _classify_single({"url": None, "formats": None, "thumbnails": thumbnails}) == IMAGE
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {},
+        {"formats": []},
+        {"formats": None},
+        {"url": ""},
+        {"url": None},
+        {"formats": [], "url": None},
+        {"thumbnails": [{"url": "http://x/img.jpg"}], "formats": []},
+        {"duration": 3},
+        {"url": "http://x/f.mp4"},
+        {"url": "http://x/f.mp4", "formats": None},
+        {"url": "http://x/f.mp4", "formats": []},
+        {"formats": [{"url": "http://x/f.mp4"}]},
+        {"formats": [{"url": "http://x/f.mp4"}], "url": None},
+        {"formats": [STORYBOARD]},
+    ],
+)
+def test_probe_and_match_filter_agree_on_nothing_to_fetch(extra: dict[str, Any]) -> None:
+    entry = {"id": "i", "title": "t", **extra}
+    skipped: list[str] = []
+    verdict = _skip_items_without_media(skipped)({**entry, "playlist_index": 1}, incomplete=True)
+    assert (verdict is not None) is (_media_kind(entry) is None)
+    assert bool(skipped) is (_media_kind(entry) is None)
 
 
 def test_a_duration_does_not_make_audio_a_video() -> None:
