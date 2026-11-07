@@ -8,6 +8,7 @@ to extracted metadata.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -52,6 +53,16 @@ class DownloadResult:
         return self.saved + self.skipped + self.failed
 
 
+def _cover_name(path: str, ext: str | None) -> str:
+    """The media's path with a ``.cover`` part, for yt-dlp to name a thumbnail after.
+
+    yt-dlp swaps the media's extension for the one in the thumbnail's link, so a link ending
+    in .m4a or .mp3 put the cover at the media's own path.
+    """
+    stem, real_ext = os.path.splitext(path)
+    return f"{stem}.cover{real_ext}" if real_ext[1:] == ext else f"{path}.cover"
+
+
 class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
@@ -64,13 +75,11 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         # Thumbnail files this run wrote for the current item, and whether it lost its cover.
         self.item_thumbs: list[str] = []
         self.item_no_cover = False
-        # Paths the current item's media was at, before and after each step.
-        self.item_media: set[Path] = set()
         super().__init__(*args, **kwargs)
 
     def process_info(self, info_dict: Any) -> Any:
         self.item_errors = len(self.errors)
-        self.item_thumbs, self.item_no_cover, self.item_media = [], False, set()
+        self.item_thumbs, self.item_no_cover = [], False
         try:
             result = super().process_info(info_dict)
         except BaseException:
@@ -87,6 +96,11 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         # yt-dlp only catches network errors here; a URL with no scheme (a relative og:image),
         # or an extension it won't write (thumb.php?id=), raises before the media is fetched,
         # and would lose the download over its cover.
+        ext = info_dict.get("ext")
+        if filename:
+            filename = _cover_name(filename, ext)
+        if thumb_filename_base:
+            thumb_filename_base = _cover_name(thumb_filename_base, ext)
         try:
             written = super()._write_thumbnails(label, info_dict, filename, thumb_filename_base)
         except (RequestError, _UnsafeExtensionError):
@@ -97,24 +111,9 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_thumbs += [path for path, _ in written or []]
         return written
 
-    def run_pp(self, pp: Any, infodict: Any) -> Any:
-        # yt-dlp takes a thumbnail's extension from its link, so a link ending in .mp3 names it
-        # like the audio, and audio extraction then writes over it: it is the audio from then on.
-        self._claim_media(infodict)
-        infodict = super().run_pp(pp, infodict)
-        self._claim_media(infodict)
-        return infodict
-
-    def _claim_media(self, info: Any) -> None:
-        if info.get("filepath"):
-            media = Path(info["filepath"])
-            self.item_media.add(media)
-            self.item_thumbs = [path for path in self.item_thumbs if Path(path) != media]
-
     def drop_thumbs(self) -> None:
         for path in self.item_thumbs:
-            if Path(path) not in self.item_media:
-                Path(path).unlink(missing_ok=True)
+            Path(path).unlink(missing_ok=True)
         self.item_thumbs = []
 
     def item_failed(self) -> bool:

@@ -2686,18 +2686,34 @@ def test_a_thumbnail_named_like_the_audio_never_deletes_it(
 ) -> None:
     code, output = generic("audio-mp3-thumb.html", flags=("-y", "-a", *flags, "-o", str(out)))
     assert names(out) == ["audio-mp3-thumb (1).mp3"]
-    assert "audio" in streams(out / "audio-mp3-thumb (1).mp3")
+    # The link holds a real JPEG; named apart from the audio, it is embedded like any cover.
+    assert {"audio", "video"} <= streams(out / "audio-mp3-thumb (1).mp3")
     assert code == 0
-    assert t("no_cover", "audio-mp3-thumb (1).mp3") in output
+    assert cover_warnings(output) == 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Bug: a thumbnail link ending in the media's own extension (.m4a) writes the cover "
-    "where the media goes, so yt-dlp says it was already downloaded and ExtractAudio fails on "
-    "the JPEG: exit 1, nothing saved. Since 059c24a, item_media claims that path, so the JPEG "
-    "named .m4a (and a .png with -p) stays behind; cbd49b2 removed it.",
-)
+@pytest.mark.parametrize("flags", [(), ("-p",)])
+def test_a_broken_thumbnail_named_like_the_audio_is_dropped_alone(
+    generic: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    page = "audio-mp3-junk-thumb.html"
+    code, output = generic(page, flags=("-y", "-a", *flags, "-o", str(out)))
+    assert names(out) == ["audio-mp3-junk-thumb (1).mp3"]
+    assert "audio" in streams(out / "audio-mp3-junk-thumb (1).mp3")
+    assert code == 0
+    assert t("no_cover", "audio-mp3-junk-thumb (1).mp3") in output
+
+
+def test_a_rerun_never_writes_a_thumbnail_over_the_last_audio(generic: Any, out: Path) -> None:
+    flags = ("-y", "-a", "-o", str(out))
+    generic("audio-mp3-thumb.html", flags=flags)
+    code, output = generic("audio-mp3-thumb.html", flags=flags)
+    assert code == 0
+    assert names(out) == ["audio-mp3-thumb (1).mp3"]
+    # yt-dlp deletes whatever sits at the thumbnail's path before fetching it.
+    assert f"Deleting existing file {out / 'audio-mp3-thumb (1).mp3'}" not in output
+
+
 @pytest.mark.parametrize("flags", [(), ("-p",)])
 def test_a_thumbnail_named_like_the_downloaded_media_never_fails_the_audio(
     generic: Any, media_url: str, out: Path, flags: tuple[str, ...]
@@ -2705,9 +2721,10 @@ def test_a_thumbnail_named_like_the_downloaded_media_never_fails_the_audio(
     page = "audio-m4a-thumb.html"
     code, output = generic(page, flags=("-y", "-a", *flags, "-o", str(out)))
     assert names(out) == ["audio-m4a-thumb (1).mp3"]
-    assert "audio" in streams(out / "audio-m4a-thumb (1).mp3")
+    assert {"audio", "video"} <= streams(out / "audio-m4a-thumb (1).mp3")
     assert code == 0
     assert t("failed", f"{media_url}/{page}") not in output
+    assert cover_warnings(output) == 0
     assert len(history_rows()) == 1
 
 
