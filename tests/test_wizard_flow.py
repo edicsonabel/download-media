@@ -217,6 +217,33 @@ def test_single_audio_skips_type_step(walk: Any) -> None:
     assert opts.audio_only is True
 
 
+def labelled_audio() -> Probe:
+    return Probe(
+        url=URL, site="generic", content_kind=ContentKind.SINGLE_AUDIO, may_hold_video=True
+    )
+
+
+@pytest.mark.parametrize(
+    ("preset", "asked"),
+    # URL, type, quality, container, folder, cookies. Audio: URL, type, format, folder, cookies.
+    [(False, 6), (True, 5)],
+    ids=["plain", "audio-flag"],
+)
+def test_audio_that_may_hold_a_video_gets_the_type_step(
+    monkeypatch: pytest.MonkeyPatch, answers: Any, capsys: Any, preset: bool, asked: int
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    monkeypatch.setattr(wizard, "probe", lambda url, cookies: labelled_audio())
+    prompts = answers(*[""] * asked)
+    opts = wizard.run(DownloadOptions(urls=[URL], audio_only=preset))
+    assert opts is not None
+    assert len(prompts) == asked
+    assert opts.audio_only is preset
+    output = capsys.readouterr().out
+    assert t("audio_may_hold_video") in output
+    assert t("ask_type") in output
+
+
 def test_detection_banner_shows_metadata(walk: Any, capsys: Any) -> None:
     rich = Probe(
         url=URL,

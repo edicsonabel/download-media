@@ -58,6 +58,7 @@ class Probe:
     items: list[ProbeItem] = field(default_factory=list)
     needs_cookies: bool = False
     failed: bool = False
+    may_hold_video: bool = False  # Audio by a label only: the file may hold a video.
     error_message: str | None = None
 
     @property
@@ -186,6 +187,20 @@ def _short_reason(message: str) -> str:
 _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO = frozenset({"asf", "m4b", "ogg", "ogx", "wma"})
 
 
+def _ext_says_audio(ext: Any) -> bool:
+    return ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO
+
+
+def _audio_by_label_only(fmt: dict[str, Any]) -> bool:
+    # A Content-Type or an <audio> tag says 'none' and names no audio codec:
+    # nothing looked at the stream, and the container can hold a video.
+    return (
+        fmt.get("vcodec") == "none"
+        and fmt.get("acodec") is None
+        and not _ext_says_audio(fmt.get("ext"))
+    )
+
+
 def _format_kind(fmt: dict[str, Any]) -> ContentKind:
     """Read a format as yt-dlp does: ``'none'`` is absent, ``None`` is unknown."""
     vcodec = fmt.get("vcodec")
@@ -197,7 +212,7 @@ def _format_kind(fmt: dict[str, Any]) -> ContentKind:
     # acodec can't decide here: yt-dlp may name it and still have video (or
     # fill it in from the extension), while vcodec stays unknown.
     ext = fmt.get("ext")
-    if ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO:
+    if _ext_says_audio(ext):
         return ContentKind.SINGLE_AUDIO
     if ext in MEDIA_EXTENSIONS.thumbnails:
         return ContentKind.UNKNOWN  # Offered, never refused: a direct .jpg downloads.
@@ -212,13 +227,17 @@ _KINDS_BY_STRENGTH = (
 )
 
 
-def _media_kind(info: dict[str, Any]) -> ContentKind | None:
-    """What ``info`` holds, or None if there is nothing to fetch."""
+def _formats(info: dict[str, Any]) -> list[dict[str, Any]]:
     # yt-dlp keeps no ``formats`` on a result that only has a ``url``.
     formats = info.get("formats")
     if formats is None:
-        formats = [info] if info.get("url") else []
-    kinds = {_format_kind(f) for f in formats}
+        return [info] if info.get("url") else []
+    return list(formats)
+
+
+def _media_kind(info: dict[str, Any]) -> ContentKind | None:
+    """What ``info`` holds, or None if there is nothing to fetch."""
+    kinds = {_format_kind(f) for f in _formats(info)}
     return next((kind for kind in _KINDS_BY_STRENGTH if kind in kinds), None)
 
 
@@ -318,6 +337,8 @@ def _read_result(url: str, site: str, data: Any, errors: list[str]) -> Probe:
         uploader=data.get("uploader") or data.get("channel"),
         duration=_seconds(data),
         filesize=data.get("filesize_approx") or data.get("filesize"),
+        may_hold_video=kind == ContentKind.SINGLE_AUDIO
+        and any(_audio_by_label_only(f) for f in _formats(data)),
     )
 
 

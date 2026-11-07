@@ -15,6 +15,7 @@ from download_media.probe import (
     _classify_entry,
     _classify_single,
     _media_kind,
+    _read_result,
     _short_reason,
     detect_site,
     is_auth_error,
@@ -255,6 +256,60 @@ def test_every_other_extension_yt_dlp_lists_as_audio_stays_audio(
     ext: str, acodec: str | None
 ) -> None:
     assert _classify_single({"formats": [{"vcodec": None, "acodec": acodec, "ext": ext}]}) == AUDIO
+
+
+# A Content-Type or an <audio> tag gives vcodec 'none' and names no audio codec.
+EXT_MAY_HOLD_VIDEO = ["ogg", "wma", "m4b", "asf", "ogx", "mp4", "webm", "unknown_video"]
+# D5: aiff, alac, ape and wav can't hold a video unless renamed, like the rest here.
+EXT_SAYS_AUDIO = ["m4a", "wav", "aiff", "alac", "ape", "mp3", "aac", "flac", "opus", "oga", "mka"]
+HLS_VARIANT = {"vcodec": "avc1.64001f", "acodec": "mp4a.40.2", "ext": "mp4"}
+
+
+def may_hold_video(*formats: dict[str, Any]) -> bool:
+    data = {"id": "i", "title": "t", "formats": list(formats)}
+    return _read_result("http://x/f", "generic", data, []).may_hold_video
+
+
+@pytest.mark.parametrize(
+    "formats,flagged",
+    [
+        *(([{"vcodec": "none", "acodec": None, "ext": e}], True) for e in EXT_MAY_HOLD_VIDEO),
+        *(([{"vcodec": "none", "acodec": None, "ext": e}], False) for e in EXT_SAYS_AUDIO),
+        *(
+            ([{"vcodec": None, "acodec": None, "ext": e}], False)
+            for e in EXT_MAY_HOLD_VIDEO + EXT_SAYS_AUDIO
+        ),
+        ([{"vcodec": "none", "acodec": "opus", "ext": "webm"}], False),
+        ([{"vcodec": "none", "acodec": "none", "ext": "mp4"}], False),
+        # An HLS audio rendition next to its video variants: the result is a video.
+        ([HLS_VARIANT, {"vcodec": "none", "acodec": None, "ext": "mp4"}], False),
+        # D6: any labelled format of an audio result raises the flag.
+        (
+            [
+                {"vcodec": "none", "acodec": "mp3", "ext": "mp3"},
+                {"vcodec": "none", "acodec": None, "ext": "webm"},
+            ],
+            True,
+        ),
+    ],
+)
+def test_audio_known_only_by_a_label_may_hold_a_video(
+    formats: list[dict[str, Any]], flagged: bool
+) -> None:
+    assert may_hold_video(*formats) is flagged
+
+
+@pytest.mark.parametrize("ext", EXT_MAY_HOLD_VIDEO)
+def test_a_url_only_result_under_a_label_may_hold_a_video(ext: str) -> None:
+    data = {"id": "i", "title": "t", "url": "http://x/f", "vcodec": "none", "ext": ext}
+    assert _read_result("http://x/f", "generic", data, []).may_hold_video is True
+
+
+def test_a_playlist_of_labelled_audio_is_not_flagged() -> None:
+    entry = {"id": "e", "formats": [{"vcodec": "none", "acodec": None, "ext": "ogg"}]}
+    result = _read_result("http://x/f", "generic", {"id": "p", "entries": [entry]}, [])
+    assert result.is_playlist
+    assert result.may_hold_video is False
 
 
 KINDS_WEAKEST_FIRST = [

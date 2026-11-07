@@ -87,8 +87,23 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         ".wma": "audio/x-ms-wma",
     }
 
+    # /as-audio/<file> serves <file> under an audio/* label, as some servers do for video.
+    _AS_AUDIO: ClassVar[dict[str, str]] = {
+        ".asf": "audio/x-ms-asf",
+        ".mp4": "audio/mp4",
+        ".webm": "audio/webm",
+    }
+
     def log_message(self, format: str, *args: Any) -> None:
         pass
+
+    def translate_path(self, path: str) -> str:
+        return super().translate_path(path.removeprefix("/as-audio"))
+
+    def guess_type(self, path: Any) -> str:
+        if self.path.startswith("/as-audio/"):
+            return self._AS_AUDIO[Path(path).suffix]
+        return super().guess_type(path)
 
     def send_head(self) -> Any:
         status = re.fullmatch(r"/status/(\d{3})(?:/.*)?", self.path)  # A sub-path names the id.
@@ -136,6 +151,8 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "video-tag-audio-ogg": '<video src="tiny.ogg"></video>',
         "video-tag-audio-m4b": '<video src="tiny.m4b"></video>',
         "audio-theora-ogg": '<audio src="theora.ogg"></audio>',
+        "audio-mp4": '<audio src="tiny.mp4"></audio>',
+        "audio-webm": '<audio src="tiny.webm"></audio>',
         "ogg-video-and-audio": '<video src="theora.ogg"></video><audio src="tiny.ogg"></audio>',
         "everything": (
             '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
