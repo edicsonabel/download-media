@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T23:33:33-04:00",
+  "updated": "2026-11-06T23:44:53-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,9 +251,9 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
@@ -267,11 +267,7 @@
       ],
       "review": {
         "approved": true,
-        "findings": [
-          "minor tests/conftest.py:62 direct tiny.ogg rows depend on the host MIME database; on Python below 3.14 without /etc/mime.types they fail",
-          "minor tests/test_probe.py:274 test_extensions_the_rule_relies_on_are_in_yt_dlp runs no project code, and its ogg row no longer matches the rule",
-          "minor tests/test_e2e.py:2076 local streams shadows the helper and the exit code is ignored"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -343,6 +339,13 @@
           "result": "done",
           "at": "2026-11-06T23:33:33-04:00",
           "note": "Three QA minors fixed in tests only. 798 passed, 2 xfailed; table test removed. Mutation 8/9; survivor: split-streams test can't see a missing merge because the fixture's video-only format has audio. Planner follow-up. Real 3.12 is only proven by CI."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-06T23:44:53-04:00",
+          "note": "Re-check of 0343274: tests only, three minors closed, gate exit 0, 798 passed, 2 xfailed. Merge covered by the human's standing approval."
         }
       ]
     }
