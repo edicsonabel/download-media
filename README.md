@@ -65,7 +65,7 @@ download-media                    # asks everything, including URL
 download-media <url>              # URL preset, asks the rest
 ```
 
-The wizard walks through: URL → video/audio → quality and container (or audio format) → output folder → optional browser cookies. Every prompt shows the choices made so far and accepts `b` to go back one step.
+The wizard walks through: URL → video/audio → quality and container (or audio format) → output folder → optional browser cookies. Every prompt shows the choices made so far and accepts `b` to go back one step. If a page can't be inspected, the wizard says why, and if it needs a login it offers browser cookies right after the URL.
 
 ### Direct mode (any intent flag skips the wizard)
 

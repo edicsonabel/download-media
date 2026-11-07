@@ -22,6 +22,17 @@ def video_probe(url: str = URL) -> Probe:
     return Probe(url=url, site="generic", content_kind=ContentKind.SINGLE_VIDEO, title="Clip")
 
 
+def login_wall() -> Probe:
+    return Probe(
+        url=URL,
+        site="generic",
+        content_kind=ContentKind.UNKNOWN,
+        failed=True,
+        needs_cookies=True,
+        error_message="Login required",
+    )
+
+
 def carousel(items: list[ProbeItem] | None = None) -> Probe:
     default = [
         ProbeItem(1, ContentKind.SINGLE_IMAGE, False, "(image #1)"),
@@ -168,25 +179,19 @@ def test_cancel_after_back_from_first_cookies_prompt(walk: Any) -> None:
 
 
 def test_auth_failure_asks_cookies_and_probes_again(walk: Any) -> None:
-    denied = Probe(
-        url=URL, site="generic", content_kind=ContentKind.UNKNOWN, failed=True, needs_cookies=True
-    )
+    denied = login_wall()
     opts = walk([denied, video_probe()], "", BRAVE, "", "", "", "")
     assert opts.cookies_browser == "brave"
     assert opts.playlist_mode == "no"
 
 
 def test_cancel_at_auth_retry(walk: Any) -> None:
-    denied = Probe(
-        url=URL, site="generic", content_kind=ContentKind.UNKNOWN, failed=True, needs_cookies=True
-    )
+    denied = login_wall()
     assert walk(denied, "", "c") is None
 
 
 def test_declining_cookies_at_auth_retry_goes_manual(walk: Any) -> None:
-    denied = Probe(
-        url=URL, site="generic", content_kind=ContentKind.UNKNOWN, failed=True, needs_cookies=True
-    )
+    denied = login_wall()
     opts = walk(denied, "", "1", "", "", "", "")
     assert opts.cookies_browser is None
     assert opts.playlist_mode == "auto"
@@ -231,6 +236,15 @@ def test_detection_banner_shows_metadata(walk: Any, capsys: Any) -> None:
 def test_playlist_with_nothing_downloadable_cancels(walk: Any) -> None:
     images = [ProbeItem(1, ContentKind.SINGLE_IMAGE, False, "(image #1)")]
     assert walk(carousel(images), "") is None
+
+
+def test_a_refused_playlist_still_says_what_failed(walk: Any, capsys: Any) -> None:
+    refused = carousel([ProbeItem(1, ContentKind.UNKNOWN, False, "(item #1)")])
+    refused.error_message = "HTTP Error 500"
+    assert walk(refused, "") is None
+    out = capsys.readouterr().out
+    assert t("probe_partial", "HTTP Error 500") in out
+    assert t("no_supported_items") in out
 
 
 def test_playlist_of_only_unknown_items_is_offered(walk: Any) -> None:

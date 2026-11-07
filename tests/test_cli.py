@@ -330,6 +330,69 @@ def test_hint_stays_quiet_for_unrelated_errors(capsys) -> None:
     assert _hint(capsys, "HTTP Error 500", []) == ""
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[site] x: This video is only available for registered users. Use --cookies for it.",
+        "[site] x: The webpage request was redirected to the login page. You have exceeded the "
+        "rate-limit for accessing posts anonymously. Use --cookies for it.",
+    ],
+)
+def test_hint_follows_the_probe_on_what_cookies_can_fix(capsys, message: str) -> None:
+    assert "--cookies <browser>" in _hint(capsys, message, [])
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "[generic] private: Unable to download webpage: HTTP Error 429: Too Many Requests",
+        "This private video is blocked here\nYou might want to use a VPN or a proxy server.",
+    ],
+)
+def test_hint_stays_quiet_when_cookies_cannot_help(capsys, message: str) -> None:
+    assert _hint(capsys, message, []) == ""
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "ERROR: [generic] login: Unable to download webpage: HTTP Error 404: Not Found",
+        "\x1b[0;31mERROR:\x1b[0m [generic] login: Unable to download webpage: HTTP Error 404",
+        "[fakesite] a: HTTP Error 404: Not Found\n[fakesite] login: HTTP Error 404: Not Found",
+    ],
+    ids=["plain", "coloured", "second-error"],
+)
+def test_hint_ignores_the_id_of_a_real_download_error(capsys, message: str) -> None:
+    assert _hint(capsys, message, []) == ""
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "ERROR: [generic] login: Unable to download webpage: [Errno 111] Connection refused",
+        "\x1b[0;31mERROR:\x1b[0m [generic] login: Unable to download webpage: Connection refused",
+        "[fakesite] a: This post is gone\n[fakesite] login: This post is gone",
+    ],
+    ids=["plain", "coloured", "second-error"],
+)
+def test_hint_ignores_the_id_of_any_download_error(capsys, message: str) -> None:
+    assert _hint(capsys, message, []) == ""
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "ERROR: [generic] s401: Unable to download webpage: HTTP Error 401: Unauthorized",
+        "\x1b[0;31mERROR:\x1b[0m [site] x: Private video",
+        "ERROR: Login required",
+        "[fakesite] a: This post is gone\n[fakesite] b: Login required",
+    ],
+    ids=["401", "coloured", "no-site", "second-error"],
+)
+def test_hint_still_reads_the_sites_words_in_a_download_error(capsys, message: str) -> None:
+    assert "--cookies <browser>" in _hint(capsys, message, [])
+
+
 def test_keyring_hint_only_when_it_can_help(capsys) -> None:
     assert "+gnomekeyring" in _hint(capsys, "boom", ["--cookies", "brave"])
     assert _hint(capsys, "boom", ["--cookies", "brave+kwallet6"]) == ""

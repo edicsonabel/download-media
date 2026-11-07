@@ -29,6 +29,7 @@ from .config import (
 from .cookies import browser_of, parse_spec, uses_keyring, ydl_cookies
 from .downloader import DownloadResult, build_ydl_opts, download, list_formats
 from .i18n import is_yes, t
+from .probe import is_auth_error
 from .ui import C, die, fmt_bytes, fmt_duration, info, ok, warn
 
 # Flags that signal "I know what I want; skip the wizard".
@@ -331,9 +332,7 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
             "  → install python-secretstorage so cookies from Brave/Chrome can be decrypted:"
         )
         warn("      sudo pacman -S python-secretstorage")
-    elif (
-        "sign in to confirm you" in msg or "login required" in msg or "private" in msg
-    ) and not opts.cookies_browser:
+    elif is_auth_error(message) and not opts.cookies_browser:
         warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
     if opts.cookies_browser and uses_keyring(opts.cookies_browser):
         warn(t("cookies_keyring_hint", browser_of(opts.cookies_browser)))

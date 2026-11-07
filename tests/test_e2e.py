@@ -17,6 +17,8 @@ from download_media import cli, i18n
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.i18n import t
 
+from .conftest import GEO_BLOCK, HTTP_404
+
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
 EMPTY = "https://fake.test/empty"
@@ -1060,8 +1062,8 @@ def test_wizard_audio_selection_repeats(
 def test_wizard_browser_choice_repeats(
     run: Any, replay: Any, again: Path, fake_site: list[Any], answers: Any
 ) -> None:
-    # URL, type, quality, container, folder, cookies, then the preview.
-    answers("", "", "", "", "", "2", "")
+    # URL, cookies, type, quality, container, folder. The probe asks first: no preview.
+    answers("", "2", "", "", "", "")
     code, output = run("-i", "https://fake.test/needs-cookies")
     assert code == 0
     [line] = commands(output)
@@ -1694,7 +1696,7 @@ def test_wizard_on_a_lone_image_still_fails_the_probe(run: Any, out: Path, answe
     answers(*SINGLE_WALK, "")
     code, output = run("-i", "https://fake.test/image")
     assert code == 1
-    assert t("probe_failed", "unknown") in output
+    assert t("probe_failed", "No video formats found!") in output
     assert names(out) == []
 
 
@@ -2077,13 +2079,14 @@ def test_split_streams_with_unknown_codecs_are_merged(run: Any, out: Path, answe
 
 
 @pytest.mark.parametrize("page", ["storyboard-only", "image-format", "ig-image"])
-def test_wizard_on_a_lone_format_without_streams_still_fails_the_probe(
+def test_wizard_on_a_lone_format_without_streams_is_refused_as_an_image(
     run: Any, out: Path, answers: Any, page: str
 ) -> None:
-    answers(*SINGLE_WALK, "")
+    prompts = answers("")
     code, output = run("-i", f"https://fake.test/{page}")
-    assert code == 1
-    assert t("probe_failed", "unknown") in output
+    assert code == 0
+    assert len(prompts) == 1
+    assert t("image_only_skipped") in output
     assert t("done") not in output
     assert names(out) == []
 
@@ -2213,3 +2216,718 @@ def test_what_the_user_reads_about_each_kind_in_both_languages(
     answers(*SINGLE_WALK, "")
     _, output = run("-i", "https://fake.test/jpg")
     assert f"generic / {unknown}" in output
+
+
+GATED = "https://fake.test/needs-cookies"
+# detect_site reads the whole URL, and FakeSiteIE ignores the query.
+COOKIE_HUNGRY = f"{GATED}?from=instagram.com"
+NO_COOKIES = "1"
+FIRST_BROWSER = "2"
+# Type, quality, container, folder.
+VIDEO_STEPS = ("",) * 4
+LOGIN_REQUIRED = "Login required"
+RATE_LIMIT_REASON = (
+    "This content isn't available, try again later. The current session has been rate-limited "
+    "by YouTube for up to an hour."
+)
+GEO_REASON = "This video is not available from your location due to geo restriction"
+
+
+def asked_for_login(reason: str = "") -> str:
+    return t("auth_needed_retry", reason)
+
+
+def partly_inspected(reason: str = "") -> str:
+    return t("probe_partial", reason)
+
+
+@pytest.fixture
+def wizard_on(run: Any, answers: Any) -> Callable[..., tuple[int, str]]:
+    """Walk the wizard on ``url``. Every reply must be asked for, and nothing else."""
+
+    def _wizard_on(url: str, *replies: Any, flags: tuple[str, ...] = ()) -> tuple[int, str]:
+        prompts = answers(*replies)
+        code, output = run("-i", *flags, url)
+        assert len(prompts) == len(replies)
+        return code, output
+
+    return _wizard_on
+
+
+def test_wizard_retries_a_gated_video_with_the_browser_it_is_given(
+    wizard_on: Any, replay: Any, out: Path, again: Path
+) -> None:
+    code, output = wizard_on(GATED, "", FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert names(out) == ["Clip.mp4"]
+    assert len(history_rows()) == 1
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == ["Clip.mp4"]
+
+
+@pytest.mark.parametrize("reply", [NO_COOKIES, "b"], ids=["declines", "back"])
+def test_wizard_says_why_a_gated_video_failed_when_cookies_are_declined(
+    wizard_on: Any, out: Path, reply: str
+) -> None:
+    # Then the manual steps and the preview. Not asked for cookies again.
+    code, output = wizard_on(GATED, "", reply, *VIDEO_STEPS, "")
+    assert code == 1
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert t("probe_failed", LOGIN_REQUIRED) in output
+    assert "unknown" not in output
+    assert output.count(t("ask_cookies")) == 1
+    assert names(out) == []
+    assert history_rows() == []
+
+
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_cancelling_at_the_cookie_retry_ends_the_run(wizard_on: Any, reply: Any) -> None:
+    code, output = wizard_on(GATED, "", reply)
+    assert code == 0
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert t("equiv_cmd") not in output
+
+
+def test_wizard_keeps_the_picker_on_a_gated_carousel(
+    wizard_on: Any, replay: Any, out: Path, again: Path
+) -> None:
+    code, output = wizard_on(
+        "https://fake.test/gated-carousel", "", FIRST_BROWSER, "", *VIDEO_STEPS
+    )
+    assert code == 0
+    assert output.count(tag("kind_video")) == 2
+    saved = ["02 - Clip [v1].mp4", "03 - Clip [v2].mp4"]
+    assert names(out) == saved
+    [line] = commands(output)
+    assert "--cookies" in line
+    assert "--playlist-items" in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == saved
+
+
+def test_no_playlist_flag_keeps_the_picker_on_a_gated_carousel(wizard_on: Any, out: Path) -> None:
+    url = "https://fake.test/gated-carousel"
+    code, output = wizard_on(url, "", FIRST_BROWSER, "", *VIDEO_STEPS, flags=("-P",))
+    assert code == 0
+    assert output.count(tag("kind_video")) == 2
+    assert len(names(out)) == 2
+
+
+def test_declining_a_gated_carousel_goes_manual(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on("https://fake.test/gated-carousel", "", NO_COOKIES, *VIDEO_STEPS, "")
+    assert code == 1
+    assert asked_for_login() in output
+    assert t("probe_falling_back") in output
+    assert names(out) == []
+
+
+def test_declining_twice_on_a_cookie_hungry_site_asks_no_third_time(
+    wizard_on: Any, out: Path
+) -> None:
+    code, output = wizard_on(COOKIE_HUNGRY, "", NO_COOKIES, NO_COOKIES, *VIDEO_STEPS, "")
+    assert code == 1
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert output.count(t("ask_cookies")) == 2
+    assert names(out) == []
+
+
+def test_a_decline_up_front_can_be_taken_back_at_the_retry(wizard_on: Any, out: Path) -> None:
+    code, _ = wizard_on(COOKIE_HUNGRY, "", NO_COOKIES, FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+
+
+def test_a_browser_given_up_front_needs_no_retry(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on(COOKIE_HUNGRY, "", FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert asked_for_login() not in output
+    assert names(out) == ["Clip.mp4"]
+
+
+def test_a_public_carousel_on_a_cookie_hungry_site_asks_once(wizard_on: Any) -> None:
+    url = "https://fake.test/carousel?from=instagram.com"
+    code, output = wizard_on(url, "", NO_COOKIES, "", *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(t("ask_cookies")) == 1
+
+
+def test_cookies_that_do_not_help_end_the_retry_without_a_loop(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on(PRIVATE, "", FIRST_BROWSER, *VIDEO_STEPS, "")
+    assert code == 1
+    assert t("auth_still_needed", BROWSERS[0]) in output
+    assert t("probe_failed", "This post is private") in output
+    assert output.count(t("ask_cookies")) == 1
+    assert names(out) == []
+
+
+def test_cookies_from_the_command_line_that_do_not_help_say_so(wizard_on: Any) -> None:
+    # The late cookies step stays: nothing has asked yet.
+    code, output = wizard_on(PRIVATE, *SINGLE_WALK, "", flags=("--cookies", "firefox"))
+    assert code == 1
+    assert t("auth_still_needed", "firefox") in output
+    assert asked_for_login() not in output
+
+
+@pytest.mark.parametrize("page,reason", [("rate-limited", RATE_LIMIT_REASON), ("geo", GEO_REASON)])
+def test_a_failure_cookies_cannot_fix_is_explained_without_a_prompt(
+    wizard_on: Any, page: str, reason: str
+) -> None:
+    code, output = wizard_on(f"https://fake.test/{page}", *SINGLE_WALK, "")
+    assert code == 1
+    assert t("probe_failed", reason) in output
+    assert asked_for_login() not in output
+    assert output.count(t("ask_cookies")) == 1
+    assert output.index(t("probe_falling_back")) < output.index(t("ask_cookies"))
+
+
+def test_a_geo_block_with_metadata_is_not_an_image(wizard_on: Any) -> None:
+    code, output = wizard_on("https://fake.test/geo-metadata", *SINGLE_WALK, "")
+    assert code == 1
+    assert t("probe_failed", GEO_BLOCK) in output
+    assert t("image_only_skipped") not in output
+
+
+def test_an_extractor_bug_is_reported_without_yt_dlps_tail(wizard_on: Any) -> None:
+    code, output = wizard_on("https://fake.test/extractor-bug", *SINGLE_WALK, "")
+    assert code == 1
+    assert t("probe_failed", "Unable to extract video data") in output
+
+
+def test_declining_a_partly_gated_carousel_keeps_the_picker(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on("https://fake.test/partial-gated", "", NO_COOKIES, "", *VIDEO_STEPS)
+    assert code == 0
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert partly_inspected(LOGIN_REQUIRED) in output
+    assert "[?]" in output
+    assert tag("kind_image") in output
+    assert names(out) == ["01 - Clip [v2].mp4"]
+    [line] = commands(output)
+    assert "--playlist-items 1" in line
+
+
+def test_cookies_recover_the_gated_entry_of_a_carousel(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on("https://fake.test/partial-gated", "", FIRST_BROWSER, "", *VIDEO_STEPS)
+    assert code == 0
+    assert "[?]" not in output
+    assert partly_inspected() not in output
+    assert output.count(tag("kind_video")) == 2
+    assert names(out) == ["01 - Clip [v2].mp4", "03 - Clip [v1].mp4"]
+
+
+def test_a_rate_limited_entry_keeps_the_picker_with_no_early_prompt(
+    wizard_on: Any, out: Path
+) -> None:
+    code, output = wizard_on("https://fake.test/partial-rate", *PICKER_WALK)
+    assert code == 0
+    assert partly_inspected(RATE_LIMIT_REASON) in output
+    assert asked_for_login() not in output
+    assert output.count(t("ask_cookies")) == 1
+    assert output.index("[?]") < output.index(t("ask_cookies"))
+    assert names(out) == ["01 - Clip [v2].mp4"]
+
+
+def test_a_broken_entry_counts_the_same_in_the_wizard_and_with_y_p(
+    wizard_on: Any, run: Any, out: Path, again: Path
+) -> None:
+    url = "https://fake.test/partial-broken"
+    code, output = wizard_on(url, "", "all", *VIDEO_STEPS, "")
+    assert code == 0
+    assert partly_inspected("Unable to extract video data") in output
+    assert "[?]" in output
+    assert t("partial_result", 1, 3, 1, 1) in output
+    [line] = commands(output)
+    assert " -p " in f"{line} "
+    saved = names(out)
+    assert saved == ["01 - Clip [v2].mp4"]
+    code, direct = run("-y", "-p", "-o", str(again), url)
+    assert code == 0
+    assert t("partial_result", 1, 3, 1, 1) in direct
+    assert names(again) == saved
+
+
+def test_a_carousel_with_every_entry_gated_is_a_failure_not_an_empty_one(
+    wizard_on: Any, out: Path
+) -> None:
+    code, output = wizard_on("https://fake.test/all-gated", "", NO_COOKIES, *VIDEO_STEPS, "")
+    assert code == 1
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert t("no_supported_items") not in output
+    assert names(out) == []
+
+
+def test_an_empty_entry_is_not_called_an_image(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on("https://fake.test/hole", *PICKER_WALK)
+    assert code == 0
+    assert "[?]" in output
+    assert partly_inspected() not in output
+    assert t("ig_image_warning") not in output
+    assert tag("kind_image") not in output
+    assert names(out) == ["01 - Clip [v2].mp4"]
+
+
+@pytest.mark.parametrize("page", ["ig-image", "image-format", "storyboard-only", "thumbnail-image"])
+def test_a_lone_image_is_refused_at_once(wizard_on: Any, out: Path, page: str) -> None:
+    code, output = wizard_on(f"https://fake.test/{page}", "")
+    assert code == 0
+    assert t("image_only_skipped") in output
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_entries_yt_dlp_cannot_fetch_stay_images_with_no_warning_of_failure(wizard_on: Any) -> None:
+    code, output = wizard_on("https://fake.test/undownloadable-carousel", *PICKER_WALK)
+    assert code == 0
+    assert output.count(tag("kind_image")) == 3
+    assert output.count(tag("kind_video")) == 1
+    assert partly_inspected() not in output
+
+
+def test_cookies_the_site_rejects_are_still_dropped_by_the_retry(wizard_on: Any, out: Path) -> None:
+    url = "https://fake.test/rejects-cookies"
+    code, output = wizard_on(url, *SINGLE_WALK, "", flags=("--cookies", "brave"))
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    [line] = commands(output)
+    assert "--cookies" not in line
+
+
+def test_audio_intent_survives_the_cookie_retry(wizard_on: Any, out: Path) -> None:
+    # URL, cookies, type, audio format, folder.
+    code, _ = wizard_on(GATED, "", FIRST_BROWSER, "", "", "", flags=("-a",))
+    assert code == 0
+    assert names(out) == ["Clip.mp3"]
+
+
+def test_listing_formats_goes_through_the_cookie_retry(
+    fake_site: list[Any], answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    # -l alone opens the wizard, so it gets the same retry before listing.
+    prompts = answers("", FIRST_BROWSER, *VIDEO_STEPS)
+    code = cli.main(["-l", GATED])
+    captured = capfd.readouterr()
+    assert code == 0
+    assert len(prompts) == 6
+    assert asked_for_login(LOGIN_REQUIRED) in captured.out + captured.err
+    assert "main" in captured.out
+
+
+TWO_THIRDS = {"-p": (0, ["01 - Clip [v2].mp4"])}
+ONE_LEFT_BEHIND = {
+    "": (1, ["Clip [v2].mp4"]),
+    "-P": (1, ["Clip [v2].mp4"]),
+    "-a": (1, ["Clip [v2].mp3"]),
+    **TWO_THIRDS,
+}
+# What main does with these pages: a page and a mode missing here exit 1 and save nothing.
+DIRECT_OUTCOMES: dict[str, dict[str, tuple[int, list[str]]]] = {
+    "partial-gated": ONE_LEFT_BEHIND,
+    "partial-rate": ONE_LEFT_BEHIND,
+    "partial-broken": ONE_LEFT_BEHIND,
+    "partial-both": {"-p": (0, ["03 - Clip [v2].mp4"])},
+    "hole": {
+        "": (0, ["Clip [v2].mp4"]),
+        "-p": (0, ["01 - Clip [v2].mp4"]),
+        "-P": (0, ["Clip [v2].mp4"]),
+        "-a": (0, ["Clip [v2].mp3"]),
+        "-l": (0, []),
+    },
+}
+
+
+@pytest.mark.parametrize("mode", ["", "-p", "-P", "-a", "-l"])
+@pytest.mark.parametrize(
+    "page",
+    [
+        "needs-cookies",
+        "login-hint",
+        "gated-carousel",
+        "anonymous-limit",
+        "age-gate",
+        "rate-limited",
+        "geo",
+        "geo-metadata",
+        "paid-post",
+        "no-video-post",
+        "drm",
+        "extractor-bug",
+        "partial-gated",
+        "partial-rate",
+        "partial-broken",
+        "partial-both",
+        "all-gated",
+        "hole",
+        "thumbnail-image",
+    ],
+)
+def test_direct_modes_keep_their_exit_codes_and_files(
+    run: Any, out: Path, page: str, mode: str
+) -> None:
+    code, _ = run("-y", *mode.split(), f"https://fake.test/{page}")
+    assert (code, names(out)) == DIRECT_OUTCOMES.get(page, {}).get(mode, (1, []))
+
+
+def test_wizard_asks_for_cookies_on_a_real_401(generic: Any) -> None:
+    code, output = generic("status/401", "", NO_COOKIES, *VIDEO_STEPS, "")
+    assert code == 1
+    reason = "Unable to download webpage: HTTP Error 401: Unauthorized"
+    assert asked_for_login(reason) in output
+    assert t("probe_failed", reason) in output
+
+
+@pytest.mark.parametrize(
+    "status,reason",
+    [
+        (403, "Forbidden"),
+        (404, "Not Found"),
+        (410, "Gone"),
+        (429, "Too Many Requests"),
+        (503, "Service Unavailable"),
+    ],
+)
+def test_wizard_explains_a_real_http_error_without_a_prompt(
+    generic: Any, status: int, reason: str
+) -> None:
+    code, output = generic(f"status/{status}", *SINGLE_WALK, "")
+    assert code == 1
+    message = f"Unable to download webpage: HTTP Error {status}: {reason}"
+    assert t("probe_failed", message) in output
+    assert asked_for_login() not in output
+
+
+def test_a_browser_picked_at_the_retry_that_is_not_installed_is_named(
+    generic: Any, home: Path
+) -> None:
+    chrome = str(BROWSERS.index("chrome") + 2)
+    code, output = generic("status/401", "", chrome, *VIDEO_STEPS, "")
+    assert code == 1
+    assert "could not find chrome cookies database" in output
+    assert t("auth_still_needed", "chrome") not in output
+    assert t("probe_falling_back") in output
+    assert names(home / "Videos") == []
+
+
+def test_a_browser_that_is_not_installed_is_named_and_the_retry_still_saves(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("poster.html", *SINGLE_WALK, "", flags=("-i", "--cookies", "chrome"))
+    assert code == 0
+    assert "could not find chrome cookies database" in output
+    assert "failed to load cookies" not in output
+    assert t("auth_still_needed", "chrome") not in output
+    assert len(names(home / "Videos")) == 1
+
+
+GIVE_UP = "try again with --cookies"
+
+
+@pytest.mark.parametrize("reply", [NO_COOKIES, "b"], ids=["declines", "back"])
+def test_declining_part_of_a_carousel_keeps_the_rest_and_no_cookies_in_the_command(
+    wizard_on: Any, replay: Any, out: Path, again: Path, reply: str
+) -> None:
+    url = "https://fake.test/partial-first"
+    code, output = wizard_on(url, "", reply, "", *VIDEO_STEPS)
+    assert code == 0
+    assert output.count("[?]") == 1
+    saved = ["02 - Clip [v2].mp4", "03 - Clip [v3].mp4"]
+    assert names(out) == saved
+    assert len(history_rows()) == 1
+    [line] = commands(output)
+    assert "--playlist-items 2,3" in line
+    assert "--cookies" not in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == saved
+
+
+@pytest.mark.parametrize("page", ["partial-first", "gated-carousel"])
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_cancelling_the_retry_of_a_carousel_saves_nothing(
+    wizard_on: Any, out: Path, page: str, reply: Any
+) -> None:
+    code, output = wizard_on(f"https://fake.test/{page}", "", reply)
+    assert code == 0
+    assert t("equiv_cmd") not in output
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_back_at_the_retry_of_a_gated_carousel_is_a_decline(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on("https://fake.test/gated-carousel", "", "b", *VIDEO_STEPS, "")
+    assert code == 1
+    assert output.count(t("ask_cookies")) == 1
+    assert t("probe_falling_back") in output
+    assert names(out) == []
+
+
+def test_back_at_the_second_prompt_of_a_cookie_hungry_site_asks_no_third_time(
+    wizard_on: Any, out: Path
+) -> None:
+    code, output = wizard_on(COOKIE_HUNGRY, "", NO_COOKIES, "b", *VIDEO_STEPS, "")
+    assert code == 1
+    assert output.count(t("ask_cookies")) == 2
+    assert names(out) == []
+
+
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_cancelling_the_second_prompt_of_a_cookie_hungry_site_ends_the_run(
+    wizard_on: Any, reply: Any
+) -> None:
+    code, output = wizard_on(COOKIE_HUNGRY, "", NO_COOKIES, reply)
+    assert code == 0
+    assert t("equiv_cmd") not in output
+
+
+def test_a_wrong_answer_at_the_retry_is_asked_again_in_place(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on(GATED, "", "nope", FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(t("ask_cookies")) == 1
+    assert names(out) == ["Clip.mp4"]
+
+
+def test_a_declined_login_ends_with_the_cookies_hint(wizard_on: Any) -> None:
+    _, output = wizard_on(GATED, "", NO_COOKIES, *VIDEO_STEPS, "")
+    assert GIVE_UP in output
+
+
+def test_cookies_that_did_not_help_get_no_cookies_hint(wizard_on: Any) -> None:
+    _, output = wizard_on(PRIVATE, "", FIRST_BROWSER, *VIDEO_STEPS, "")
+    assert GIVE_UP not in output
+
+
+def test_a_wrong_keyring_reads_as_cookies_that_did_not_help(wizard_on: Any) -> None:
+    flags = ("--cookies", "brave+basictext")
+    code, output = wizard_on(PRIVATE, *SINGLE_WALK, "", flags=flags)
+    assert code == 1
+    assert t("auth_still_needed", "brave") in output
+    assert asked_for_login() not in output
+    [line] = commands(output)
+    assert "--cookies brave+basictext" in line
+
+
+def test_one_entry_left_among_failures_is_the_one_saved(
+    wizard_on: Any, replay: Any, out: Path, again: Path
+) -> None:
+    url = "https://fake.test/partial-all-but-one"
+    code, output = wizard_on(url, "", NO_COOKIES, "", *VIDEO_STEPS)
+    assert code == 0
+    assert partly_inspected(LOGIN_REQUIRED) in output
+    assert output.count("[?]") == 3
+    assert names(out) == ["03 - Clip [v2].mp4"]
+    [line] = commands(output)
+    assert "--playlist-items 3" in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_all_counts_the_failed_entry_and_replays_the_same_files(
+    wizard_on: Any, replay: Any, out: Path, again: Path
+) -> None:
+    url = "https://fake.test/partial-first"
+    code, output = wizard_on(url, "", NO_COOKIES, "all", *VIDEO_STEPS)
+    assert code == 0
+    assert t("partial_result", 2, 3, 0, 1) in output
+    [line] = commands(output)
+    assert " -p " in f"{line} "
+    assert "--cookies" not in line
+    code, again_output = replay(line, again)
+    assert code == 0
+    assert t("partial_result", 2, 3, 0, 1) in again_output
+    assert names(again) == names(out)
+
+
+def test_picking_a_failed_entry_leaves_only_what_can_be_saved(wizard_on: Any, out: Path) -> None:
+    url = "https://fake.test/partial-first"
+    code, output = wizard_on(url, "", NO_COOKIES, "1", "1,3", *VIDEO_STEPS)
+    assert code == 0
+    assert t("selection_warning_unsupported", "1") in output
+    assert names(out) == ["03 - Clip [v3].mp4"]
+    [line] = commands(output)
+    assert "--playlist-items 3" in line
+
+
+def test_cookies_that_leave_an_entry_gated_keep_the_picker_without_a_loop(
+    wizard_on: Any, replay: Any, out: Path, again: Path
+) -> None:
+    url = "https://fake.test/partial-private"
+    code, output = wizard_on(url, "", FIRST_BROWSER, "", *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(t("ask_cookies")) == 1
+    assert partly_inspected("This post is private") in output
+    assert t("auth_still_needed", BROWSERS[0]) not in output
+    assert names(out) == ["01 - Clip [v2].mp4"]
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_cookies_that_break_a_partial_carousel_are_explained_without_a_loop(
+    wizard_on: Any,
+) -> None:
+    url = "https://fake.test/partial-rejected"
+    _, output = wizard_on(url, "", FIRST_BROWSER, *VIDEO_STEPS, "")
+    assert output.count(t("ask_cookies")) == 1
+    assert t("probe_failed", "Failed to parse JSON") in output
+    assert t("auth_still_needed", BROWSERS[0]) not in output
+    assert t("cookies_retry", BROWSERS[0]) in output
+
+
+def test_a_refusal_after_a_decline_says_why_first(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on("https://fake.test/images-and-gated", "", NO_COOKIES)
+    assert code == 0
+    assert output.index(partly_inspected(LOGIN_REQUIRED)) < output.index(t("no_supported_items"))
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_an_error_with_no_words_still_reads_unknown(wizard_on: Any) -> None:
+    code, output = wizard_on("https://fake.test/blank-error", *SINGLE_WALK, "")
+    assert code == 1
+    assert t("probe_failed", "unknown") in output
+    assert asked_for_login() not in output
+
+
+def test_a_text_duration_on_an_image_entry_keeps_the_picker(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on("https://fake.test/text-duration-carousel", *PICKER_WALK)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v2].mp4"]
+    assert tag("kind_image") in output
+
+
+@pytest.mark.parametrize("page", ["login-hint", "anonymous-limit", "age-gate", "paid-post"])
+def test_direct_mode_points_at_cookies_on_a_login_error(run: Any, page: str) -> None:
+    code, output = run("-y", f"https://fake.test/{page}")
+    assert code == 1
+    assert GIVE_UP in output
+
+
+def test_direct_mode_does_not_repeat_the_hint_to_someone_using_cookies(run: Any) -> None:
+    code, output = run("-y", "--cookies", "firefox", "https://fake.test/private")
+    assert code == 1
+    assert GIVE_UP not in output
+
+
+@pytest.mark.parametrize("page", ["rate-limited", "geo", "geo-metadata", "drm", "extractor-bug"])
+def test_direct_mode_keeps_quiet_when_cookies_cannot_help(run: Any, page: str) -> None:
+    code, output = run("-y", f"https://fake.test/{page}")
+    assert code == 1
+    assert GIVE_UP not in output
+
+
+@pytest.mark.parametrize(
+    "page,hint",
+    [
+        ("status/401", True),
+        ("status/403", False),
+        ("status/404", False),
+        ("status/410", False),
+        ("status/429", False),
+        ("status/503", False),
+    ],
+)
+def test_direct_mode_hint_on_real_http_errors(generic: Any, page: str, hint: bool) -> None:
+    code, output = generic(page, flags=("-y",))
+    assert code == 1
+    assert (GIVE_UP in output) is hint
+
+
+@pytest.mark.parametrize("page", ["login", "private%20clip", "tag:private"])
+def test_a_real_404_named_after_a_login_asks_for_nothing(generic: Any, page: str) -> None:
+    code, output = generic(page, flags=("-y",))
+    assert code == 1
+    assert GIVE_UP not in output
+    code, output = generic(page, *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+    assert t("probe_failed", "Unable to download webpage: HTTP Error 404: File not found") in output
+
+
+def test_a_real_404_whose_id_the_prefix_cannot_read_asks_for_nothing(generic: Any) -> None:
+    page = "tag:%20private"
+    code, output = generic(page, flags=("-y",))
+    assert code == 1
+    assert GIVE_UP not in output
+    code, output = generic(page, *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+
+
+def test_direct_mode_does_not_blame_a_refused_connection_on_login(
+    home: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["-y", "http://127.0.0.1:1/login"]) == 1
+    assert GIVE_UP not in capfd.readouterr().out
+
+
+def test_a_404_hiding_a_private_video_is_rescued_by_the_late_cookies_step(
+    wizard_on: Any, out: Path
+) -> None:
+    # A 404 never asks up front, so this step is all such a site has left.
+    *steps, _ = SINGLE_WALK
+    code, output = wizard_on("https://fake.test/hidden-404", *steps, FIRST_BROWSER, "")
+    assert code == 0
+    assert asked_for_login() not in output
+    assert t("probe_failed", HTTP_404) in output
+    assert output.count(t("ask_cookies")) == 1
+    assert names(out) == ["Clip.mp4"]
+    assert len(history_rows()) == 1
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+
+
+def test_direct_mode_ignores_an_id_with_a_colon_on_a_403(generic: Any) -> None:
+    code, output = generic("status/403/tag:%20private", flags=("-y",))
+    assert code == 1
+    assert GIVE_UP not in output
+
+
+def test_direct_mode_ignores_an_id_with_a_colon_on_a_refused_connection(
+    home: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["-y", "http://127.0.0.1:1/tag:%20private"]) == 1
+    assert GIVE_UP not in capfd.readouterr().out
+
+
+def test_wizard_ignores_an_id_with_a_colon_on_a_403(generic: Any) -> None:
+    code, output = generic("status/403/tag:%20private", *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+    assert t("probe_failed", "Unable to download webpage: HTTP Error 403: Forbidden") in output
+
+
+def test_the_reason_of_a_404_drops_all_of_an_id_with_a_colon(generic: Any) -> None:
+    code, output = generic("tag:%20private", *SINGLE_WALK, "")
+    assert code == 1
+    assert t("probe_failed", "Unable to download webpage: HTTP Error 404: File not found") in output
+
+
+@pytest.mark.parametrize("page", ["404-login", "404-spaced"])
+def test_direct_mode_does_not_blame_a_404_on_login(run: Any, page: str) -> None:
+    code, output = run("-y", f"https://fake.test/{page}")
+    assert code == 1
+    assert GIVE_UP not in output
+
+
+@pytest.mark.parametrize("page", ["404-spaced", "404-colon"])
+def test_wizard_does_not_ask_for_cookies_on_a_404_named_after_a_login(
+    wizard_on: Any, page: str
+) -> None:
+    code, output = wizard_on(f"https://fake.test/{page}", *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+
+
+def test_wizard_does_not_ask_for_cookies_on_a_404_whose_id_is_a_login_word(
+    wizard_on: Any,
+) -> None:
+    code, output = wizard_on("https://fake.test/404-login", *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+    assert t("probe_failed", "Unable to download webpage: HTTP Error 404: Not Found") in output
