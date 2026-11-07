@@ -1,6 +1,6 @@
 # 21 — Make `-s` embed subtitles as documented, and let `--sub-langs` turn them on
 
-Status: draft
+Status: approved
 Item: `fix/subs-as-documented`
 
 > **For the human's review: D1, D2 and D3 change shipped behaviour.** The roles decided them under the overnight delegation. D1: with `-s`, video files now hold the subtitles as streams, and the `.vtt`/`.srt` files users get today stay next to them. In mp4, ffmpeg always marks the first embedded language as the default track, so some players may show it straight away. D2: `--sub-langs` on its own now downloads subtitles. D3: two new warnings, and the exit status stays 0. All three are easy to undo and none loses a file. See Open decisions and SemVer.
@@ -221,6 +221,8 @@ Not needed. Selecting (`process_subtitles`), writing (`_write_subtitles`) and em
 **Minor.** There are new user-visible messages (`AGENTS.md` counts those as minor), and `-s` and `--sub-langs` change behaviour. Nothing is breaking: no flag is renamed, no default value changes, no path moves, and the files `-s` users get today are still written. 0.3.0 is already a minor because of `8cc3d30`. The 0.3.0 notes should say: "`-s` now embeds subtitles in the video (the subtitle files are still saved); `--sub-langs` alone now turns subtitles on; in mp4 the first language is marked as the default track." Commit type: `fix`.
 
 ## Open decisions
+
+Resolved by the roles under the human's overnight delegation, each on the recommended option: D1 B (embed and keep the subtitle files), D2 yes (`--sub-langs` implies `-s`), D3 as recommended (`subs_none` and `subs_not_embedded`, never a failure), D4 unchanged for `-a -s`, D5 no wizard step here. D1, D2 and D3 change shipped behaviour and need the human's review.
 
 Each was decided by the roles under the overnight delegation, following the rule: easiest to undo, no data lost, least change to what users rely on. **⚠** marks a change to shipped behaviour.
 
