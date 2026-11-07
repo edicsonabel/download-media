@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T09:16:46-04:00",
+  "updated": "2026-11-07T09:32:59-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,9 +707,9 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
       "worktree": ".worktrees/fix-playlist-items-fix",
@@ -720,7 +720,8 @@
         "3bc48d2",
         "ce926e6",
         "fab0a23",
-        "21c228f"
+        "21c228f",
+        "1f4c65f"
       ],
       "review": {
         "approved": false,
@@ -763,6 +764,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T09:16:46-04:00",
           "note": "Round 1. 1483 passed, 5 xfailed (2 new strict). Mutation 18/18. missing_items matches yt-dlp's slicing on 72 checks. One medium finding."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T09:32:59-04:00",
+          "note": "Round 1 fixed: under --playlist-items in playlist mode, the declared playlist_count is removed so yt-dlp counts entries itself. 1489 passed, 3 xfailed; floor passes. Side effect: yt-dlp's 'of M' line uses the real count."
         }
       ]
     }
