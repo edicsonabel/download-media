@@ -63,11 +63,13 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         # Thumbnail files this run wrote for the current item, and whether it lost its cover.
         self.item_thumbs: list[str] = []
         self.item_no_cover = False
+        # Paths the current item's media was at, before and after each step.
+        self.item_media: set[Path] = set()
         super().__init__(*args, **kwargs)
 
     def process_info(self, info_dict: Any) -> Any:
         self.item_errors = len(self.errors)
-        self.item_thumbs, self.item_no_cover = [], False
+        self.item_thumbs, self.item_no_cover, self.item_media = [], False, set()
         try:
             result = super().process_info(info_dict)
         except BaseException:
@@ -93,9 +95,24 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_thumbs += [path for path, _ in written or []]
         return written
 
+    def run_pp(self, pp: Any, infodict: Any) -> Any:
+        # yt-dlp takes a thumbnail's extension from its link, so a link ending in .mp3 names it
+        # like the audio, and audio extraction then writes over it: it is the audio from then on.
+        self._claim_media(infodict)
+        infodict = super().run_pp(pp, infodict)
+        self._claim_media(infodict)
+        return infodict
+
+    def _claim_media(self, info: Any) -> None:
+        if info.get("filepath"):
+            media = Path(info["filepath"])
+            self.item_media.add(media)
+            self.item_thumbs = [path for path in self.item_thumbs if Path(path) != media]
+
     def drop_thumbs(self) -> None:
         for path in self.item_thumbs:
-            Path(path).unlink(missing_ok=True)
+            if Path(path) not in self.item_media:
+                Path(path).unlink(missing_ok=True)
         self.item_thumbs = []
 
     def item_failed(self) -> bool:

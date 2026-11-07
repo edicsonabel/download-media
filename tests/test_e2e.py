@@ -2680,12 +2680,6 @@ def test_other_thumbnail_links_never_fail_the_audio(
         assert cover_warnings(output) == 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Bug: yt-dlp takes the thumbnail's extension from its link. A link ending in .mp3 "
-    "names the thumbnail after the audio, so after ExtractAudio writes the audio there, "
-    "_EmbedCover's drop_thumbs() deletes the saved .mp3. main keeps it (Download failed).",
-)
 @pytest.mark.parametrize("flags", [(), ("-p",)])
 def test_a_thumbnail_named_like_the_audio_never_deletes_it(
     generic: Any, out: Path, flags: tuple[str, ...]
