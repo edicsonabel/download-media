@@ -580,6 +580,13 @@ class FakeSiteIE(InfoExtractor):
         if page == "lazy-hidden":
             # The same header count on a paged list, YouTube's real shape: 3 declared, 2 read.
             return {**self.playlist_result(two_lazily(), "post", "Post"), "playlist_count": 3}
+        if page == "multi-hidden":
+            # A multi_video result (one video in parts) carries the same declared count.
+            parts = [self._video("v1"), video]
+            return {
+                **self.playlist_result(parts, "post", "Post", multi_video=True),
+                "playlist_count": 3,
+            }
         if page == "partial-drm":
             return self.playlist_result([video, broken], "post", "Post")
         if page == "partial-no-url":

@@ -399,6 +399,8 @@ def test_lazy_list_not_read_to_the_end_has_no_note(run: Any, out: Path) -> None:
         ("lazy-hidden", "2,3", ["02 - Clip [v3].mp4"], ["3"]),
         # Not read to the end: the size is unknown, and nothing requested is missing.
         ("lazy-hidden", "1", ["01 - Clip [v2].mp4"], []),
+        # A multi_video result declares its count the same way.
+        ("multi-hidden", "2,3", ["02 - Clip [v2].mp4"], ["3"]),
     ],
 )
 def test_missing_items_follow_the_entries_not_the_declared_count(
@@ -411,7 +413,7 @@ def test_missing_items_follow_the_entries_not_the_declared_count(
     assert t("done") in output
 
 
-@pytest.mark.parametrize("page", ["hidden-items", "lazy-hidden"])
+@pytest.mark.parametrize("page", ["hidden-items", "lazy-hidden", "multi-hidden"])
 def test_missing_items_note_counts_the_entries_read(run: Any, out: Path, page: str) -> None:
     code, output = run("-y", "--playlist-items", "2,3", f"https://fake.test/{page}")
     assert code == 0
