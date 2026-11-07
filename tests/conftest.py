@@ -195,6 +195,7 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "ogx-and-mp4": '<video src="theora.ogx"></video><video src="tiny.mp4"></video>',
         "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
         "all-junk": f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>',
+        "audio-no-ext-video": f'<audio src="{NO_EXT_VIDEO}"></audio>',
     }
     for name, body in pages.items():
         (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")

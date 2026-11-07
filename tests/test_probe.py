@@ -275,8 +275,8 @@ def may_hold_video(*formats: dict[str, Any]) -> bool:
     [
         *(([{"vcodec": "none", "acodec": None, "ext": e}], True) for e in EXT_MAY_HOLD_VIDEO),
         *(([{"vcodec": "none", "acodec": None, "ext": e}], False) for e in EXT_SAYS_AUDIO),
-        # An <audio src> with no extension: its video path fails today (roadmap row 29).
-        ([{"vcodec": "none", "acodec": None, "ext": "unknown_video"}], False),
+        # An <audio src> with no extension.
+        ([{"vcodec": "none", "acodec": None, "ext": "unknown_video"}], True),
         *(
             ([{"vcodec": None, "acodec": None, "ext": e}], False)
             for e in EXT_MAY_HOLD_VIDEO + EXT_SAYS_AUDIO

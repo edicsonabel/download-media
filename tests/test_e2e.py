@@ -2663,19 +2663,40 @@ def test_hls_in_an_audio_tag_reads_as_video_and_keeps_it(generic: Any, home: Pat
     assert "video" in streams(home / "Videos" / saved)
 
 
-def test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds(
-    media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+def test_wizard_offers_the_video_of_real_audio_with_no_extension_in_an_audio_tag(
+    generic: Any, home: Path
 ) -> None:
-    answers(*SINGLE_WALK)  # Enough Enters for either flow: with or without the type step.
-    code = cli.main([f"{media_url}/audio-no-ext.html"])
-    captured = capfd.readouterr()
-    output = captured.out + captured.err
+    # Enter keeps the file as served; ffmpeg can't tag an .unknown_video.
+    code, output = generic("audio-no-ext.html", *SINGLE_WALK)
     assert code == 0
+    assert t("audio_may_hold_video") in output
     assert t("done") in output
-    assert t("failed", f"{media_url}/audio-no-ext.html") not in output
-    saved = [*names(home / "Music"), *names(home / "Videos")]
-    assert len(saved) == 1
-    assert not saved[0].endswith(".unknown_video")
+    assert names(home / "Music") == []
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".unknown_video")
+    assert t("untagged", saved) in output
+
+
+def test_wizard_can_still_save_such_audio_as_mp3(generic: Any, home: Path) -> None:
+    # URL, type, format, folder, cookies.
+    code, output = generic("audio-no-ext.html", "", "2", "", "", "")
+    assert code == 0
+    assert t("audio_may_hold_video") in output
+    assert names(home / "Videos") == []
+    [saved] = names(home / "Music")
+    assert saved.endswith(".mp3")
+
+
+def test_wizard_keeps_the_video_behind_an_audio_tag_with_no_extension(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("audio-no-ext-video.html", *SINGLE_WALK)
+    assert code == 0
+    assert t("audio_may_hold_video") in output
+    assert names(home / "Music") == []
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".unknown_video")
+    assert "video" in streams(home / "Videos" / saved)
 
 
 @pytest.mark.parametrize(
