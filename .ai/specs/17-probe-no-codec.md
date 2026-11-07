@@ -1,6 +1,6 @@
 # 17 — Stop the probe mistaking media without codec info for images
 
-Status: approved
+Status: done
 Item: `fix/probe-no-codec`
 
 ## Problem
@@ -123,7 +123,7 @@ Handled by other rows: the exit code of a wizard refusal (`cancel-exits`), `igno
 
 ## Design
 
-Written for the recommended option of each decision. A prototype of exactly this rule, applied at runtime from a scratch folder, produced every "after" result in this spec.
+Written for the recommended option of each decision. A prototype of the approved rule, applied at runtime from a scratch folder, produced every "after" result in this spec. One row was added after approval, and it changes the `.ogg` results: see "Changes after approval".
 
 ### The rule
 
@@ -134,7 +134,8 @@ One format, in this order:
 | `'none'`  | `'none'`    | any                         | image     | yt-dlp's own test; no codec selector can pick it                                        |
 | `'none'`  | anything else | any                       | audio     | No video, and audio isn't ruled out (F5)                                                |
 | named     | any         | any                         | video     |                                                                                         |
-| unknown   | any         | in `MEDIA_EXTENSIONS.audio` | audio     | `.m4a`, or `.mp3` with `acodec` filled in by yt-dlp. Without this, `{"url": "x.mp3"}` flips from audio to video |
+| unknown   | any         | `asf`, `m4b`, `ogg`, `ogx`, `wma` | video | They can hold a video yt-dlp keeps. Added after approval (`bec654d`) |
+| unknown   | any         | any other in `MEDIA_EXTENSIONS.audio` | audio | `.m4a`, or `.mp3` with `acodec` filled in by yt-dlp. Without this, `{"url": "x.mp3"}` flips from audio to video |
 | unknown   | any         | in `MEDIA_EXTENSIONS.thumbnails` | unknown | Offered, never refused; a direct `.jpg` works                                         |
 | unknown   | any         | anything else               | video     | What yt-dlp does (F1 to F4)                                                             |
 
@@ -152,7 +153,7 @@ def _media_kind(info: dict[str, Any]) -> ContentKind | None:
 
 ### `probe.py`
 
-- Add `_format_kind` and `_media_kind` next to the classifiers. Use `from yt_dlp.utils import MEDIA_EXTENSIONS`: our own extension list would re-implement yt-dlp's.
+- Add `_format_kind` and `_media_kind` next to the classifiers. Use `from yt_dlp.utils import MEDIA_EXTENSIONS`: our own extension list would re-implement yt-dlp's. The five extensions in the rule table are the one exception: `_AUDIO_LISTED_BUT_MAY_HOLD_VIDEO` narrows yt-dlp's list and doesn't copy it.
 - `_classify_entry`: `kind = _media_kind(entry) or ContentKind.SINGLE_IMAGE`, and `supported=kind != ContentKind.SINGLE_IMAGE`. Drop `duration` from the decision (F6); keep it for display. The `None` branch stays as it is.
 - `_classify_single`: return `_media_kind(data)` when it isn't `None`. Otherwise keep today's tail: thumbnails mean image, nothing means unknown.
 - **Keep the thumbnails branch and `image_only_skipped`,** although after this change no real run reaches them. See "`probe-auth`".
@@ -209,7 +210,9 @@ Only the wizard and `-i` call `probe()` (`wizard.py:482`, `:494`). Direct, `-y`,
 | wizard, several `<video>`                        | Picker with `[video]`; Enter saves all, in `yes` mode                                        |
 | wizard, two `og:video` (url-only entries)        | Same; entries are supported                                                                  |
 | wizard, video with a partial codec (F4)          | `Video`, type step shown, saves the `.mp4`                                                   |
-| wizard, one `.m4a`, `.ogg` or `.wav`             | `Audio`, no type step, `aformat`, `.mp3` in `~/Music`. Today: raw file in `~/Videos`         |
+| wizard, one `.m4a` or `.wav`, or `.ogg` with `vcodec` `'none'` (`<audio>`, or a direct link served as `audio/*`) | `Audio`, no type step, `aformat`, `.mp3` in `~/Music`. Today: raw file in `~/Videos` |
+| wizard, `.ogg`, `.wma`, `.m4b`, `.asf` or `.ogx` with an unknown `vcodec`, such as `<video src>` | `Video`, type step shown, raw file in `~/Videos`. `.ogx` then ends in `Download failed`, exit 1, file kept, as it does with `-y` |
+| wizard, direct link to a video served as `audio/*` | `Audio`, `.mp3` in `~/Music`, video lost. Accepted for now: see "Changes after approval" |
 | wizard, several audio                            | Picker with `[audio]`; Enter saves all. The type step stays (see Out)                        |
 | wizard, video plus audio on one page             | `[video]`, `[audio]`; Enter saves the video, as the prompt says; `all` saves both            |
 | wizard, direct `.jpg`                            | Unchanged: `Unknown`, saved                                                                  |
@@ -244,45 +247,45 @@ Tests that depend on yt-dlp use the real thing:
 
 Generic extractor, loopback:
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** Wizard on four `<video src>`: exit 0, 4 `.mp4` files, `t("done")` in the output, `t("no_supported_items")` not in it, 1 history row
-- [ ] **[fix]** Wizard on `<video src poster>`, six answers: exit 0, one `.mp4` in `~/Videos`, `t("kind_video")` in the output, `t("image_only_skipped")` not in it
-- [ ] **[fix]** Wizard on a page with `og:video` and `og:image`: same result
-- [ ] **[fix]** Wizard on two `og:video`: exit 0, 2 files
-- [ ] **[fix]** Wizard on `<source type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"'>`: `.mp4` in `~/Videos`, nothing in `~/Music`
-- [ ] **[fix]** Wizard on `<audio src="tiny.m4a">` with an absolute `og:image`: `.mp3` in `~/Music`, `t("kind_audio")` in the output
-- [ ] **[fix]** Wizard on two `<audio src="x.m4a">`, Enter: 2 files, both items tagged audio
-- [ ] **[fix]** Wizard on `<video>` plus `<audio>`, Enter: only the video is saved
-- [ ] **[fix]** Wizard on `<video src="tiny.jpg">` and a real video: the output has `[?]` and `[video]`; Enter saves the `.mp4` only, `all` saves both
-- [ ] **[fix]** Wizard on a poster page whose media file is missing: exit 1, `t("failed", url)` and no `t("done")` in the output
-- [ ] **[fix]** Wizard on one real and one missing `<video>`: exit 0, 1 file, `t("partial_result", ...)` in the output
-- [ ] **[fix]** `-i -a` on the poster page: one `.mp3`
-- [ ] **[fix]** Printed command after each of the first two walks: replay saves the same files, no prompt
-- [ ] **[fix]** Wizard twice on the poster page: one file, exit 0 both times, 2 history rows
-- [ ] **[pin]** Wizard on a direct `tiny.jpg`: saved, `t("kind_unknown")` in the output
-- [ ] **[pin]** Parametrized over the poster, `multi`, `og:video` and `<audio>` pages: direct with preview, `-y`, `-y -p`, `-y -P` and `-y -a` give the file names and exit code measured on `main`
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** Wizard on four `<video src>`: exit 0, 4 `.mp4` files, `t("done")` in the output, `t("no_supported_items")` not in it, 1 history row
+- [x] **[fix]** Wizard on `<video src poster>`, six answers: exit 0, one `.mp4` in `~/Videos`, `t("kind_video")` in the output, `t("image_only_skipped")` not in it
+- [x] **[fix]** Wizard on a page with `og:video` and `og:image`: same result
+- [x] **[fix]** Wizard on two `og:video`: exit 0, 2 files
+- [x] **[fix]** Wizard on `<source type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"'>`: `.mp4` in `~/Videos`, nothing in `~/Music`
+- [x] **[fix]** Wizard on `<audio src="tiny.m4a">` with an absolute `og:image`: `.mp3` in `~/Music`, `t("kind_audio")` in the output
+- [x] **[fix]** Wizard on two `<audio src="x.m4a">`, Enter: 2 files, both items tagged audio
+- [x] **[fix]** Wizard on `<video>` plus `<audio>`, Enter: only the video is saved
+- [x] **[fix]** Wizard on `<video src="tiny.jpg">` and a real video: the output has `[?]` and `[video]`; Enter saves the `.mp4` only, `all` saves both
+- [x] **[fix]** Wizard on a poster page whose media file is missing: exit 1, `t("failed", url)` and no `t("done")` in the output
+- [x] **[fix]** Wizard on one real and one missing `<video>`: exit 0, 1 file, `t("partial_result", ...)` in the output
+- [x] **[fix]** `-i -a` on the poster page: one `.mp3`
+- [x] **[fix]** Printed command after each of the first two walks: replay saves the same files, no prompt
+- [x] **[fix]** Wizard twice on the poster page: one file, exit 0 both times, 2 history rows
+- [x] **[pin]** Wizard on a direct `tiny.jpg`: saved, `t("kind_unknown")` in the output
+- [x] **[pin]** Parametrized over the poster, `multi`, `og:video` and `<audio>` pages: direct with preview, `-y`, `-y -p`, `-y -P` and `-y -a` give the file names and exit code measured on `main`
 
 `fake_site`:
 
-- [ ] **[fix]** Wizard on a carousel of `_image` entries and a video whose format has only `url` and `ext`: `[image]` and `[video]` in the output; Enter saves the video only, and `-y -p` saves the same file
-- [ ] **[fix]** Wizard on a carousel of url-only entries: all saved
-- [ ] **[fix]** Wizard on a carousel of only `.jpg` url-only entries: Enter saves all. Fails without the `wizard.py` change
-- [ ] **[fix]** Wizard on a carousel of known-codec audio with a duration: items tagged audio
-- [ ] **[pin]** Wizard on `only-images`: `t("no_supported_items")`, exit 0, no command, no files
-- [ ] **[pin]** Wizard on `fake.test/image`: `t("probe_failed", "unknown")` in the output, exit 1
+- [x] **[fix]** Wizard on a carousel of `_image` entries and a video whose format has only `url` and `ext`: `[image]` and `[video]` in the output; Enter saves the video only, and `-y -p` saves the same file
+- [x] **[fix]** Wizard on a carousel of url-only entries: all saved
+- [x] **[fix]** Wizard on a carousel of only `.jpg` url-only entries: Enter saves all. Fails without the `wizard.py` change
+- [x] **[fix]** Wizard on a carousel of known-codec audio with a duration: items tagged audio
+- [x] **[pin]** Wizard on `only-images`: `t("no_supported_items")`, exit 0, no command, no files
+- [x] **[pin]** Wizard on `fake.test/image`: `t("probe_failed", "unknown")` in the output, exit 1
 
 Unit, `tests/test_probe.py`, one parametrized table:
 
-- [ ] **[fix]** `_classify_entry` and `_classify_single` over every row of the rule table, plus url-only entries, a storyboard next to an unknown format, a storyboard next to audio, and audio with a duration
-- [ ] **[pin]** `_classify_entry({"id": "i", "title": "t", "formats": []}, 1)` is image, unsupported, and with `thumbnails` too. This is the shape `probe-auth` will produce
-- [ ] **[pin]** `_classify_single({"formats": [], "thumbnails": [...]})` is image, `{}` is unknown
-- [ ] **[fix]** Wizard flow: a playlist of only `ProbeItem(1, ContentKind.UNKNOWN, True, ...)` isn't refused
+- [x] **[fix]** `_classify_entry` and `_classify_single` over every row of the rule table, plus url-only entries, a storyboard next to an unknown format, a storyboard next to audio, and audio with a duration
+- [x] **[pin]** `_classify_entry({"id": "i", "title": "t", "formats": []}, 1)` is image, unsupported, and with `thumbnails` too. This is the shape `probe-auth` will produce
+- [x] **[pin]** `_classify_single({"formats": [], "thumbnails": [...]})` is image, `{}` is unknown
+- [x] **[fix]** Wizard flow: a playlist of only `ProbeItem(1, ContentKind.UNKNOWN, True, ...)` isn't refused
 
 No existing test needs to change: the full suite passes with the prototype applied (477 passed, the same as the baseline).
 
 Commit: `fix(probe): classify media without codec info by what yt-dlp would do`, or split by file if the developer prefers, but the rule and `wizard.py:502` belong together.
 
-**SemVer:** patch on its own: no flag, default or on-disk path changes, and no new message. Not breaking: `AGENTS.md`'s triggers are renamed flags, changed defaults and moved state, and the defaults per type stay the same; what changes is which type some pages are detected as. The visible consequence belongs in the release notes: in the wizard, `.m4a`, `.ogg` and `.wav` pages now convert to the audio format in `~/Music`, where they used to land raw in `~/Videos`. The next release is already 0.3.0, so this moves nothing. No version bump in this item.
+**SemVer:** patch on its own: no flag, default or on-disk path changes, and no new message. Not breaking: `AGENTS.md`'s triggers are renamed flags, changed defaults and moved state, and the defaults per type stay the same; what changes is which type some pages are detected as. The visible consequence belongs in the release notes: in the wizard, `.m4a` and `.wav` pages, and `.ogg` pages where yt-dlp sets `vcodec` `'none'`, now convert to the audio format in `~/Music`, where they used to land raw in `~/Videos`. A direct link to a video served as `audio/*` is converted too, and loses its video. The next release is already 0.3.0, so this moves nothing. No version bump in this item.
 
 ## Live check
 
@@ -297,9 +300,47 @@ printf '\n1\n\n\n\n\n\n' | .venv/bin/download-media -i -o tmp/probe-no-codec "$D
 
 The answers are URL, cookies (`1`, none), selection, type, quality, container, folder. On disk, the number of files in the first folder equals the `[video]` rows printed, and matches the second folder. Every image shows as `[image]` and none is saved. Run it alone: Instagram rate-limits by IP.
 
+**Result:** run once, during QA at `875030f`, without cookies: 20 items, 4 video, 16 image, the same 4 files through the wizard and `-y -p`, no image saved. Not repeated at validation, to stay clear of the rate limit: `src/` has no changes between `875030f` and the merge.
+
+## Changes after approval
+
+The goal, scope and acceptance criteria didn't change. Results below come from the real console script on a loopback server, with yt-dlp 2026.10.26. "Pre-fix" is `src/` at `2b9eb5c`.
+
+### The rule (`bec654d`)
+
+The approved rule read every extension in `MEDIA_EXTENSIONS.audio` as audio when `vcodec` was unknown. Testing found that `asf`, `m4b`, `ogg`, `ogx` and `wma` can hold a video that yt-dlp keeps. Read as audio, the wizard skipped the type step, converted to `.mp3`, deleted the video and said `Done.`, where `-y` and the pre-fix wizard keep the file. So these five now need `vcodec` `'none'` to be audio. The two mistakes aren't equal: a wrong "audio" loses the video, and a wrong "video" only keeps the raw file and brings the type step back.
+
+`.m4a` stays audio: yt-dlp's metadata step passes `-vn` for it (`postprocessor/ffmpeg.py:675`), so its video is lost on every path.
+
+This narrows what the approval said about `.ogg` in D2, in the Cases table and in the release note, all corrected above:
+
+| Source                                         | `vcodec` | Wizard | Saved                                    |
+| ---------------------------------------------- | -------- | ------ | ---------------------------------------- |
+| `<audio src="x.ogg">`                          | `'none'` | Audio  | `.mp3` in `~/Music`                      |
+| Direct `.ogg` served as `audio/*` (`generic.py:877`) | `'none'` | Audio | `.mp3` in `~/Music`                 |
+| `<video src="x.ogg">`, holding video           | `None`   | Video  | Raw `.ogg` in `~/Videos`, video kept     |
+| `<video src="x.ogg">`, holding only audio      | `None`   | Video  | Raw `.ogg` in `~/Videos`; the type step can still choose audio |
+
+`.ogx` keeps its video but ends in `Download failed`, exit 1, with the file on disk, because ffmpeg has no muxer for that extension. `-y` and the pre-fix wizard do the same.
+
+### Human decisions after QA
+
+1. **Renamed videos stay as they are.** A video under `oga`, `spx`, `mka`, `weba`, `m4r`, `f4a` or `f4b` reads as audio and is converted. Measured with an `.mp4` renamed to each, in `<video src>`: `.mp3` in `~/Music`, video gone, exit 0. Pre-fix it was `Unknown`, with the raw file kept in `~/Videos`, though all but `mka` then ended in `Download failed`, exit 1, because yt-dlp's post-processing failed on that file. `-y` still does.
+2. **Video under `audio/*` is accepted for now,** with a roadmap row for a type step. `generic.py:877` sets `vcodec` `'none'` from the `Content-Type`, and that outranks the extension. Measured on a direct Theora `.ogg` and a `.wma` holding video: `.mp3`, video gone, where pre-fix kept the raw file. `<audio src>` on a file holding video is the same case. `-y` still keeps the file. An audio single has no type step, so the wizard can't keep it today. That row wasn't on the plan at validation.
+
+### Not decided: four more extensions
+
+The first decision names seven extensions, and validation found four more with the same change: `aiff`, `alac`, `ape` and `wav`. A renamed video under them went from a raw file in `~/Videos`, exit 1, to `.mp3`, video gone, exit 0. They aren't containers that normally hold video, which may be why the list left them out, but nobody has decided them, so they aren't recorded as accepted.
+
+The other six extensions the rule reads as audio didn't change: `aac`, `flac`, `mp3`, `opus` and `vorbis` were already audio pre-fix, since yt-dlp fills `acodec` from the extension, and `.m4a` loses its video on every path.
+
+### Removed test
+
+`test_extensions_the_rule_relies_on_are_in_yt_dlp` was added in `d6b83a4` and dropped in `0343274`. It asserted yt-dlp's extension table without running project code, and its `ogg` row no longer matched the rule. It isn't the parametrized table under Acceptance criteria, which stays, and no criterion depended on it. The classification tests still catch a change in yt-dlp's table: taking `m4a`, `mp3` or `jpg` out of it, or adding `mp4` to the audio list, failed 5, 4, 8 and 12 tests in `tests/test_probe.py`.
+
 ## Open decisions
 
-Resolved on approval: the human chose the recommended option in D1 (A), D2 (include), D3 (A) and D4 (ship, own row).
+Resolved on approval: the human chose the recommended option in D1 (A), D2 (include), D3 (A) and D4 (ship, own row). Later decisions, and the one still open, are under "Changes after approval".
 
 ### D1: an entry that really is unknown
 
@@ -316,7 +357,7 @@ Resolved on approval: the human chose the recommended option in D1 (A), D2 (incl
 
 The row only names videos read as images. F4 (video saved as mp3), F5 (audio) and F6 (labels) fall out of the same rule.
 
-**Recommendation: include them.** Splitting means writing a worse rule on purpose, and F4 is the worst of the lot. The cost is one behavior change to accept: `.m4a`, `.ogg` and `.wav` pages go through the wizard as audio, so they become `.mp3` in `~/Music`, as `.mp3` pages already do. The alternative is fixing only `vcodec` `None` here, and opening a row for the rest.
+**Recommendation: include them.** Splitting means writing a worse rule on purpose, and F4 is the worst of the lot. The cost is one behavior change to accept: `.m4a`, `.ogg` and `.wav` pages go through the wizard as audio, so they become `.mp3` in `~/Music`, as `.mp3` pages already do. For `.ogg`, this now holds only when yt-dlp sets `vcodec` `'none'`: see "Changes after approval". The alternative is fixing only `vcodec` `None` here, and opening a row for the rest.
 
 ### D3: quality and container steps when they can't have an effect
 
