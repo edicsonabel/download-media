@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T18:08:30-04:00",
+  "updated": "2026-11-07T18:41:44-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,19 +1054,23 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
       "worktree": ".worktrees/fix-audio-thumbnail",
       "commits": [
         "e2c7144",
-        "38c1931"
+        "38c1931",
+        "cbd49b2"
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "medium _EmbedCover.run / drop_thumbs deletes the saved audio when the thumbnail link ends in the audio extension",
+          "medium _write_thumbnails catches only RequestError; _UnsafeExtensionError (thumb.php, .html links) still fails the whole audio download"
+        ]
       },
       "history": [
         {
@@ -1096,6 +1100,13 @@
           "result": "done",
           "at": "2026-11-07T18:08:30-04:00",
           "note": "Gate exit 0, 1635 passed, 2 xfailed. 30 new tests fail on main at both yt-dlp versions. Deviations: m4a cover pin can't hold (yt-dlp's metadata step strips it with -vn, also on main); .temp.opus pin moved to a unit test. Planner: m4a never keeps its cover; pin ruff format version."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-07T18:41:44-04:00",
+          "note": "Round 1. 1651 passed, 7 xfailed (5 new strict). Mutation 25/25. Orchestrator: both findings in scope (the second breaks the spec's goal). Planner: network-failed thumbnails give no no_cover warning; -a -p double count when extraction and metadata both fail."
         }
       ]
     }
