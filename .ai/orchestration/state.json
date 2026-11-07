@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T06:40:13-04:00",
+  "updated": "2026-11-07T07:03:34-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -599,13 +599,15 @@
     "fix/audio-type-step": {
       "type": "fix",
       "title": "Wizard converts a video served as audio and drops its video",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/27-audio-type-step.md",
       "branch": "fix/audio-type-step",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-audio-type-step",
+      "commits": [
+        "82d94fa"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -617,6 +619,20 @@
           "result": "approved",
           "at": "2026-11-07T06:40:13-04:00",
           "note": "Next P1, started under the human's overnight delegation. Regression over 0.2.0 from probe-no-codec; the planner recommends it merges before /release."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T07:03:34-04:00",
+          "note": "Reproduced on 8 shapes. A label can't be told from real audio by measurement, only by what the source said. Decisions D1-D6. Prototype: 1221 passed, 4 expected failures."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T07:03:34-04:00",
+          "note": "Spec approved under the human's delegation, every recommended option. D5 (accept renamed aiff, alac, ape, wav) had been put to the human; flagged for their review."
         }
       ]
     }
