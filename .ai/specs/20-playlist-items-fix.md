@@ -1,6 +1,6 @@
 # 20 — Report `--playlist-items` truthfully, and drop `NA` from single-video names
 
-Status: draft
+Status: approved
 Item: `fix/playlist-items-fix`
 
 ## Problem
@@ -236,6 +236,8 @@ Not needed. Everything depends on yt-dlp's playlist processing, output templates
 The one shipped behaviour that changes is the `-p` file name on a URL that turns out to be a single video: 0.2.0 saved `NA - Clip [v1].mp4`, this saves `Clip.mp4`. That's the bug being fixed, not a format the tool promised (D2). **Release note for 0.3.0:** "`-p` on a URL that holds a single video now saves it under the same name as without `-p`, instead of `NA - <title> [<id>]`. Re-running such a download after upgrading saves a new copy next to the old file." `--playlist-items` itself is new in 0.3.0, so its behaviour needs no note beyond its description.
 
 ## Open decisions
+
+Resolved by the roles under the human's overnight delegation, each on the recommended option: D1 A (Enter keeps the flag), D2 A (single-video name in playlist mode matches single mode; changes shipped `-p` output, so it needs a 0.3.0 note and the human's review), D3 A, D4 A, D5 A, D6 A.
 
 The human delegated these overnight. Each lists the options and a recommendation; the orchestrator records the recommendation and the human reviews it.
 
