@@ -282,8 +282,11 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     except KeyboardInterrupt:
         warn(t("cancelled"))
         raise
+    if result.missing:
+        warn(t("items_not_found", result.playlist_count, ",".join(result.missing)))
     if not result.saved:
-        warn(t("no_supported_items"))
+        # Nothing was skipped or failed: the list just doesn't hold what was asked for.
+        warn(t("failed", url) if result.missing and not result.total else t("no_supported_items"))
         return _Outcome(False, cookies_dropped, pmode)
     if result.skipped or result.failed:
         warn(t("partial_result", result.saved, result.total, result.skipped, result.failed))

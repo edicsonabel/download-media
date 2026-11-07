@@ -526,6 +526,11 @@ class FakeSiteIE(InfoExtractor):
             yield video
             self.raise_login_required()
 
+        def two_lazily() -> Iterator[dict[str, Any]]:
+            # Most paged extractors: yt-dlp only learns the size by reading to the end.
+            yield video
+            yield self._video("v3")
+
         if page in missing:
             raise ExtractorError(
                 "Unable to download webpage: HTTP Error 404: Not Found",
@@ -562,6 +567,26 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result(fails_midway(), "post", "Post")
         if page == "nested-gated":
             return self.playlist_result([self.url_result(follow("partial-gated"))], "post", "Post")
+        if page == "lazy-carousel":
+            return self.playlist_result(two_lazily(), "post", "Post")
+        if page in ("hidden-items", "stale-count"):
+            # YouTube's tab extractor sets playlist_count from the header's "N videos", which
+            # counts the unavailable videos it hides from the list, and can lag behind it.
+            entries = [self._video("v1"), video]
+            if page == "stale-count":
+                entries.append(self._video("v3"))
+            declared = 3 if page == "hidden-items" else 2
+            return {**self.playlist_result(entries, "post", "Post"), "playlist_count": declared}
+        if page == "lazy-hidden":
+            # The same header count on a paged list, YouTube's real shape: 3 declared, 2 read.
+            return {**self.playlist_result(two_lazily(), "post", "Post"), "playlist_count": 3}
+        if page == "multi-hidden":
+            # A multi_video result (one video in parts) carries the same declared count.
+            parts = [self._video("v1"), video]
+            return {
+                **self.playlist_result(parts, "post", "Post", multi_video=True),
+                "playlist_count": 3,
+            }
         if page == "partial-drm":
             return self.playlist_result([video, broken], "post", "Post")
         if page == "partial-no-url":

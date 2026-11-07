@@ -267,10 +267,11 @@ def step_output(opts: DownloadOptions) -> None:
     opts.output = Path(answer)
 
 
-def step_select(opts: DownloadOptions, items: list[ProbeItem]) -> None:
+def step_select(opts: DownloadOptions, items: list[ProbeItem], preset: str | None = None) -> None:
     """Show carousel items and ask the user which to download.
 
-    Default (Enter) selects supported videos only. Unsupported items
+    Default (Enter) keeps the command line's ``--playlist-items`` as given,
+    or else selects supported videos only. Unsupported items
     (e.g. Instagram carousel images) are visually flagged and skipped if
     selected.
     """
@@ -295,7 +296,11 @@ def step_select(opts: DownloadOptions, items: list[ProbeItem]) -> None:
     while True:
         print()
         try:
-            reply = input(t("ask_selection_default_videos"))
+            reply = input(
+                t("ask_selection_default_preset", preset)
+                if preset
+                else t("ask_selection_default_videos")
+            )
         except EOFError as e:
             raise _Cancel from e
         low = reply.strip().lower()
@@ -303,7 +308,9 @@ def step_select(opts: DownloadOptions, items: list[ProbeItem]) -> None:
             raise _Cancel
         if low == "b":
             raise _Back
-        if not low:
+        if not low and preset:
+            opts.playlist_items = preset
+        elif not low:
             indices = [it.index for it in items if it.supported and it.kind == ContentKind.SINGLE_VIDEO]
             if not indices:
                 indices = [it.index for it in items if it.supported]
@@ -403,7 +410,9 @@ def _step_applies(name: str, opts: DownloadOptions) -> bool:
     return True
 
 
-def _run_step(name: str, opts: DownloadOptions, items: list[ProbeItem]) -> None:
+def _run_step(
+    name: str, opts: DownloadOptions, items: list[ProbeItem], preset: str | None = None
+) -> None:
     dispatch: dict[str, Callable[[], None]] = {
         "url":       lambda: step_url(opts),
         "cookies":   lambda: step_cookies(opts),
@@ -412,7 +421,7 @@ def _run_step(name: str, opts: DownloadOptions, items: list[ProbeItem]) -> None:
         "container": lambda: step_container(opts),
         "aformat":   lambda: step_aformat(opts),
         "output":    lambda: step_output(opts),
-        "select":    lambda: step_select(opts, items),
+        "select":    lambda: step_select(opts, items, preset),
     }
     fn = dispatch.get(name)
     if fn is None:
@@ -421,7 +430,7 @@ def _run_step(name: str, opts: DownloadOptions, items: list[ProbeItem]) -> None:
 
 
 def _walk_plan(
-    plan: list[str], opts: DownloadOptions, items: list[ProbeItem]
+    plan: list[str], opts: DownloadOptions, items: list[ProbeItem], preset: str | None = None
 ) -> bool:
     """Walk the post-probe plan with back/cancel. Returns False if cancelled."""
     history: list[str] = []
@@ -434,7 +443,7 @@ def _walk_plan(
             continue
         _print_summary(history, opts)
         try:
-            _run_step(name, opts, items)
+            _run_step(name, opts, items, preset)
         except _Back:
             # Pop the last step that actually ran and re-enter it
             if history:
@@ -516,6 +525,8 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
     Returns ``None`` if cancelled, and raises ``_Refused`` when there's
     nothing to save.
     """
+    # The command line's value: run_all starts every walk from it.
+    preset = opts.playlist_items
     # ---- Phase 1.5: pre-emptive cookies for sites that always need them ----
     site = detect_site(opts.urls[0])
     cookies_asked = False
@@ -583,6 +594,6 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
 
     # ---- Phase 3: post-probe state machine ----
     plan = _build_post_probe_plan(probe_result, cookies_asked)
-    if not _walk_plan(plan, opts, probe_result.items):
+    if not _walk_plan(plan, opts, probe_result.items, preset):
         return None
     return opts

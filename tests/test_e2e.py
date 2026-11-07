@@ -237,13 +237,214 @@ def test_playlist_items_flag_can_pick_several(run: Any, out: Path) -> None:
     assert names(out) == ["02 - Clip [v1].mp4", "04 - Clip [v2].mp4"]
 
 
+@pytest.mark.parametrize("flags", [("-p",), ("--playlist-items", "2")])
+def test_a_plain_video_in_playlist_mode_keeps_its_single_mode_name(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, VIDEO)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert t("done") in output
+
+
+def test_plain_videos_in_playlist_mode_still_avoid_a_name_clash(run: Any, out: Path) -> None:
+    assert run("-y", "-p", VIDEO)[0] == 0
+    assert run("-y", "-p", VIDEO_B)[0] == 0
+    assert names(out) == ["Clip [v2].mp4", "Clip.mp4"]
+
+
+def test_whole_playlist_answer_on_a_plain_video_keeps_its_name(
+    run: Any, out: Path, answers: Any
+) -> None:
+    answers("2")
+    code, _ = run(f"{VIDEO}?list=1")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+
+
 def test_playlist_items_out_of_range_is_a_failure(run: Any, out: Path) -> None:
     code, output = run("-y", "--playlist-items", "9", CAROUSEL)
     assert code == 1
     assert names(out) == []
-    assert t("no_supported_items") in output
+    assert t("items_not_found", 4, "9") in output
+    assert t("failed", CAROUSEL) in output
+    assert t("no_supported_items") not in output
     assert t("done") not in output
     assert history_rows() == []
+
+
+def test_playlist_items_names_the_missing_item_before_done(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "2,9", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    note = t("items_not_found", 4, "9")
+    assert note in output
+    assert output.index(note) < output.index(t("done"))
+    assert len(history_rows()) == 1
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == "2,9"
+
+
+def test_playlist_items_names_each_segment_that_selects_nothing(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items=2,-7,5-9,3-9,-1", CAROUSEL)
+    assert code == 0
+    assert names(out) == BOTH_ITEMS
+    assert t("items_not_found", 4, "-7,5-9") in output
+
+
+def test_playlist_items_counts_the_outermost_list(run: Any, out: Path) -> None:
+    # Inner lists are filtered too, silently (roadmap row 32); only the outer one is checked.
+    code, output = run("-y", "--playlist-items", "1,3", "https://fake.test/nested-gated")
+    assert code == 0
+    assert t("items_not_found", 1, "3") in output
+    assert names(out) == ["01 - Clip [v2].mp4"]
+
+
+def test_playlist_items_on_an_empty_playlist_has_no_note(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "1", EMPTY)
+    assert code == 1
+    assert t("no_supported_items") in output
+    assert t("items_not_found", 0, "1").split("(")[0] not in output
+
+
+def not_found_notes(output: str) -> list[str]:
+    """Every items_not_found note the run printed, whatever its numbers."""
+    prefix = t("items_not_found", 0, "").split("(")[0]
+    return [line.strip() for line in output.splitlines() if line.strip().startswith(prefix)]
+
+
+def test_playlist_items_zero_is_named_as_missing(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "0", CAROUSEL)
+    assert code == 1
+    assert not_found_notes(output) == [t("items_not_found", 4, "0")]
+    assert t("failed", CAROUSEL) in output
+    assert t("no_supported_items") not in output
+    assert names(out) == []
+
+
+def test_missing_item_next_to_a_skipped_image_keeps_the_image_reason(run: Any, out: Path) -> None:
+    # Item 1 is an image: something was skipped, so "failed" would hide the real reason.
+    code, output = run("-y", "--playlist-items", "1,9", CAROUSEL)
+    assert code == 1
+    assert not_found_notes(output) == [t("items_not_found", 4, "9")]
+    assert t("no_supported_items") in output
+    assert t("failed", CAROUSEL) not in output
+    assert t("done") not in output
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_missing_items_of_one_url_are_not_reported_for_the_next(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "2,9", CAROUSEL, VIDEO)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4", "Clip.mp4"]
+    assert not_found_notes(output) == [t("items_not_found", 4, "9")]
+    assert output.count(t("done")) == 2
+    assert len(history_rows()) == 2
+
+
+def test_each_url_reports_its_own_missing_items(run: Any, out: Path) -> None:
+    partial = "https://fake.test/partial-gated"  # video, image, gated: 3 items.
+    code, output = run("-y", "--playlist-items", "1,4", partial, CAROUSEL)
+    assert code == 0
+    assert names(out) == ["01 - Clip [v2].mp4", "04 - Clip [v2].mp4"]
+    assert not_found_notes(output) == [t("items_not_found", 3, "4")]
+
+
+def test_rerun_with_missing_items_keeps_the_note_and_the_files(
+    run: Any, replay: Any, out: Path, again: Path
+) -> None:
+    note = t("items_not_found", 4, "9")
+    assert run("-y", "--playlist-items", "2,9", CAROUSEL)[0] == 0
+    code, output = run("-y", "--playlist-items", "2,9", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    assert not_found_notes(output) == [note]
+    assert output.index(note) < output.index(t("done"))
+    assert len(history_rows()) == 2
+    [line] = commands(output)
+    code, output = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+    assert not_found_notes(output) == [note]
+
+
+def test_missing_items_of_a_lazy_list_are_named_once_it_is_read_to_the_end(
+    run: Any, out: Path
+) -> None:
+    code, output = run("-y", "--playlist-items", "2,9", "https://fake.test/lazy-carousel")
+    assert code == 0
+    assert names(out) == ["02 - Clip [v3].mp4"]
+    assert not_found_notes(output) == [t("items_not_found", 2, "9")]
+
+
+def test_lazy_list_not_read_to_the_end_has_no_note(run: Any, out: Path) -> None:
+    # yt-dlp never learns the size here: nothing can be named, and nothing is missing.
+    code, output = run("-y", "--playlist-items", "1", "https://fake.test/lazy-carousel")
+    assert code == 0
+    assert names(out) == ["01 - Clip [v2].mp4"]
+    assert not_found_notes(output) == []
+    assert t("done") in output
+
+
+@pytest.mark.parametrize(
+    ("page", "spec", "saved", "notes"),
+    [
+        # Header says 3, item 3 is hidden: yt-dlp drops it, and nothing names it.
+        ("hidden-items", "2,3", ["02 - Clip [v2].mp4"], ["3"]),
+        # Header says 2, the list holds 3: item 3 is saved, and the note says it was skipped.
+        ("stale-count", "3", ["03 - Clip [v3].mp4"], []),
+        # The same header on a paged list: asking for item 3 reads it to the end.
+        ("lazy-hidden", "2,3", ["02 - Clip [v3].mp4"], ["3"]),
+        # Not read to the end: the size is unknown, and nothing requested is missing.
+        ("lazy-hidden", "1", ["01 - Clip [v2].mp4"], []),
+        # A multi_video result declares its count the same way.
+        ("multi-hidden", "2,3", ["02 - Clip [v2].mp4"], ["3"]),
+    ],
+)
+def test_missing_items_follow_the_entries_not_the_declared_count(
+    run: Any, out: Path, page: str, spec: str, saved: list[str], notes: list[str]
+) -> None:
+    code, output = run("-y", "--playlist-items", spec, f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == saved
+    assert [note.rsplit(" ", 1)[-1] for note in not_found_notes(output)] == notes
+    assert t("done") in output
+
+
+@pytest.mark.parametrize("page", ["hidden-items", "lazy-hidden", "multi-hidden"])
+def test_missing_items_note_counts_the_entries_read(run: Any, out: Path, page: str) -> None:
+    code, output = run("-y", "--playlist-items", "2,3", f"https://fake.test/{page}")
+    assert code == 0
+    assert not_found_notes(output) == [t("items_not_found", 2, "3")]
+
+
+def test_rerun_of_a_plain_video_in_playlist_mode_keeps_one_file(run: Any, out: Path) -> None:
+    assert run("-y", "-p", VIDEO)[0] == 0
+    code, output = run("-y", "-p", VIDEO)
+    assert code == 0
+    assert t("done") in output
+    assert names(out) == ["Clip.mp4"]
+    # The same file as without -p: no second copy of the same video.
+    assert run("-y", VIDEO)[0] == 0
+    assert names(out) == ["Clip.mp4"]
+
+
+def test_plain_audio_in_playlist_mode_keeps_its_name_and_avoids_a_clash(
+    run: Any, out: Path
+) -> None:
+    assert run("-y", "-p", "-a", VIDEO)[0] == 0
+    assert names(out) == ["Clip.mp3"]
+    assert run("-y", "-p", "-a", VIDEO_B)[0] == 0
+    assert names(out) == ["Clip [v2].mp3", "Clip.mp3"]
+
+
+def test_missing_items_with_audio_are_reported_the_same(run: Any, out: Path) -> None:
+    code, output = run("-y", "-a", "--playlist-items", "2,9", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp3"]
+    assert not_found_notes(output) == [t("items_not_found", 4, "9")]
 
 
 def test_playlist_items_with_a_bad_spec_is_a_clean_failure(run: Any, out: Path) -> None:
@@ -490,6 +691,95 @@ def test_wizard_selection_replaces_the_playlist_items_flag(
     code, _ = run("-i", "--playlist-items", "2", CAROUSEL)
     assert code == 0
     assert names(out) == ["04 - Clip [v2].mp4"]
+
+
+def test_wizard_picker_preselects_the_playlist_items_flag(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
+    prompts = answers(*PICKER_WALK)
+    code, output = run("-i", "--playlist-items", "2", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    assert t("ask_selection_default_preset", "2") in prompts
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == "2"
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+def test_wizard_picker_preset_out_of_range_is_reported(run: Any, out: Path, answers: Any) -> None:
+    answers(*PICKER_WALK)
+    code, output = run("-i", "--playlist-items", "9", CAROUSEL)
+    assert code == 1
+    assert t("items_not_found", 4, "9") in output
+    assert names(out) == []
+
+
+def test_wizard_picker_preset_reaches_every_url(run: Any, out: Path, answers: Any) -> None:
+    prompts = answers(*PICKER_WALK, *PICKER_WALK)
+    other = "https://fake.test/rejects-cookies-carousel"
+    code, _ = run("-i", "--playlist-items", "4", CAROUSEL, other)
+    assert code == 0
+    assert names(out) == ["04 - Clip [v2].mp4"]
+    preset = t("ask_selection_default_preset", "4")
+    assert prompts.count(preset) == 2
+
+
+@pytest.mark.parametrize(
+    ("replies", "items", "saved"),
+    [
+        # Back at the picker, the first step after the probe: it asks again, Enter keeps 2.
+        (("", "b", *PICKER_WALK[1:]), "2", "02 - Clip [v1].mp4"),
+        # Back from the type step to the picker, then a typed answer replaces the preset.
+        (("", "", "b", "4", *PICKER_WALK[2:]), "4", "04 - Clip [v2].mp4"),
+        # Back from the type step, then Enter: still the command line's value.
+        (("", "", "b", *PICKER_WALK[1:]), "2", "02 - Clip [v1].mp4"),
+    ],
+    ids=["back-at-picker", "back-then-typed", "back-then-enter"],
+)
+def test_wizard_picker_preset_survives_going_back(
+    run: Any, out: Path, answers: Any, replies: tuple[str, ...], items: str, saved: str
+) -> None:
+    prompts = answers(*replies)
+    code, output = run("-i", "--playlist-items", "2", CAROUSEL)
+    assert code == 0
+    assert names(out) == [saved]
+    assert prompts.count(t("ask_selection_default_preset", "2")) == 2
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == items
+
+
+def test_wizard_typed_selection_does_not_become_the_next_urls_preset(
+    run: Any, out: Path, answers: Any
+) -> None:
+    other = "https://fake.test/rejects-cookies-carousel"
+    prompts = answers("", "4", *PICKER_WALK[2:], *PICKER_WALK)
+    code, output = run("-i", "--playlist-items", "2", CAROUSEL, other)
+    assert code == 0
+    assert names(out) == BOTH_ITEMS
+    assert prompts.count(t("ask_selection_default_preset", "2")) == 2
+    assert t("ask_selection_default_preset", "4") not in prompts
+    items = [shlex.split(line) for line in commands(output)]
+    assert sorted(argv[argv.index("--playlist-items") + 1] for argv in items) == ["2", "4"]
+
+
+@pytest.mark.parametrize(
+    ("lang", "prompt"),
+    [
+        ("es", "Selecciona items (Enter = 2, 'all' = todo intentable, c = cancelar): "),
+        ("en", "Pick items (Enter = 2, 'all' = try everything, c = cancel): "),
+    ],
+)
+def test_wizard_picker_preset_prompt_in_both_languages(
+    run: Any, answers: Any, monkeypatch: pytest.MonkeyPatch, lang: str, prompt: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    prompts = answers(*PICKER_WALK)
+    assert run("-i", "--playlist-items", "2", CAROUSEL)[0] == 0
+    assert prompt in prompts
 
 
 def test_detected_keyring_reaches_wizard_probe(
@@ -880,7 +1170,8 @@ def test_cookie_retry_that_finds_nothing_is_a_failure(run: Any, out: Path) -> No
     code, output = run("-y", "--cookies", "brave", "--playlist-items", "9", url)
     assert code == 1
     assert t("cookies_retry", "brave") in output
-    assert t("no_supported_items") in output
+    assert t("items_not_found", 4, "9") in output
+    assert t("failed", url) in output
     assert t("done") not in output
     assert names(out) == []
     assert history_rows() == []
@@ -1357,13 +1648,13 @@ def test_single_answer_next_to_a_plain_url_shares_one_flagged_command(
         (
             "es",
             "Comando equivalente para repetir esta descarga:",
-            "Ningún item es descargable.",
+            "No están en esta playlist (4 items), se omiten: 9",
             "Listo.",
         ),
         (
             "en",
             "Equivalent command to repeat this download:",
-            "No items are downloadable.",
+            "Not in this playlist (4 items), skipped: 9",
             "Done.",
         ),
     ],
@@ -1607,7 +1898,7 @@ def test_wizard_keeps_saving_a_direct_image(generic: Any, home: Path) -> None:
     [
         ("poster", (), ("",), ["poster (1).mp4"]),
         ("poster", ("-y",), (), ["poster (1).mp4"]),
-        ("poster", ("-y", "-p"), (), ["NA - poster (1) [poster-1].mp4"]),
+        ("poster", ("-y", "-p"), (), ["poster (1).mp4"]),
         ("poster", ("-y", "-P"), (), ["poster (1).mp4"]),
         ("poster", ("-y", "-a"), (), ["poster (1).mp3"]),
         ("multi", (), ("",), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
@@ -1617,12 +1908,12 @@ def test_wizard_keeps_saving_a_direct_image(generic: Any, home: Path) -> None:
         ("multi", ("-y", "-a"), (), [f"multi ({i}) [multi-{i}].mp3" for i in range(1, 5)]),
         ("og-video", (), ("",), ["video.mp4"]),
         ("og-video", ("-y",), (), ["video.mp4"]),
-        ("og-video", ("-y", "-p"), (), ["NA - video [tiny].mp4"]),
+        ("og-video", ("-y", "-p"), (), ["video.mp4"]),
         ("og-video", ("-y", "-P"), (), ["video.mp4"]),
         ("og-video", ("-y", "-a"), (), ["video.mp3"]),
         ("audio", (), ("",), ["audio (1).m4a"]),
         ("audio", ("-y",), (), ["audio (1).m4a"]),
-        ("audio", ("-y", "-p"), (), ["NA - audio (1) [audio-1].m4a"]),
+        ("audio", ("-y", "-p"), (), ["audio (1).m4a"]),
         ("audio", ("-y", "-P"), (), ["audio (1).m4a"]),
         ("audio", ("-y", "-a"), (), ["audio (1).mp3"]),
     ],
