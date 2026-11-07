@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T22:48:47-04:00",
+  "updated": "2026-11-06T23:11:01-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -252,8 +252,8 @@
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
       "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
@@ -265,8 +265,12 @@
         "875030f"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor tests/conftest.py:62 direct tiny.ogg rows depend on the host MIME database; on Python below 3.14 without /etc/mime.types they fail",
+          "minor tests/test_probe.py:274 test_extensions_the_rule_relies_on_are_in_yt_dlp runs no project code, and its ogg row no longer matches the rule",
+          "minor tests/test_e2e.py:2076 local streams shadows the helper and the exit code is ignored"
+        ]
       },
       "history": [
         {
@@ -317,6 +321,13 @@
           "result": "done",
           "at": "2026-11-06T22:48:47-04:00",
           "note": "Finding closed. 803 passed, 2 xfailed. Mutation 12/12. Human decision at merge: a direct Theora .ogg served as audio/ogg gets vcodec none, so the wizard converts it to mp3 and drops the video; main kept it raw. Same for wma, m4b, asf holding video under audio/*. Planner follow-ups: .ogx carousel count wrong; extensionless octet-stream link saves .unknown_video and reports failure; og:video without extension fails."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-06T23:11:01-04:00",
+          "note": "Gate passes, 803 passed, 2 xfailed. Live check passed without cookies: 20 items, 4 video, 16 image, same 4 files through the wizard and -y -p. Three minor test findings. Decisions for the human: renamed videos (leave as is) and video under audio/* (planner row for a type step). All 8 live files had only a video stream, not caused by this item. Branch has never run on CI; new fixtures need more ffmpeg encoders. Release notes: .ogg converts only when yt-dlp sets vcodec none. Planner: unsupported_count has no callers."
         }
       ]
     }
