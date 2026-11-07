@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T03:43:58-04:00",
+  "updated": "2026-11-07T03:46:10-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -368,9 +368,9 @@
     "fix/probe-auth": {
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
       "worktree": ".worktrees/fix-probe-auth",
@@ -390,9 +390,7 @@
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "low probe.py:138 an id with ': ' reaches the auth rule on statuses outside 404/410/5xx or on a refused connection"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -450,6 +448,13 @@
           "result": "done",
           "at": "2026-11-07T03:43:58-04:00",
           "note": "Round 2 finding fixed with the measured regex. 1156 passed, 2 xfailed; floor passes in es and en."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T03:46:10-04:00",
+          "note": "Round 2 confirmed on real runs. Mutation 2/2. Accepted tradeoff: a site sentence with a login hint before ': Unable to' no longer counts as auth; late cookies step still covers it."
         }
       ]
     }
