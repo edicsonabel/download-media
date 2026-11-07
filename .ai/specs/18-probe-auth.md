@@ -1,6 +1,6 @@
 # 18 — Make the probe see extraction errors
 
-Status: draft
+Status: approved
 Item: `fix/probe-auth`
 
 ## Problem
@@ -541,6 +541,8 @@ What must hold:
 4. Gated post: `This content needs a login:` appears after the up-front decline, the content is detected, and what's on disk matches what's reported.
 
 ## Open decisions
+
+Resolved on approval: the human chose the recommended option in D1 (D, override `process_video_result`), D2 (share), D3 (keep the picker), D4 (ask for cookies) and D5 (accept).
 
 ### D1: how the probe sees errors
 
