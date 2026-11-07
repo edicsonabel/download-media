@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T12:10:11-04:00",
+  "updated": "2026-11-07T12:26:37-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,13 +940,15 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-false-failure",
+      "commits": [
+        "037a6f6"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -958,6 +960,20 @@
           "result": "approved",
           "at": "2026-11-07T12:10:11-04:00",
           "note": "Planner's recommended next item, started under the human's delegation. main pushed at 3d9c913 under the same delegation: no docs or workflow changes, so only CI ran."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T12:26:37-04:00",
+          "note": "Reproduced, wider than the row: real .weba/.m4r/.f4a/.f4b audio fails; -p counts post-processing failures twice and can call a total failure Done; single mode stops early; --cookies retry leaves a second copy. Prototype fixes all; 4 expected test flips. Planner: non-media body stays on disk after a failure; xattrs for rerun detection."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T12:26:37-04:00",
+          "note": "Spec approved under the human's delegation, every recommended option. D6 and D7 change shipped behaviour; flagged for review."
         }
       ]
     }
