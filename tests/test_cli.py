@@ -233,6 +233,30 @@ def test_equivalent_cookie_drop_is_decided_per_browser(capsys) -> None:
     assert lines == ["download-media -y a", "download-media -y --cookies firefox b c"]
 
 
+@pytest.mark.parametrize("dropped_first", [True, False])
+def test_equivalent_merges_a_walk_whose_cookies_were_dropped_with_one_without(
+    capsys, dropped_first: bool
+) -> None:
+    dropped = (("a", parse(["--cookies", "brave", "a"])), (True, True, "no"))
+    plain = (("b", parse(["b"])), (True, False, "no"))
+    pairs = [dropped, plain] if dropped_first else [plain, dropped]
+    lines = _equivalent_lines(capsys, [run for run, _ in pairs], [result for _, result in pairs])
+    assert lines == ["download-media -y a b" if dropped_first else "download-media -y b a"]
+
+
+def test_equivalent_leaves_out_a_declined_walk(capsys) -> None:
+    runs = [("a", parse(["a"])), ("b", parse(["-a", "b"])), ("c", parse(["c"]))]
+    results = [(True, False, "no"), (False, False, None), (False, False, "no")]
+    lines = _equivalent_lines(capsys, runs, results)
+    assert lines == ["download-media -y a c"]
+
+
+def test_equivalent_keeps_cookies_when_a_walk_with_them_failed(capsys) -> None:
+    runs = [("a", parse(["--cookies", "brave", "a"])), ("b", parse(["--cookies", "brave", "b"]))]
+    lines = _equivalent_lines(capsys, runs, [(True, True, "no"), (False, False, "no")])
+    assert lines == ["download-media -y --cookies brave a b"]
+
+
 def test_playlist_items_excludes_both_playlist_flags(capsys) -> None:
     import pytest
 
