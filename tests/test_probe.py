@@ -139,7 +139,7 @@ IMAGE, AUDIO, VIDEO, UNKNOWN = (
         ({"vcodec": "h264", "acodec": None, "ext": "jpg"}, VIDEO),
         ({"vcodec": None, "acodec": None, "ext": "m4a"}, AUDIO),
         ({"vcodec": None, "acodec": "mp3", "ext": "mp3"}, AUDIO),
-        ({"vcodec": None, "acodec": "none", "ext": "ogg"}, AUDIO),
+        ({"vcodec": None, "acodec": "none", "ext": "ogg"}, VIDEO),
         ({"vcodec": None, "acodec": None, "ext": "jpg"}, UNKNOWN),
         ({"vcodec": None, "acodec": None, "ext": "png"}, UNKNOWN),
         ({"vcodec": None, "acodec": None, "ext": "webp"}, UNKNOWN),
@@ -209,6 +209,47 @@ def test_strongest_format_decides(formats: list[dict[str, Any]], kind: ContentKi
 )
 def test_format_with_one_codec_set_or_neither(fmt: dict[str, Any], kind: ContentKind) -> None:
     assert _classify_single({"formats": [fmt]}) == kind
+
+
+MAY_HOLD_VIDEO = ["asf", "m4b", "ogg", "ogx", "wma"]
+
+
+@pytest.mark.parametrize("ext", MAY_HOLD_VIDEO)
+@pytest.mark.parametrize(
+    "fmt,kind",
+    [
+        ({"vcodec": None, "acodec": None}, VIDEO),
+        ({"vcodec": None, "acodec": "vorbis"}, VIDEO),
+        ({"vcodec": None, "acodec": "none"}, VIDEO),
+        ({"acodec": None}, VIDEO),
+        ({"vcodec": "theora", "acodec": "vorbis"}, VIDEO),
+        ({"vcodec": "none", "acodec": "vorbis"}, AUDIO),
+        ({"vcodec": "none", "acodec": None}, AUDIO),
+        ({"vcodec": "none", "acodec": "none"}, IMAGE),
+    ],
+)
+@pytest.mark.parametrize(
+    "shape",
+    [
+        lambda fmt: {"id": "i", "title": "t", "formats": [fmt]},
+        lambda fmt: {"id": "i", "title": "t", "url": "http://x/f", **fmt},
+    ],
+    ids=["formats", "url-only"],
+)
+def test_container_that_can_hold_video_needs_vcodec_none_to_be_audio(
+    shape: Any, ext: str, fmt: dict[str, Any], kind: ContentKind
+) -> None:
+    info = shape({**fmt, "ext": ext})
+    assert _classify_entry(info, 1).kind == kind
+    assert _classify_single(info) == kind
+
+
+@pytest.mark.parametrize("ext", sorted(set(MEDIA_EXTENSIONS.audio) - set(MAY_HOLD_VIDEO)))
+@pytest.mark.parametrize("acodec", [None, "aac"])
+def test_every_other_extension_yt_dlp_lists_as_audio_stays_audio(
+    ext: str, acodec: str | None
+) -> None:
+    assert _classify_single({"formats": [{"vcodec": None, "acodec": acodec, "ext": ext}]}) == AUDIO
 
 
 KINDS_WEAKEST_FIRST = [

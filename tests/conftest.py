@@ -91,6 +91,17 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "audio-wav": '<audio src="tiny.wav"></audio>',
         "audio-relative-og": '<audio src="tiny.m4a"></audio><meta property="og:image" content="tiny.jpg">',
         "video-ogg": '<video src="theora.ogg"></video>',
+        "video-ogg-codecs": (
+            """<video><source src="theora.ogg" type='video/ogg; codecs="theora, vorbis"'></video>"""
+        ),
+        "video-ogx": '<video src="theora.ogx"></video>',
+        "video-m4b": '<video src="clip.m4b"></video>',
+        "video-wma": '<video src="clip.wma"></video>',
+        "video-m4a": '<video src="clip.m4a"></video>',
+        "og-video-ogg": f'<meta property="og:video" content="{base}/theora.ogg">',
+        "video-tag-audio-ogg": '<video src="tiny.ogg"></video>',
+        "video-tag-audio-m4b": '<video src="tiny.m4b"></video>',
+        "audio-theora-ogg": '<audio src="theora.ogg"></audio>',
         "everything": (
             '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
         ),
@@ -145,6 +156,11 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         [*source, "-c:v", "libtheora", "-c:a", "libvorbis", str(root / "theora.ogg")], check=True
     )
     subprocess.run([*source, "-c:v", "wmv2", "-c:a", "wmav2", str(root / "clip.asf")], check=True)
+    shutil.copy(root / "theora.ogg", root / "theora.ogx")
+    shutil.copy(root / "clip.asf", root / "clip.wma")
+    shutil.copy(root / "tiny.mp4", root / "clip.m4b")
+    shutil.copy(root / "tiny.mp4", root / "clip.m4a")
+    shutil.copy(root / "tiny.m4a", root / "tiny.m4b")
     hls = ["-c", "copy", "-f", "hls", "-hls_playlist_type", "vod", str(root / "tiny.m3u8")]
     subprocess.run([*source, *hls], check=True)
     for copy in ("v1", "v2", "v3", "v4"):

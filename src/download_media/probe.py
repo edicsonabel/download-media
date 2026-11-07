@@ -129,6 +129,12 @@ def _is_auth_error(message: str) -> bool:
     return any(hint in msg for hint in _AUTH_ERROR_HINTS)
 
 
+# yt-dlp lists these as audio, yet they can hold a video it would keep. A wrong
+# "audio" converts and deletes that video; a wrong "video" only keeps the raw file.
+# .m4a isn't one: yt-dlp's metadata step already strips video from it.
+_AUDIO_LISTED_BUT_MAY_HOLD_VIDEO = frozenset({"asf", "m4b", "ogg", "ogx", "wma"})
+
+
 def _format_kind(fmt: dict[str, Any]) -> ContentKind:
     """Read a format as yt-dlp does: ``'none'`` is absent, ``None`` is unknown."""
     vcodec = fmt.get("vcodec")
@@ -140,7 +146,7 @@ def _format_kind(fmt: dict[str, Any]) -> ContentKind:
     # acodec can't decide here: yt-dlp may name it and still have video (or
     # fill it in from the extension), while vcodec stays unknown.
     ext = fmt.get("ext")
-    if ext in MEDIA_EXTENSIONS.audio:
+    if ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO:
         return ContentKind.SINGLE_AUDIO
     if ext in MEDIA_EXTENSIONS.thumbnails:
         return ContentKind.UNKNOWN  # Offered, never refused: a direct .jpg downloads.

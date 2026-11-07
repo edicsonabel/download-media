@@ -45,6 +45,12 @@ def commands(output: str) -> list[str]:
     return [line for line in lines if line.startswith("download-media ")]
 
 
+def streams(path: Path) -> set[str]:
+    """The stream types ffprobe finds in ``path``."""
+    probe = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0"]
+    return set(subprocess.run([*probe, str(path)], capture_output=True, text=True).stdout.split())
+
+
 def detected(kind: str) -> str:
     """The detection banner, since a bare "Video" also matches the output folder."""
     return f"generic / {t(kind)}"
@@ -1851,30 +1857,88 @@ def test_wizard_on_audio_with_a_relative_og_image_ends_without_a_traceback(
     assert t("done") in output or t("failed", f"{media_url}/{page}") in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Spec 17's rule reads an unknown vcodec with an extension in MEDIA_EXTENSIONS.audio as "
-    "audio, but ogg and asf also hold video. The wizard skips the type step, deletes the video "
-    "and reports Done; main and -y both keep it.",
-)
 @pytest.mark.parametrize(
-    ("page", "saved"), [("video-ogg.html", "video-ogg (1).ogg"), ("clip.asf", "clip.asf")]
+    ("page", "saved"),
+    [
+        ("video-ogg.html", "video-ogg (1).ogg"),
+        ("video-ogg-codecs.html", "video-ogg-codecs (1).ogv"),
+        ("og-video-ogg.html", "video.ogg"),
+        ("clip.asf", "clip.asf"),
+        ("video-m4b.html", "video-m4b (1).m4b"),
+        ("video-wma.html", "video-wma (1).wma"),
+    ],
 )
 def test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio(
-    media_url: str,
-    home: Path,
-    answers: Any,
-    capfd: pytest.CaptureFixture[str],
-    page: str,
-    saved: str,
+    generic: Any, home: Path, page: str, saved: str
 ) -> None:
-    answers(*SINGLE_WALK, "")  # A kind left unknown asks to confirm once more.
-    code = cli.main([f"{media_url}/{page}"])
-    capfd.readouterr()
+    code, output = generic(page, *SINGLE_WALK)
     assert code == 0
+    assert detected("kind_video") in output
+    assert t("done") in output
     assert names(home / "Music") == []
     assert names(home / "Videos") == [saved]
+    assert "video" in streams(home / "Videos" / saved)
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"), [("video-ogx.html", "video-ogx (1).ogx"), ("theora.ogx", "theora.ogx")]
+)
+def test_wizard_keeps_an_ogx_and_reports_the_metadata_failure(
+    generic: Any, media_url: str, home: Path, page: str, saved: str
+) -> None:
+    # ffmpeg has no muxer for .ogx, so yt-dlp's metadata step fails after the
+    # download. The same happens with -y and on main: the file stays, video included.
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 1
+    assert detected("kind_video") in output
+    assert t("failed", f"{media_url}/{page}") in output
+    assert t("done") not in output
+    assert names(home / "Music") == []
+    assert names(home / "Videos") == [saved]
+    assert "video" in streams(home / "Videos" / saved)
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("video-tag-audio-ogg.html", "video-tag-audio-ogg (1).ogg"),
+        ("video-tag-audio-m4b.html", "video-tag-audio-m4b (1).m4b"),
+    ],
+)
+def test_wizard_keeps_audio_in_such_a_container_raw_when_nothing_says_it_is_audio(
+    generic: Any, home: Path, page: str, saved: str
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert detected("kind_video") in output
+    assert names(home / "Music") == []
+    assert names(home / "Videos") == [saved]
+
+
+def test_wizard_can_still_choose_audio_for_such_a_container(generic: Any, home: Path) -> None:
+    # URL, type, format, folder, cookies: reading as video brings the type step back.
+    code, _ = generic("video-tag-audio-ogg.html", "", "2", "", "", "")
+    assert code == 0
+    assert names(home / "Music") == ["video-tag-audio-ogg (1).mp3"]
+    assert names(home / "Videos") == []
+
+
+def test_yt_dlp_strips_video_from_m4a_so_reading_it_as_audio_loses_nothing(
+    generic: Any, home: Path
+) -> None:
+    # The reason .m4a isn't with the containers above. If yt-dlp stops doing this,
+    # an .m4a holding video would start losing it to the audio path.
+    code, _ = generic("video-m4a.html", flags=("-y",))
+    assert code == 0
+    assert streams(home / "Videos" / "video-m4a (1).m4a") == {"audio"}
+
+
+def test_wizard_trusts_an_audio_tag_on_such_a_container(generic: Any, home: Path) -> None:
+    # yt-dlp sets vcodec to 'none' for <audio>: the page, not the extension, says so.
+    code, output = generic("audio-theora-ogg.html", "", "", "", "")
+    assert code == 0
+    assert detected("kind_audio") in output
+    assert names(home / "Music") == ["audio-theora-ogg (1).mp3"]
 
 
 def test_wizard_on_a_generic_page_with_every_kind(
