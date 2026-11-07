@@ -4148,6 +4148,21 @@ def test_subs_are_embedded_in_a_webm(run: Any, out: Path) -> None:
     assert never_said("subs_not_embedded", output)
 
 
+def test_sub_langs_alone_turns_subtitles_on(run: Any, replay: Any, out: Path, again: Path) -> None:
+    code, output = run("-y", "--sub-langs", "en", SUBS)
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert "-s" in argv
+    assert argv[argv.index("--sub-langs") + 1] == "en"
+
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
 @pytest.mark.parametrize("url", ["https://fake.test/subs-fr", VIDEO])
 def test_no_subtitles_in_the_languages_is_a_warning(run: Any, out: Path, url: str) -> None:
     code, output = run("-y", "-s", url)

@@ -94,8 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Download subtitles, embed them in videos and keep them as files.",
     )
     p.add_argument(
-        "--sub-langs", default=DEFAULT_SUB_LANGS, dest="sub_langs",
-        help=f"Subtitle languages, comma-separated (default: {DEFAULT_SUB_LANGS}).",
+        "--sub-langs", dest="sub_langs",
+        help=f"Subtitle languages, comma-separated; implies -s (default: {DEFAULT_SUB_LANGS}).",
     )
 
     p.add_argument(
@@ -129,8 +129,8 @@ def options_from_args(args: argparse.Namespace) -> DownloadOptions:
         video_format=args.video_format,
         output=args.output,
         cookies_browser=args.cookies_browser,
-        subs=args.subs,
-        sub_langs=args.sub_langs,
+        subs=args.subs or args.sub_langs is not None,
+        sub_langs=DEFAULT_SUB_LANGS if args.sub_langs is None else args.sub_langs,
         playlist_mode=pmode,
         playlist_items=args.playlist_items,
         no_confirm=args.no_confirm,
