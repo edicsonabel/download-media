@@ -2787,11 +2787,6 @@ def test_an_error_with_no_words_still_reads_unknown(wizard_on: Any) -> None:
     assert asked_for_login() not in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="probe() raises on an image entry with a text duration, see test_probe.py",
-)
 def test_a_text_duration_on_an_image_entry_keeps_the_picker(wizard_on: Any, out: Path) -> None:
     code, output = wizard_on("https://fake.test/text-duration-carousel", *PICKER_WALK)
     assert code == 0

@@ -8,13 +8,14 @@ discovering at download time that the user picked an image.
 
 from __future__ import annotations
 
+import math
 import re
 import textwrap
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from yt_dlp.utils import MEDIA_EXTENSIONS
+from yt_dlp.utils import MEDIA_EXTENSIONS, float_or_none
 
 from .cookies import ydl_cookies
 from .downloader import _Ydl
@@ -206,6 +207,12 @@ def _media_kind(info: dict[str, Any]) -> ContentKind | None:
     return next((kind for kind in _KINDS_BY_STRENGTH if kind in kinds), None)
 
 
+def _seconds(info: dict[str, Any]) -> float | None:
+    # What the override hands back hasn't been through yt-dlp's numeric sanitizing.
+    seconds = float_or_none(info.get("duration")) or 0
+    return seconds if 0 < seconds < math.inf else None
+
+
 def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
     """Classify one playlist entry as video / audio / image."""
     if entry is None:
@@ -216,7 +223,6 @@ def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
             supported=False,
             title=f"(item #{idx})",
         )
-    duration = entry.get("duration") or 0
     kind = _media_kind(entry) or ContentKind.SINGLE_IMAGE
 
     title = str(entry.get("title") or entry.get("id") or f"Item {idx}")
@@ -226,7 +232,7 @@ def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
         kind=kind,
         supported=kind != ContentKind.SINGLE_IMAGE,
         title=title,
-        duration=duration if duration > 0 else None,
+        duration=_seconds(entry),
     )
 
 
@@ -259,31 +265,7 @@ class _ProbeYdl(_Ydl):
         return super().process_video_result(info_dict, download=download)
 
 
-def probe(url: str, cookies_browser: str | None = None) -> Probe:
-    """Inspect ``url`` and return a structured :class:`Probe`. Never raises."""
-    site = detect_site(url)
-
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "noplaylist": False,
-        "ignoreerrors": True,
-        "logger": _SilentLogger(),
-    }
-    if cookies_browser:
-        ydl_opts["cookiesfrombrowser"] = ydl_cookies(cookies_browser)
-
-    data: Any = None
-    errors: list[str] = []
-    try:
-        with _ProbeYdl(ydl_opts) as ydl:
-            errors = ydl.errors
-            data = ydl.extract_info(url, download=False, process=True)
-    except Exception as exc:
-        # A missing browser reports its real cause first, then raises a generic error.
-        errors = errors or [str(exc)]
-
+def _read_result(url: str, site: str, data: Any, errors: list[str]) -> Probe:
     auth_errors = [error for error in errors if is_auth_error(error)]
     worst = next(iter(auth_errors or errors), None)
     reason = _short_reason(worst) if worst else None
@@ -319,6 +301,32 @@ def probe(url: str, cookies_browser: str | None = None) -> Probe:
         content_kind=kind,
         title=data.get("title") or data.get("id"),
         uploader=data.get("uploader") or data.get("channel"),
-        duration=data.get("duration"),
+        duration=_seconds(data),
         filesize=data.get("filesize_approx") or data.get("filesize"),
     )
+
+
+def probe(url: str, cookies_browser: str | None = None) -> Probe:
+    """Inspect ``url`` and return a structured :class:`Probe`. Never raises."""
+    site = detect_site(url)
+
+    ydl_opts: dict[str, Any] = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": False,
+        "ignoreerrors": True,
+        "logger": _SilentLogger(),
+    }
+    if cookies_browser:
+        ydl_opts["cookiesfrombrowser"] = ydl_cookies(cookies_browser)
+
+    errors: list[str] = []
+    try:
+        with _ProbeYdl(ydl_opts) as ydl:
+            errors = ydl.errors
+            data = ydl.extract_info(url, download=False, process=True)
+        return _read_result(url, site, data, errors)
+    except Exception as exc:
+        # A missing browser reports its real cause first, then raises a generic error.
+        return _read_result(url, site, None, errors or [str(exc)])

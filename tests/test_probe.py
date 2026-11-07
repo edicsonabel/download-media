@@ -663,19 +663,57 @@ def test_a_carousel_with_every_entry_gated_is_a_failure(fake_site: Any) -> None:
     assert result.error_message == "Login required"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="The override hands the entry back before yt-dlp makes duration numeric, and "
-    "_classify_entry compares it outside probe()'s try: probe() raises, the wizard crashes",
-)
 def test_a_text_duration_on_an_image_entry_cannot_break_the_probe(fake_site: Any) -> None:
     result = probe("https://fake.test/text-duration-carousel")
     assert [item.kind for item in result.items] == [IMAGE, VIDEO]
+    assert result.items[0].duration == 12
+
+
+def test_odd_types_on_an_image_entry_cannot_break_the_probe(fake_site: Any) -> None:
+    result = probe("https://fake.test/odd-types-carousel")
+    assert [item.kind for item in result.items] == [IMAGE, VIDEO]
+    assert result.items[0].title == "123"
+    assert result.items[0].duration is None
+
+
+def test_what_the_classifier_cannot_read_is_a_failure_and_not_a_crash(
+    fake_site: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from download_media import probe as probe_module
+
+    def unreadable(entry: Any, idx: int) -> None:
+        raise TypeError("a value nobody expected")
+
+    monkeypatch.setattr(probe_module, "_classify_entry", unreadable)
+    result = probe("https://fake.test/carousel")
+    assert result.failed is True
+    assert result.needs_cookies is False
+    assert result.error_message == "a value nobody expected"
+
+
+@pytest.mark.parametrize(
+    "raw,seconds",
+    [
+        ("12", 12),
+        (12.5, 12.5),
+        (0, None),
+        (-1, None),
+        ("soon", None),
+        ("inf", None),
+        ("nan", None),
+        ([], None),
+        ({"s": 1}, None),
+    ],
+    ids=["text", "float", "zero", "negative", "words", "inf", "nan", "list", "dict"],
+)
+def test_a_raw_duration_reads_as_seconds_or_nothing(raw: Any, seconds: float | None) -> None:
+    assert _classify_entry({"url": "http://x/f.mp4", "duration": raw}, 1).duration == seconds
 
 
 def test_a_text_duration_on_a_lone_image_is_still_an_image(fake_site: Any) -> None:
-    assert probe("https://fake.test/text-duration-image").content_kind == IMAGE
+    result = probe("https://fake.test/text-duration-image")
+    assert result.content_kind == IMAGE
+    assert result.duration == 12
 
 
 @pytest.mark.parametrize("page", ["live-video", "url-video"])

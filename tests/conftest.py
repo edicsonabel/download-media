@@ -450,6 +450,7 @@ class FakeSiteIE(InfoExtractor):
         video, thumbnail = self._video("v2"), f"{self.media_url}/tiny.jpg"
         # Extractors pass an API's text through: yt-dlp only makes it numeric later.
         text_duration = {**self._instagram_image("i1"), "duration": "12"}
+        odd_types = {"duration": ["12"], "title": 123, "id": 456, "height": "tall", "width": {}}
         no_url = {**self._instagram_image("n1"), "formats": [{"format_id": "x", "ext": "mp4"}]}
         # The generic extractor's id is the URL's last segment, unquoted. It only reaches this
         # message on recent yt-dlp, so a loopback 404 can't show it at the floor.
@@ -474,6 +475,10 @@ class FakeSiteIE(InfoExtractor):
             return text_duration
         if page == "text-duration-carousel":
             return self.playlist_result([text_duration, video], "post", "Post")
+        if page == "odd-types-carousel":
+            return self.playlist_result(
+                [{**self._instagram_image("i1"), **odd_types}, video], "post", "Post"
+            )
         if page == "live-video":
             return {**self._video("v1"), "is_live": True, "thumbnail": thumbnail}
         if page == "upcoming":
