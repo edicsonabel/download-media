@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T10:20:02-04:00",
+  "updated": "2026-11-07T10:37:12-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -816,14 +816,17 @@
     "fix/subs-as-documented": {
       "type": "fix",
       "title": "Subtitles behave as documented",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/21-subs-as-documented.md",
       "branch": "fix/subs-as-documented",
       "worktree": ".worktrees/fix-subs-as-documented",
       "commits": [
-        "0aa5f77"
+        "0aa5f77",
+        "f6ce695",
+        "d3c371b",
+        "749e7d0"
       ],
       "review": {
         "approved": false,
@@ -850,6 +853,13 @@
           "result": "approved",
           "at": "2026-11-07T10:20:02-04:00",
           "note": "Spec approved under the human's delegation, every recommended option. D1, D2, D3 change shipped behaviour; flagged for the human's review. Known cost: in mp4 ffmpeg marks the first subtitle language as default."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T10:37:12-04:00",
+          "note": "Gate exit 0, 1516 passed, 3 xfailed. Floor yt-dlp passes subtitle tests. Real runs: mp4 mov_text spa/eng with .vtt kept; TTML warns, exit 0."
         }
       ]
     }
