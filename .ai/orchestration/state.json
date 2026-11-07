@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T17:49:22-04:00",
+  "updated": "2026-11-07T18:08:30-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,14 +1054,15 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
       "worktree": ".worktrees/fix-audio-thumbnail",
       "commits": [
-        "e2c7144"
+        "e2c7144",
+        "38c1931"
       ],
       "review": {
         "approved": false,
@@ -1088,6 +1089,13 @@
           "result": "approved",
           "at": "2026-11-07T17:49:22-04:00",
           "note": "Spec approved under the human's delegation, D1-D10 A. D1 and D5 change shipped behaviour; flagged for review."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T18:08:30-04:00",
+          "note": "Gate exit 0, 1635 passed, 2 xfailed. 30 new tests fail on main at both yt-dlp versions. Deviations: m4a cover pin can't hold (yt-dlp's metadata step strips it with -vn, also on main); .temp.opus pin moved to a unit test. Planner: m4a never keeps its cover; pin ruff format version."
         }
       ]
     }
