@@ -86,7 +86,7 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
     def send_head(self) -> Any:
-        status = re.fullmatch(r"/status/(\d{3})", self.path)
+        status = re.fullmatch(r"/status/(\d{3})(?:/.*)?", self.path)  # A sub-path names the id.
         if status:
             self.send_error(int(status[1]))
             return None

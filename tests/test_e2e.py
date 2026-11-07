@@ -2882,6 +2882,43 @@ def test_a_404_hiding_a_private_video_is_rescued_by_the_late_cookies_step(
     assert f"--cookies {BROWSERS[0]}" in line
 
 
+ID_WITH_A_COLON = pytest.mark.xfail(
+    strict=True,
+    reason="_SITE_PREFIX tries \\S+: first, so an id with ': ' loses only its first word and the "
+    "rest reads as the site's. The status rule hides that on 404, 410 and 5xx, not elsewhere",
+)
+
+
+@ID_WITH_A_COLON
+def test_direct_mode_ignores_an_id_with_a_colon_on_a_403(generic: Any) -> None:
+    code, output = generic("status/403/tag:%20private", flags=("-y",))
+    assert code == 1
+    assert GIVE_UP not in output
+
+
+@ID_WITH_A_COLON
+def test_direct_mode_ignores_an_id_with_a_colon_on_a_refused_connection(
+    home: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["-y", "http://127.0.0.1:1/tag:%20private"]) == 1
+    assert GIVE_UP not in capfd.readouterr().out
+
+
+@ID_WITH_A_COLON
+def test_wizard_ignores_an_id_with_a_colon_on_a_403(generic: Any) -> None:
+    code, output = generic("status/403/tag:%20private", *SINGLE_WALK, "")
+    assert code == 1
+    assert asked_for_login() not in output
+    assert t("probe_failed", "Unable to download webpage: HTTP Error 403: Forbidden") in output
+
+
+@ID_WITH_A_COLON
+def test_the_reason_of_a_404_drops_all_of_an_id_with_a_colon(generic: Any) -> None:
+    code, output = generic("tag:%20private", *SINGLE_WALK, "")
+    assert code == 1
+    assert t("probe_failed", "Unable to download webpage: HTTP Error 404: File not found") in output
+
+
 @pytest.mark.parametrize("page", ["404-login", "404-spaced"])
 def test_direct_mode_does_not_blame_a_404_on_login(run: Any, page: str) -> None:
     code, output = run("-y", f"https://fake.test/{page}")

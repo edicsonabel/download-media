@@ -633,6 +633,25 @@ def test_short_reason_drops_an_id_and_nothing_else(message: str) -> None:
     assert _short_reason(message) == "Unable to download webpage: HTTP Error 404: Not Found"
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="_SITE_PREFIX tries \\S+: first, so 'private' outlives the id. Only the status rule "
+    "hides that, and it doesn't cover these",
+)
+@pytest.mark.parametrize(
+    "ending",
+    [
+        "HTTP Error 400: Bad Request",
+        "HTTP Error 403: Forbidden",
+        "HTTP Error 451: Unavailable For Legal Reasons",
+        "<urlopen error [Errno 111] Connection refused>",
+    ],
+    ids=["400", "403", "451", "refused"],
+)
+def test_the_end_of_an_id_with_a_colon_asks_for_nothing(ending: str) -> None:
+    assert is_auth_error(f"[generic] tag: private: Unable to download webpage: {ending}") is False
+
+
 def test_short_reason_drops_an_id_with_a_space() -> None:
     message = "[generic] my clip: Unable to download webpage: HTTP Error 404: Not Found"
     assert _short_reason(message) == "Unable to download webpage: HTTP Error 404: Not Found"
