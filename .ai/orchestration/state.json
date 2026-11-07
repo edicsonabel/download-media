@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T08:38:09-04:00",
+  "updated": "2026-11-07T08:57:52-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,14 +707,18 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
       "worktree": ".worktrees/fix-playlist-items-fix",
       "commits": [
-        "a928006"
+        "a928006",
+        "ad09d7b",
+        "68a11fb",
+        "3bc48d2",
+        "ce926e6"
       ],
       "review": {
         "approved": false,
@@ -741,6 +745,13 @@
           "result": "approved",
           "at": "2026-11-07T08:38:09-04:00",
           "note": "Spec approved under the human's delegation, every recommended option. D2 changes the shipped -p file name on a plain video (drops 'NA - '); flagged for the human's review."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T08:57:52-04:00",
+          "note": "Gate exit 0, 1389 passed, 3 xfailed. Floor yt-dlp passes this item's tests. 0.3.0 note goes to the planner for PLAN.md. Planner: the yt-dlp floor and an unpinned curl_cffi don't work together."
         }
       ]
     }
