@@ -264,3 +264,31 @@ def test_a_hung_ffprobe_is_given_up_on(tmp_path: Path, monkeypatch: pytest.Monke
 
     monkeypatch.setattr(subprocess, "run", short_run)
     assert _has_media_streams(str(tmp_path / "clip.ogx")) is False
+
+
+def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(
+    tmp_path: Path, media_url: str
+) -> None:
+    # Driven directly: in a full run yt-dlp's metadata step goes first and takes the same name.
+    from urllib.request import urlopen
+
+    from yt_dlp import YoutubeDL
+
+    from download_media.downloader import _EmbedSubtitles
+
+    video, track = tmp_path / "Clip.mp4", tmp_path / "Clip.en.ttml"
+    for path, name in ((video, "tiny.mp4"), (track, "en.ttml")):
+        with urlopen(f"{media_url}/{name}") as body:
+            path.write_bytes(body.read())
+    (tmp_path / "Clip.temp.mp4").write_text("mine", encoding="utf-8")
+    info = {
+        "filepath": str(video),
+        "ext": "mp4",
+        "requested_subtitles": {"en": {"ext": "ttml", "filepath": str(track)}},
+    }
+    not_embedded: list[str] = []
+    with YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+        _EmbedSubtitles(ydl, not_embedded).run(info)
+    # ffmpeg can't read the TTML track, so it fails before opening its temp file.
+    assert not_embedded == ["Clip.mp4"]
+    assert (tmp_path / "Clip.temp.mp4").read_text(encoding="utf-8") == "mine"

@@ -263,10 +263,14 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
         files = _subtitle_files(info)
+        temp = Path(prepend_extension(info["filepath"], "temp"))
+        temp_was_there = temp.exists()
         try:
             super().run(info)
         except PostProcessingError:
-            Path(prepend_extension(info["filepath"], "temp")).unlink(missing_ok=True)
+            # ffmpeg fails before opening the temp file when it can't read a track.
+            if not temp_was_there:
+                temp.unlink(missing_ok=True)
         # Covers the failure above, containers that can't hold subtitles, srt in webm, json.
         streams = _subtitle_streams(info["filepath"]) if files else None
         if streams is not None and streams < len(files):
