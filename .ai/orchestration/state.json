@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T06:34:32-04:00",
+  "updated": "2026-11-07T06:40:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -505,12 +505,12 @@
     "fix/wizard-multi-url": {
       "type": "fix",
       "title": "Wizard drops every URL after the first",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/19-wizard-multi-url.md",
       "branch": "fix/wizard-multi-url",
-      "worktree": ".worktrees/fix-wizard-multi-url",
+      "worktree": null,
       "commits": [
         "74e9670",
         "c30cd3b",
@@ -519,7 +519,8 @@
         "2e58d6b",
         "58d8170",
         "7981000",
-        "59096fb"
+        "59096fb",
+        "0e285e7"
       ],
       "review": {
         "approved": true,
@@ -585,6 +586,37 @@
           "result": "merged",
           "at": "2026-11-07T06:34:32-04:00",
           "note": "Merged as 59096fb, no conflicts. Gate exit 0, 1225 passed, 2 xfailed."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T06:40:13-04:00",
+          "note": "All criteria hold on main, reproduction fixed. GitHub CI not run, nothing pushed."
+        }
+      ]
+    },
+    "fix/audio-type-step": {
+      "type": "fix",
+      "title": "Wizard converts a video served as audio and drops its video",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/27-audio-type-step.md",
+      "branch": "fix/audio-type-step",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T06:40:13-04:00",
+          "note": "Next P1, started under the human's overnight delegation. Regression over 0.2.0 from probe-no-codec; the planner recommends it merges before /release."
         }
       ]
     }
