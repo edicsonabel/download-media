@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T20:02:19-04:00",
+  "updated": "2026-11-06T20:26:23-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -144,12 +144,12 @@
     "fix/equivalent-direct": {
       "type": "fix",
       "title": "Equivalent command must repeat the run instead of reopening the wizard",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/09-equivalent-direct.md",
       "branch": "fix/equivalent-direct",
-      "worktree": ".worktrees/fix-equivalent-direct",
+      "worktree": null,
       "commits": [
         "32b7e39",
         "8cc3d30",
@@ -157,7 +157,8 @@
         "21c81e2",
         "997b721",
         "317c2d3",
-        "ff27902"
+        "ff27902",
+        "bf36bc0"
       ],
       "review": {
         "approved": true,
@@ -237,6 +238,13 @@
           "result": "merged",
           "at": "2026-11-06T20:02:19-04:00",
           "note": "Merged as ff27902, no conflicts. Gate on the merged tree: exit 0, 477 passed, 1 xfailed."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-06T20:26:23-04:00",
+          "note": "All 23 criteria hold, reproduction fixed in es and en. CI run 42315736194: attempt 1 cancelled by the job timeout during apt-get install ffmpeg, attempt 2 re-run by the orchestrator succeeded on 3.12, 477 passed. Planner follow-up: a slow mirror can time out CI."
         }
       ]
     }
