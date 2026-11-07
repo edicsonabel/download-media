@@ -11,7 +11,7 @@ Supports **1800+ sites** through yt-dlp: YouTube, Twitter/X, Instagram, TikTok, 
 - **Clipboard detection** — when no URL is passed, offers to use a URL it finds in the clipboard.
 - **Preview + confirmation** — shows title, channel, duration, and approximate size before downloading.
 - **Playlist detection** — asks whether to download just the single video or the whole playlist.
-- **Subtitles** — `-s` embeds them in the video and keeps them as files next to it (`.vtt`, `.srt`, …); `--sub-langs es,en,fr` picks the languages and turns subtitles on. With `-a` they're saved as files only.
+- **Subtitles** — `-s` embeds them in the video and keeps them as files next to it (`.vtt`, `.srt`, …); `--sub-langs es,en,fr` picks the languages and turns subtitles on. With `-a` they're saved as files only. In mp4 the first language is marked as the default track, so players may show it.
 - **Browser cookies** — `--cookies firefox` (or `brave`, `chrome`, etc.) for login-walled, age-restricted, or private content. A Chromium browser's `--password-store` is detected from its flags file (`~/.config/brave-flags.conf`, ...); if yours is set elsewhere, name the keyring: `--cookies brave+gnomekeyring`.
 - **Carousels** — images yt-dlp can't fetch are skipped, the videos are kept, and the run reports how many items were saved.
 - **History** — every successful download is logged at `~/.local/state/download-media/history.log`.
