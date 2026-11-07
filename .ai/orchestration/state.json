@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T06:31:04-04:00",
+  "updated": "2026-11-07T06:34:32-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -505,9 +505,9 @@
     "fix/wizard-multi-url": {
       "type": "fix",
       "title": "Wizard drops every URL after the first",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/19-wizard-multi-url.md",
       "branch": "fix/wizard-multi-url",
       "worktree": ".worktrees/fix-wizard-multi-url",
@@ -518,7 +518,8 @@
         "82c99d4",
         "2e58d6b",
         "58d8170",
-        "7981000"
+        "7981000",
+        "59096fb"
       ],
       "review": {
         "approved": true,
@@ -577,6 +578,13 @@
           "result": "approved",
           "at": "2026-11-07T06:31:04-04:00",
           "note": "Merge decided by the roles under the human's overnight delegation. Local main only, no push."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-07T06:34:32-04:00",
+          "note": "Merged as 59096fb, no conflicts. Gate exit 0, 1225 passed, 2 xfailed."
         }
       ]
     }
