@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T17:28:47-04:00",
+  "updated": "2026-11-07T17:31:16-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1048,6 +1048,30 @@
           "result": "validated",
           "at": "2026-11-07T17:28:47-04:00",
           "note": "All criteria mapped to tests; reproduction fixed. D6 and D7 await the human's review. Planner: rerun warning; _source_url '-' path gap; .meta overwritten by yt-dlp with chapters; 0-byte temp left; -p -a thumbnail failure counts as failed; xattrs."
+        }
+      ]
+    },
+    "fix/audio-thumbnail": {
+      "type": "fix",
+      "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/28-audio-thumbnail.md",
+      "branch": "fix/audio-thumbnail",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T17:31:16-04:00",
+          "note": "Next P1, under the human's standing delegation (goal still active)."
         }
       ]
     }
