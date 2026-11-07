@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T23:19:35-04:00",
+  "updated": "2026-11-06T23:33:33-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,9 +251,9 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
       "worktree": ".worktrees/fix-probe-no-codec",
@@ -262,7 +262,8 @@
         "5ec306b",
         "d6b83a4",
         "bec654d",
-        "875030f"
+        "875030f",
+        "0343274"
       ],
       "review": {
         "approved": true,
@@ -335,6 +336,13 @@
           "result": "approved",
           "at": "2026-11-06T23:19:35-04:00",
           "note": "Human approved everything the roles recommend, and a push when done, then went to sleep. Covers: the bec654d rule, leave renamed videos as they are, planner row for the type step, fix the MIME test dependency before merging, merge, push. No release and no new items: not asked for."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-06T23:33:33-04:00",
+          "note": "Three QA minors fixed in tests only. 798 passed, 2 xfailed; table test removed. Mutation 8/9; survivor: split-streams test can't see a missing merge because the fixture's video-only format has audio. Planner follow-up. Real 3.12 is only proven by CI."
         }
       ]
     }
