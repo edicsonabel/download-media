@@ -2658,6 +2658,201 @@ def test_no_cover_in_both_languages(
 
 
 @pytest.mark.parametrize(
+    ("page", "covered"),
+    [
+        ("audio-file-thumb.html", False),  # file:// is a RequestError, not a network one
+        ("audio-short-thumb.html", False),  # cut off: fetched, then the embed fails
+        ("audio-loop-thumb.html", False),  # a redirect loop: yt-dlp drops it itself
+        ("audio-data-thumb.html", True),  # a data: URL holding a real JPEG
+    ],
+)
+def test_other_thumbnail_links_never_fail_the_audio(
+    generic: Any, media_url: str, out: Path, page: str, covered: bool
+) -> None:
+    code, output = generic(page, flags=("-y", "-a", "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".mp3")
+    assert ("video" in streams(out / saved)) is covered
+    assert t("failed", f"{media_url}/{page}") not in output
+    assert len(history_rows()) == 1
+    if covered:
+        assert cover_warnings(output) == 0
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Bug: yt-dlp takes the thumbnail's extension from its link. A link ending in .mp3 "
+    "names the thumbnail after the audio, so after ExtractAudio writes the audio there, "
+    "_EmbedCover's drop_thumbs() deletes the saved .mp3. main keeps it (Download failed).",
+)
+@pytest.mark.parametrize("flags", [(), ("-p",)])
+def test_a_thumbnail_named_like_the_audio_never_deletes_it(
+    generic: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = generic("audio-mp3-thumb.html", flags=("-y", "-a", *flags, "-o", str(out)))
+    assert names(out) == ["audio-mp3-thumb (1).mp3"]
+    assert "audio" in streams(out / "audio-mp3-thumb (1).mp3")
+    assert code == 0
+    assert t("no_cover", "audio-mp3-thumb (1).mp3") in output
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Bug: a thumbnail link whose extension yt-dlp deems unsafe (thumb.php?id=, a page) "
+    "raises _UnsafeExtensionError in _write_thumbnails, which isn't a RequestError: "
+    "process_info reports it and the cover fails the whole download, with nothing saved.",
+)
+@pytest.mark.parametrize(
+    ("page", "flags"),
+    [
+        ("audio-php-thumb.html", ()),
+        ("audio-php-thumb.html", ("-p",)),
+        ("audio-html-thumb.html", ()),
+    ],
+)
+def test_a_thumbnail_link_with_an_unusual_extension_never_fails_the_audio(
+    generic: Any, out: Path, page: str, flags: tuple[str, ...]
+) -> None:
+    code, output = generic(page, flags=("-y", "-a", *flags, "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".mp3")
+    assert t("no_cover", saved) in output
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes to a read-only folder")
+@pytest.mark.parametrize("flags", [(), ("-p",)])
+def test_a_folder_the_thumbnail_cannot_be_written_to_still_fails(
+    media_url: str, out: Path, capfd: pytest.CaptureFixture[str], flags: tuple[str, ...]
+) -> None:
+    # Writing the thumbnail is the first write: an OSError there is the audio's failure too,
+    # never a missing cover. Single mode raises it (spec 28, D9: its own row).
+    out.mkdir()
+    out.chmod(0o555)
+    url = f"{media_url}/audio.html"
+    try:
+        code: int | None = cli.main(["-y", "-a", *flags, "-o", str(out), url])
+    except OSError:
+        code = None
+    finally:
+        out.chmod(0o755)
+    output = capfd.readouterr().out
+    assert code != 0
+    assert names(out) == []
+    assert cover_warnings(output) == 0
+    assert t("done") not in output
+    assert history_rows() == []
+    if flags:
+        assert code == 1
+        assert t("failed", url) in output
+
+
+def test_cancelling_after_the_thumbnail_leaves_none(
+    media_url: str, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import yt_dlp
+
+    def interrupted(*args: Any, **kwargs: Any) -> bool:
+        raise KeyboardInterrupt
+
+    # Ctrl-C while the media downloads, after the thumbnail was written.
+    monkeypatch.setattr(yt_dlp.YoutubeDL, "dl", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        cli.main(["-y", "-a", "-o", str(out), f"{media_url}/audio.html"])
+    assert names(out) == []
+
+
+@pytest.mark.parametrize(
+    ("page", "warned"), [("junk-media-carousel", 0), ("junk-media-relative-carousel", 1)]
+)
+def test_playlist_with_a_failed_item_warns_and_cleans_for_the_saved_one_only(
+    run: Any, out: Path, page: str, warned: int
+) -> None:
+    code, output = run("-y", "-a", "-p", f"https://fake.test/{page}")
+    assert code == 0
+    assert said_partial_result(output)
+    # The failed item's body, which audio extraction couldn't read, may stay (spec 28, Out).
+    assert [name for name in names(out) if name.endswith(".mp3")] == ["02 - Clip [t2].mp3"]
+    assert cover_leftovers(out) == []
+    # The failed item had no cover either, but only the saved one is named.
+    assert cover_warnings(output) == warned
+    if warned:
+        assert t("no_cover", "02 - Clip [t2].mp3") in output
+    else:
+        assert "video" in streams(out / "02 - Clip [t2].mp3")
+
+
+def test_cookie_retry_of_a_failed_item_leaves_no_thumbnail(
+    run: Any, out: Path, fake_site: list[Any]
+) -> None:
+    url = "https://fake.test/thumb-404-carousel"
+    code, output = run("-y", "-a", "--cookies", "brave", url)
+    assert code == 1
+    assert t("cookies_retry", "brave") in output
+    assert fake_site == [("brave",), None]
+    assert t("failed", url) in output
+    assert names(out) == []
+
+
+def test_several_urls_clean_up_per_url(
+    media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    pages = ("audio-gone.html", "audio.html", "audio-junk-thumb.html")
+    urls = [f"{media_url}/{page}" for page in pages]
+    code = cli.main(["-y", "-a", "-o", str(out), *urls])
+    output = capfd.readouterr().out
+    assert code == 1
+    assert t("failed", urls[0]) in output
+    assert names(out) == ["audio (1).mp3", "audio-junk-thumb (1).mp3"]
+    assert "video" in streams(out / "audio (1).mp3")
+    assert cover_warnings(output) == 1
+    assert t("no_cover", "audio-junk-thumb (1).mp3") in output
+    assert len(history_rows()) == 2
+
+
+def test_failed_webp_conversion_leaves_the_users_own_png_alone(generic: Any, out: Path) -> None:
+    # yt-dlp renames the thumbnail to .webp and converts it to .png, which fails: only a .png
+    # this step wrote may go.
+    out.mkdir(parents=True)
+    own = out / "audio-webp-thumb (1).png"
+    own.write_bytes(b"mine")
+    code, output = generic("audio-webp-thumb.html", flags=("-y", "-a", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["audio-webp-thumb (1).mp3", "audio-webp-thumb (1).png"]
+    assert own.read_bytes() == b"mine"
+    assert t("no_cover", "audio-webp-thumb (1).mp3") in output
+
+
+@pytest.mark.parametrize("audio_format", ["opus", "wav"])
+def test_a_run_without_a_cover_still_prints_its_command(
+    generic: Any, media_url: str, out: Path, no_mutagen: None, audio_format: str
+) -> None:
+    url = f"{media_url}/audio-relative-og.html"
+    code, output = generic(
+        "audio-relative-og.html", flags=("-y", "-a", "-f", audio_format, "-o", str(out))
+    )
+    assert code == 0
+    assert names(out) == [f"audio-relative-og (1).{audio_format}"]
+    assert cover_warnings(output) == (audio_format != "wav")
+    # The cover step keeps yt-dlp's own tag; wav has no cover step at all.
+    assert ("[EmbedThumbnail]" in output) is (audio_format != "wav")
+    command = ["download-media", "-y", "-a", "-f", audio_format, "-o", str(out), url]
+    assert commands(output) == [shlex.join(command)]
+
+
+@pytest.mark.parametrize("flags", [(), ("-p",)])
+def test_video_mode_has_no_cover_step(generic: Any, out: Path, flags: tuple[str, ...]) -> None:
+    code, output = generic("og-video.html", flags=("-y", *flags, "-o", str(out)))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert images(out) == []
+    assert "[EmbedThumbnail]" not in output
+    assert cover_warnings(output) == 0
+
+
+@pytest.mark.parametrize(
     "page", ["typed/audio/webm/audio.webm/clip.weba", "typed/audio/ogg/tiny.mp4/clip.oga"]
 )
 def test_rerun_of_an_untaggable_file_under_p_counts_each_run_once(
