@@ -123,6 +123,8 @@ Multi-entry URLs: items with no formats (Instagram images) are skipped by a
 reaches the cookie fallback. yt-dlp downloads carousels even with `noplaylist`,
 so single mode names their items with `[id]`. A run only counts as done if
 something was saved; `-p` must not report success on a total failure.
+`--playlist-items` names any item that isn't in the list, and a single video in
+playlist mode keeps its single-mode name.
 
 After every run that reached the download, whether it worked or not, the
 equivalent direct-mode command is printed (`equivalent.py`), so the user can
