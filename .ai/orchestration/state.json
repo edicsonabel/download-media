@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T19:44:14-04:00",
+  "updated": "2026-11-07T19:49:40-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,9 +1054,9 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
       "worktree": ".worktrees/fix-audio-thumbnail",
@@ -1067,7 +1067,8 @@
         "059c24a",
         "1ae70f1",
         "c15be77",
-        "dc78347"
+        "dc78347",
+        "787cfc8"
       ],
       "review": {
         "approved": true,
@@ -1153,6 +1154,13 @@
           "result": "approved",
           "at": "2026-11-07T19:44:14-04:00",
           "note": "Merge and push under the human's standing delegation ('dale, sigue')."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-07T19:49:40-04:00",
+          "note": "Merged as 787cfc8, no conflicts. Gate exit 0, 1661 passed, 2 xfailed. Pushed by the orchestrator under delegation."
         }
       ]
     }
