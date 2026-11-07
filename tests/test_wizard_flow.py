@@ -233,6 +233,15 @@ def test_playlist_with_nothing_downloadable_cancels(walk: Any) -> None:
     assert walk(carousel(images), "") is None
 
 
+def test_playlist_of_only_unknown_items_is_offered(walk: Any) -> None:
+    items = [
+        ProbeItem(1, ContentKind.UNKNOWN, True, "a.jpg"),
+        ProbeItem(2, ContentKind.UNKNOWN, True, "b.jpg"),
+    ]
+    opts = walk(carousel(items), "", "", "", "", "", "", "")
+    assert opts.playlist_items == "1,2"
+
+
 def test_carousel_default_selects_videos(walk: Any) -> None:
     opts = walk(carousel(), "", "", "", "", "", "", "")
     assert opts.playlist_mode == "yes"

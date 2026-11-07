@@ -498,11 +498,9 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
         if probe_result.content_kind == ContentKind.SINGLE_IMAGE:
             warn(t("image_only_skipped"))
             return None
-        if probe_result.is_playlist:
-            sup = probe_result.supported_video_count + probe_result.supported_audio_count
-            if sup == 0:
-                warn(t("no_supported_items"))
-                return None
+        if probe_result.is_playlist and not any(it.supported for it in probe_result.items):
+            warn(t("no_supported_items"))
+            return None
         _print_detection(probe_result)
         if probe_result.content_kind == ContentKind.SINGLE_AUDIO:
             opts.audio_only = True

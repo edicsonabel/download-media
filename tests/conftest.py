@@ -64,9 +64,34 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def _write_generic_pages(root: Path, base: str) -> None:
+    """Pages for yt-dlp's real generic extractor, which leaves codecs unknown."""
+    og_image = f'<meta property="og:image" content="{base}/tiny.jpg">'
+    videos = "".join(f'<video src="v{i}.mp4"></video>' for i in range(1, 5))
+    codecs = """<source src="tiny.mp4" type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"'>"""
+    pages = {
+        "multi": videos,
+        "poster": '<video src="tiny.mp4" poster="tiny.jpg"></video>',
+        "og-video": f'<meta property="og:video" content="{base}/tiny.mp4">{og_image}',
+        "og-videos": (
+            f'<meta property="og:video" content="{base}/v1.mp4">'
+            f'<meta property="og:video" content="{base}/v2.mp4">'
+        ),
+        "partial-codec": f"<video>{codecs}</video>",
+        "audio": f'<audio src="tiny.m4a"></audio>{og_image}',
+        "audios": '<audio src="a1.m4a"></audio><audio src="a2.m4a"></audio>',
+        "video-audio": '<video src="v1.mp4"></video><audio src="a1.m4a"></audio>',
+        "jpg-video": '<video src="tiny.jpg"></video><video src="v1.mp4"></video>',
+        "gone": '<video src="missing.mp4" poster="tiny.jpg"></video>',
+        "half-gone": '<video src="v1.mp4"></video><video src="missing.mp4"></video>',
+    }
+    for name, body in pages.items():
+        (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")
+
+
 @pytest.fixture(scope="session")
 def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
-    """Base URL of a loopback server hosting one tiny real video."""
+    """Base URL of a loopback server hosting tiny real media and generic pages."""
     if not shutil.which("ffmpeg"):
         pytest.fail("ffmpeg is required: it is a runtime dependency")
     root = tmp_path_factory.mktemp("media")
@@ -94,10 +119,20 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         ],
         check=True,
     )
+    source = ["ffmpeg", "-v", "error", "-i", str(root / "tiny.mp4")]
+    subprocess.run([*source, "-frames:v", "1", str(root / "tiny.jpg")], check=True)
+    subprocess.run([*source, "-vn", "-c:a", "copy", str(root / "tiny.m4a")], check=True)
+    for copy in ("v1", "v2", "v3", "v4"):
+        shutil.copy(root / "tiny.mp4", root / f"{copy}.mp4")
+    for copy in ("a1", "a2"):
+        shutil.copy(root / "tiny.m4a", root / f"{copy}.m4a")
     handler = functools.partial(_QuietHandler, directory=str(root))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_address[1]}"
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    # After the server starts: og:image and og:video need its port.
+    _write_generic_pages(root, base)
+    yield base
     server.shutdown()
 
 
@@ -136,6 +171,24 @@ class FakeSiteIE(InfoExtractor):
             ],
         }
 
+    def _bare_video(self, item: str) -> dict[str, Any]:
+        """A format with no codec info, like most of what extractors build."""
+        video = self._video(item)
+        video["formats"] = [{"url": f"{self.media_url}/tiny.mp4", "ext": "mp4"}]
+        return video
+
+    def _url_only(self, item: str, path: str, ext: str) -> dict[str, Any]:
+        """No formats at all: yt-dlp fetches the entry's own ``url``."""
+        return {"id": item, "title": "Clip", "url": f"{self.media_url}/{path}", "ext": ext}
+
+    def _audio(self, item: str) -> dict[str, Any]:
+        video = self._video(item)
+        video["duration"] = 1
+        video["formats"] = [
+            {"url": f"{self.media_url}/tiny.m4a", "ext": "m4a", "vcodec": "none", "acodec": "aac"}
+        ]
+        return video
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -170,6 +223,17 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result(entries, "post", "Post")
         if page == "only-images":
             return self.playlist_result([self._image("i1"), self._image("i2")], "post", "Post")
+        if page == "bare-carousel":
+            entries = [self._image("i1"), self._bare_video("v1")]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "url-only-carousel":
+            entries = [self._url_only(i, "tiny.mp4", "mp4") for i in ("v1", "v2")]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "jpg-carousel":
+            entries = [self._url_only(i, "tiny.jpg", "jpg") for i in ("p1", "p2")]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "audio-carousel":
+            return self.playlist_result([self._audio("a1"), self._audio("a2")], "post", "Post")
         if page == "broken-item":
             entries = [self._video("v1"), self._video("v2", path="missing.mp4")]
             return self.playlist_result(entries, "post", "Post")

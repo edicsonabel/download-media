@@ -23,6 +23,10 @@ PRIVATE = "https://fake.test/private"
 VIDEO = "https://fake.test/video"
 VIDEO_B = "https://fake.test/video-b"
 BOTH_ITEMS = ["02 - Clip [v1].mp4", "04 - Clip [v2].mp4"]
+# URL, type, quality, container, folder, cookies.
+SINGLE_WALK = ("",) * 6
+# URL, item selection, type, quality, container, folder, cookies.
+PICKER_WALK = ("",) * 7
 
 
 def names(folder: Path) -> list[str]:
@@ -38,6 +42,16 @@ def commands(output: str) -> list[str]:
     """The equivalent commands a run printed."""
     lines = (line.strip() for line in output.splitlines())
     return [line for line in lines if line.startswith("download-media ")]
+
+
+def detected(kind: str) -> str:
+    """The detection banner, since a bare "Video" also matches the output folder."""
+    return f"generic / {t(kind)}"
+
+
+def tag(kind: str) -> str:
+    """How the item picker labels an item."""
+    return f"[{t(kind).lower()}]"
 
 
 @pytest.fixture
@@ -71,9 +85,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture
-def replay(
-    fake_site: list[Any], capfd: pytest.CaptureFixture[str], answers: Any
-) -> Callable[..., tuple[int, str]]:
+def pasted(capfd: pytest.CaptureFixture[str], answers: Any) -> Callable[..., tuple[int, str]]:
     """Run a printed command as pasted, optionally into another folder.
 
     Nothing is scripted, so any prompt fails the test.
@@ -90,6 +102,30 @@ def replay(
         return code, captured.out + captured.err
 
     return _replay
+
+
+@pytest.fixture
+def replay(fake_site: list[Any], pasted: Any) -> Callable[..., tuple[int, str]]:
+    return pasted
+
+
+@pytest.fixture
+def generic(
+    media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> Callable[..., tuple[int, str]]:
+    """Run a loopback page through yt-dlp's real generic extractor.
+
+    ``fake_site`` loads only ``FakeSiteIE``, and ``-o`` would leave the wizard.
+    """
+
+    def _generic(page: str, *replies: str, flags: tuple[str, ...] = ()) -> tuple[int, str]:
+        prompts = answers(*replies)
+        code = cli.main([*flags, f"{media_url}/{page}"])
+        captured = capfd.readouterr()
+        assert len(prompts) == len(replies)  # A skipped step would go unnoticed.
+        return code, captured.out + captured.err
+
+    return _generic
 
 
 @pytest.fixture
@@ -1383,3 +1419,273 @@ def test_real_process_repeats_a_wizard_run_with_stdin_closed(
     second = process(shlex.split(line)[1:], tmp_path / "second", None)
     assert second.returncode == 0, second.stderr
     assert names(tmp_path / "second" / "Videos") == ["tiny.mp4"]
+
+
+MULTI = [f"0{i} - multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]
+
+
+def test_wizard_saves_every_video_without_codec_info(generic: Any, home: Path) -> None:
+    code, output = generic("multi.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == MULTI
+    assert output.count(tag("kind_video")) == 4
+    assert t("done") in output
+    assert t("no_supported_items") not in output
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("poster.html", "poster (1).mp4"),
+        ("og-video.html", "video.mp4"),
+        ("partial-codec.html", "partial-codec (1).mp4"),
+    ],
+)
+def test_wizard_reads_a_lone_video_without_codec_info_as_video(
+    generic: Any, home: Path, page: str, saved: str
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert names(home / "Videos") == [saved]
+    assert names(home / "Music") == []
+    assert detected("kind_video") in output
+    assert t("image_only_skipped") not in output
+
+
+def test_wizard_offers_entries_that_only_have_a_url(generic: Any, home: Path) -> None:
+    code, output = generic("og-videos.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == ["01 - video (1) [v1].mp4", "02 - video (2) [v2].mp4"]
+    assert output.count(tag("kind_video")) == 2
+
+
+def test_wizard_reads_audio_without_codec_info_as_audio(generic: Any, home: Path) -> None:
+    # URL, format, folder, cookies: no type step.
+    code, output = generic("audio.html", "", "", "", "")
+    assert code == 0
+    assert names(home / "Music") == ["audio (1).mp3"]
+    assert names(home / "Videos") == []
+    assert detected("kind_audio") in output
+
+
+def test_wizard_tags_audio_items_without_codec_info(generic: Any, home: Path) -> None:
+    code, output = generic("audios.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == [
+        "01 - audios (1) [audios-1].m4a",
+        "02 - audios (2) [audios-2].m4a",
+    ]
+    assert output.count(tag("kind_audio")) == 2
+
+
+@pytest.mark.parametrize(
+    ("reply", "saved"),
+    [
+        ("", ["01 - video-audio (1) [video-audio-1].mp4"]),
+        (
+            "all",
+            [
+                "01 - video-audio (1) [video-audio-1].mp4",
+                "02 - video-audio (2) [video-audio-2].m4a",
+            ],
+        ),
+    ],
+)
+def test_wizard_enter_on_video_and_audio_keeps_the_video(
+    generic: Any, home: Path, reply: str, saved: list[str]
+) -> None:
+    code, output = generic("video-audio.html", "", reply, "", "", "", "", "")
+    assert code == 0
+    assert names(home / "Videos") == saved
+    assert tag("kind_video") in output
+    assert tag("kind_audio") in output
+
+
+@pytest.mark.parametrize(
+    ("reply", "saved"),
+    [
+        ("", ["02 - jpg-video (2) [jpg-video-2].mp4"]),
+        ("all", ["01 - jpg-video (1) [jpg-video-1].jpg", "02 - jpg-video (2) [jpg-video-2].mp4"]),
+    ],
+)
+def test_wizard_leaves_a_jpg_out_of_the_videos_but_offers_it(
+    generic: Any, home: Path, reply: str, saved: list[str]
+) -> None:
+    code, output = generic("jpg-video.html", "", reply, "", "", "", "", "")
+    assert code == 0
+    assert names(home / "Videos") == saved
+    assert "[?]" in output
+    assert tag("kind_video") in output
+
+
+def test_wizard_on_a_missing_video_is_a_failure_not_an_image(
+    generic: Any, media_url: str, home: Path
+) -> None:
+    code, output = generic("gone.html", *SINGLE_WALK)
+    assert code == 1
+    assert t("failed", f"{media_url}/gone.html") in output
+    assert t("done") not in output
+    assert t("image_only_skipped") not in output
+    assert names(home / "Videos") == []
+
+
+def test_wizard_on_one_missing_video_of_two_saves_the_other(generic: Any, home: Path) -> None:
+    code, output = generic("half-gone.html", *PICKER_WALK)
+    assert code == 0
+    assert names(home / "Videos") == ["01 - half-gone (1) [half-gone-1].mp4"]
+    assert t("partial_result", 1, 2, 0, 1) in output
+
+
+def test_interactive_audio_flag_on_a_video_without_codec_info(generic: Any, home: Path) -> None:
+    # URL, type, format, folder, cookies.
+    code, _ = generic("poster.html", "", "", "", "", "", flags=("-i", "-a"))
+    assert code == 0
+    assert names(home / "Music") == ["poster (1).mp3"]
+
+
+@pytest.mark.parametrize(
+    ("page", "replies", "flags", "saved"),
+    [
+        ("poster.html", SINGLE_WALK, "-y", ["poster (1).mp4"]),
+        ("multi.html", PICKER_WALK, "-y --playlist-items 1,2,3,4", MULTI),
+    ],
+)
+def test_wizard_on_media_without_codec_info_repeats_without_a_prompt(
+    generic: Any,
+    pasted: Any,
+    media_url: str,
+    home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+    page: str,
+    replies: tuple[str, ...],
+    flags: str,
+    saved: list[str],
+) -> None:
+    _, output = generic(page, *replies)
+    [line] = commands(output)
+    assert line == f"download-media {flags} {media_url}/{page}"
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == saved
+
+
+def test_wizard_twice_on_a_video_without_codec_info(generic: Any, home: Path) -> None:
+    first, _ = generic("poster.html", *SINGLE_WALK)
+    second, output = generic("poster.html", *SINGLE_WALK)
+    assert (first, second) == (0, 0)
+    assert t("done") in output
+    assert names(home / "Videos") == ["poster (1).mp4"]
+    assert len(history_rows()) == 2
+
+
+def test_wizard_keeps_saving_a_direct_image(generic: Any, home: Path) -> None:
+    # An unknown kind leaves the playlist mode open, so the preview asks too.
+    code, output = generic("tiny.jpg", *SINGLE_WALK, "")
+    assert code == 0
+    assert names(home / "Videos") == ["tiny.jpg"]
+    assert detected("kind_unknown") in output
+
+
+@pytest.mark.parametrize(
+    ("page", "flags", "replies", "saved"),
+    [
+        ("poster", (), ("",), ["poster (1).mp4"]),
+        ("poster", ("-y",), (), ["poster (1).mp4"]),
+        ("poster", ("-y", "-p"), (), ["NA - poster (1) [poster-1].mp4"]),
+        ("poster", ("-y", "-P"), (), ["poster (1).mp4"]),
+        ("poster", ("-y", "-a"), (), ["poster (1).mp3"]),
+        ("multi", (), ("",), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
+        ("multi", ("-y",), (), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
+        ("multi", ("-y", "-p"), (), MULTI),
+        ("multi", ("-y", "-P"), (), [f"multi ({i}) [multi-{i}].mp4" for i in range(1, 5)]),
+        ("multi", ("-y", "-a"), (), [f"multi ({i}) [multi-{i}].mp3" for i in range(1, 5)]),
+        ("og-video", (), ("",), ["video.mp4"]),
+        ("og-video", ("-y",), (), ["video.mp4"]),
+        ("og-video", ("-y", "-p"), (), ["NA - video [tiny].mp4"]),
+        ("og-video", ("-y", "-P"), (), ["video.mp4"]),
+        ("og-video", ("-y", "-a"), (), ["video.mp3"]),
+        ("audio", (), ("",), ["audio (1).m4a"]),
+        ("audio", ("-y",), (), ["audio (1).m4a"]),
+        ("audio", ("-y", "-p"), (), ["NA - audio (1) [audio-1].m4a"]),
+        ("audio", ("-y", "-P"), (), ["audio (1).m4a"]),
+        ("audio", ("-y", "-a"), (), ["audio (1).mp3"]),
+    ],
+)
+def test_direct_runs_on_media_without_codec_info_are_unchanged(
+    generic: Any,
+    out: Path,
+    page: str,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    saved: list[str],
+) -> None:
+    code, _ = generic(f"{page}.html", *replies, flags=("-o", str(out), *flags))
+    assert code == 0
+    assert names(out) == saved
+
+
+def test_wizard_on_images_and_a_video_without_codec_info(
+    run: Any, out: Path, again: Path, answers: Any
+) -> None:
+    url = "https://fake.test/bare-carousel"
+    answers(*PICKER_WALK)
+    code, output = run("-i", url)
+    assert code == 0
+    assert tag("kind_image") in output
+    assert tag("kind_video") in output
+    assert names(out) == ["02 - Clip [v1].mp4"]
+
+    code, _ = run("-y", "-p", "-o", str(again), url)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("url-only-carousel", ["01 - Clip [v1].mp4", "02 - Clip [v2].mp4"]),
+        ("jpg-carousel", ["01 - Clip [p1].jpg", "02 - Clip [p2].jpg"]),
+    ],
+)
+def test_wizard_saves_carousels_of_url_only_entries(
+    run: Any, out: Path, answers: Any, page: str, saved: list[str]
+) -> None:
+    answers(*PICKER_WALK)
+    code, _ = run("-i", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == saved
+
+
+def test_wizard_tags_known_audio_with_a_duration_as_audio(
+    run: Any, out: Path, answers: Any
+) -> None:
+    answers(*PICKER_WALK)
+    code, output = run("-i", "https://fake.test/audio-carousel")
+    assert code == 0
+    assert output.count(tag("kind_audio")) == 2
+    assert tag("kind_video") not in output
+
+
+def test_wizard_keeps_refusing_a_carousel_of_only_images(run: Any, out: Path, answers: Any) -> None:
+    answers("")
+    code, output = run("-i", "https://fake.test/only-images")
+    assert code == 0
+    assert t("no_supported_items") in output
+    assert t("equiv_cmd") not in output
+    assert names(out) == []
+
+
+def test_wizard_on_a_lone_image_still_fails_the_probe(run: Any, out: Path, answers: Any) -> None:
+    # The failed probe falls back to the manual steps, and the preview asks too.
+    answers(*SINGLE_WALK, "")
+    code, output = run("-i", "https://fake.test/image")
+    assert code == 1
+    assert t("probe_failed", "unknown") in output
+    assert names(out) == []

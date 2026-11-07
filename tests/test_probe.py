@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from download_media.probe import (
@@ -109,6 +111,91 @@ def test_classify_single_image() -> None:
 
 def test_classify_single_unknown_when_empty() -> None:
     assert _classify_single({}) == ContentKind.UNKNOWN
+
+
+STORYBOARD = {"format_id": "sb0", "ext": "mhtml", "vcodec": "none", "acodec": "none"}
+IMAGE, AUDIO, VIDEO, UNKNOWN = (
+    ContentKind.SINGLE_IMAGE,
+    ContentKind.SINGLE_AUDIO,
+    ContentKind.SINGLE_VIDEO,
+    ContentKind.UNKNOWN,
+)
+
+
+@pytest.mark.parametrize(
+    "fmt,kind",
+    [
+        ({"vcodec": "none", "acodec": "none", "ext": "mp4"}, IMAGE),
+        ({"vcodec": "none", "acodec": "none", "ext": "jpg"}, IMAGE),
+        ({"vcodec": "none", "acodec": "aac", "ext": "m4a"}, AUDIO),
+        ({"vcodec": "none", "acodec": None, "ext": "m4a"}, AUDIO),
+        ({"vcodec": "none", "acodec": None, "ext": "mp4"}, AUDIO),
+        ({"vcodec": "h264", "acodec": "aac", "ext": "mp4"}, VIDEO),
+        ({"vcodec": "h264", "acodec": "none", "ext": "mp4"}, VIDEO),
+        ({"vcodec": "h264", "acodec": None, "ext": "jpg"}, VIDEO),
+        ({"vcodec": None, "acodec": None, "ext": "m4a"}, AUDIO),
+        ({"vcodec": None, "acodec": "mp3", "ext": "mp3"}, AUDIO),
+        ({"vcodec": None, "acodec": "none", "ext": "ogg"}, AUDIO),
+        ({"vcodec": None, "acodec": None, "ext": "jpg"}, UNKNOWN),
+        ({"vcodec": None, "acodec": None, "ext": "png"}, UNKNOWN),
+        ({"vcodec": None, "acodec": None, "ext": "webp"}, UNKNOWN),
+        ({"vcodec": None, "acodec": None, "ext": "mp4"}, VIDEO),
+        ({"vcodec": None, "acodec": None, "ext": "webm"}, VIDEO),
+        ({"vcodec": None, "acodec": None, "ext": "gif"}, VIDEO),
+        ({"vcodec": None, "acodec": "mp4a.40.2", "ext": "mp4"}, VIDEO),
+        ({"ext": "mp4"}, VIDEO),
+        ({}, VIDEO),
+    ],
+)
+@pytest.mark.parametrize(
+    "shape",
+    [
+        lambda fmt: {"id": "i", "title": "t", "formats": [fmt]},
+        lambda fmt: {"id": "i", "title": "t", "url": "http://x/f", **fmt},
+    ],
+    ids=["formats", "url-only"],
+)
+def test_classification_rule(shape: Any, fmt: dict[str, Any], kind: ContentKind) -> None:
+    info = shape(fmt)
+    item = _classify_entry(info, 1)
+    assert item.kind == kind
+    assert item.supported is (kind != IMAGE)
+    assert _classify_single(info) == kind
+
+
+@pytest.mark.parametrize(
+    "formats,kind",
+    [
+        ([STORYBOARD, {"vcodec": None, "acodec": None, "ext": "mp4"}], VIDEO),
+        ([STORYBOARD, {"vcodec": "none", "acodec": "opus", "ext": "webm"}], AUDIO),
+        ([STORYBOARD, {"vcodec": None, "acodec": None, "ext": "jpg"}], UNKNOWN),
+        ([{"vcodec": "none", "acodec": "aac", "ext": "m4a"}, {"vcodec": "h264"}], VIDEO),
+        ([{"vcodec": None, "ext": "jpg"}, {"vcodec": "none", "acodec": "aac"}], AUDIO),
+    ],
+)
+def test_strongest_format_decides(formats: list[dict[str, Any]], kind: ContentKind) -> None:
+    item = _classify_entry({"id": "i", "title": "t", "formats": formats}, 1)
+    assert item.kind == kind
+    assert item.supported is True
+    assert _classify_single({"formats": formats}) == kind
+
+
+def test_a_duration_does_not_make_audio_a_video() -> None:
+    entry = {"id": "i", "duration": 60, "formats": [{"vcodec": "none", "acodec": "mp3"}]}
+    item = _classify_entry(entry, 1)
+    assert item.kind == AUDIO
+    assert item.duration == 60
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [{}, {"thumbnails": [{"url": "http://x/img.jpg"}]}, {"duration": 3}],
+    ids=["plain", "thumbnails", "duration"],
+)
+def test_entry_with_nothing_to_fetch_is_an_unsupported_image(extra: dict[str, Any]) -> None:
+    item = _classify_entry({"id": "i", "title": "t", "formats": [], **extra}, 1)
+    assert item.kind == IMAGE
+    assert item.supported is False
 
 
 def test_probe_never_raises(monkeypatch) -> None:
