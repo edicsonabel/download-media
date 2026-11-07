@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T10:01:12-04:00",
+  "updated": "2026-11-07T10:08:20-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -707,12 +707,12 @@
     "fix/playlist-items-fix": {
       "type": "fix",
       "title": "Close the gaps QA found in --playlist-items",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/20-playlist-items-fix.md",
       "branch": "fix/playlist-items-fix",
-      "worktree": ".worktrees/fix-playlist-items-fix",
+      "worktree": null,
       "commits": [
         "a928006",
         "ad09d7b",
@@ -723,7 +723,8 @@
         "21c228f",
         "1f4c65f",
         "31b8a0d",
-        "dd454f1"
+        "dd454f1",
+        "5deb9bd"
       ],
       "review": {
         "approved": true,
@@ -802,6 +803,37 @@
           "result": "merged",
           "at": "2026-11-07T10:01:12-04:00",
           "note": "Merged as dd454f1, no conflicts. Gate exit 0, 1491 passed, 3 xfailed. Undo before any push: reset main to 6ef662b."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T10:08:20-04:00",
+          "note": "18 criteria hold. GitHub CI not run. D2 awaits the human. 0.3.0 note not in PLAN.md yet."
+        }
+      ]
+    },
+    "fix/subs-as-documented": {
+      "type": "fix",
+      "title": "Subtitles behave as documented",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/21-subs-as-documented.md",
+      "branch": "fix/subs-as-documented",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T10:08:20-04:00",
+          "note": "Next P1, under the human's overnight delegation."
         }
       ]
     }
