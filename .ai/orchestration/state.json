@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T07:36:27-04:00",
+  "updated": "2026-11-07T07:47:17-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -599,9 +599,9 @@
     "fix/audio-type-step": {
       "type": "fix",
       "title": "Wizard converts a video served as audio and drops its video",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/27-audio-type-step.md",
       "branch": "fix/audio-type-step",
       "worktree": ".worktrees/fix-audio-type-step",
@@ -609,7 +609,8 @@
         "82d94fa",
         "295e603",
         "254af34",
-        "e828336"
+        "e828336",
+        "f2ceff7"
       ],
       "review": {
         "approved": false,
@@ -653,6 +654,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T07:36:27-04:00",
           "note": "Round 1. Tests now run from an empty tmp_path/cwd and fail if anything is left there. 1362 passed, 13 xfailed. Mutation 13/13. Two regressions against main. Orchestrator direction: lowercase the extension; don't flag unknown_video, since its video path fails anyway (row 29), so the flag only turns working audio into a failure; revisit when row 29 lands. Planner: <audio><source type=video/ogg codecs=theora,vorbis> isn't flagged; only measuring the stream could tell."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T07:47:17-04:00",
+          "note": "Round 1 fixed: lowercase in the label rule; unknown_video not flagged, comment names row 29. 1370 passed, 3 xfailed. Planner: spec 17's _format_kind still compares case-sensitively."
         }
       ]
     }
