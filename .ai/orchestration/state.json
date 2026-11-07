@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T12:26:37-04:00",
+  "updated": "2026-11-07T12:52:33-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,14 +940,17 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
       "worktree": ".worktrees/fix-false-failure",
       "commits": [
-        "037a6f6"
+        "037a6f6",
+        "24f2bd1",
+        "53db2ca",
+        "35e5cd8"
       ],
       "review": {
         "approved": false,
@@ -974,6 +977,13 @@
           "result": "approved",
           "at": "2026-11-07T12:26:37-04:00",
           "note": "Spec approved under the human's delegation, every recommended option. D6 and D7 change shipped behaviour; flagged for review."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T12:52:33-04:00",
+          "note": "Gate exit 0, 1579 passed, 3 xfailed. Floor yt-dlp passes 126 targeted tests. Note: _TagSource deletes <name>.meta next to an untaggable file even without chapters."
         }
       ]
     }
