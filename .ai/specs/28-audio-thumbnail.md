@@ -1,6 +1,6 @@
 # 28 — Never fail an audio download over its cover image
 
-Status: draft
+Status: approved
 Item: `fix/audio-thumbnail`
 
 > **For the human's review:** every decision below was taken by the architect under the human's delegation, on the option that loses no data and is easiest to undo. D1 changes shipped behaviour on purpose: an audio file saved without its cover now ends in `Done.`, exit 0, with a warning, where it ended in a traceback or `Download failed`, exit 1. D5 drops the cover request for `-f wav`, which can't hold one.
@@ -321,6 +321,8 @@ Not needed. Thumbnails are fetched by yt-dlp's core, not by a site extractor, an
 - The `no_cover` warning has one wording for every cause. A user missing `mutagen` isn't told that installing it would bring covers to opus (D7, D10).
 
 ## Open decisions
+
+Resolved by the roles under the human's delegation, each on the recommended option: D1-D10 A. D1 (a cover problem never fails an audio download, reversing spec 29's D6 edge for the cover step) and D5 (`-f wav` requests no thumbnail) change shipped behaviour; the human reviews.
 
 The human delegated these to the roles. Each has a recommendation, chosen to lose no data and to be easy to undo. **D1 and D5 change shipped behaviour**; the human reviews them.
 
