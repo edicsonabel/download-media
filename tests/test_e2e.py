@@ -1100,7 +1100,7 @@ def test_empty_playlist_fails_the_run_but_keeps_the_rest(run: Any, out: Path) ->
         ((), ("https://fake.test/merged",)),
         (("--video-format", "mkv"), ("https://fake.test/merged",)),
         (("-a",), ("https://fake.test/merged",)),
-        (("-s",), (VIDEO,)),
+        (("-s",), ("https://fake.test/subs",)),
         (("-P",), (LIST_URL,)),
         ((), (VIDEO, VIDEO_B)),
         (("-a",), (VIDEO, VIDEO_B)),
@@ -4100,3 +4100,152 @@ def test_the_counter_and_the_skipped_url_in_both_languages(
     assert code == 0
     assert second_title in output
     assert f"{skipped}{IMAGE}" in output
+
+
+# Subtitles (spec 21): -s embeds them in the video and keeps the files.
+SUBS = "https://fake.test/subs"  # en subtitles, es auto-captions.
+SUBS_FILES = ["Clip.en.vtt", "Clip.es.vtt", "Clip.mp4"]
+
+
+def subtitle_streams(path: Path) -> list[tuple[str, str]]:
+    """Codec and language of each subtitle stream ffprobe finds in ``path``, in order."""
+    probe = ["ffprobe", "-v", "error", "-select_streams", "s"]
+    probe += ["-show_entries", "stream=codec_name:stream_tags=language", "-of", "csv=p=0"]
+    out = subprocess.run([*probe, str(path)], capture_output=True, text=True, timeout=15).stdout
+    return [tuple(line.split(",")) for line in out.splitlines()]  # type: ignore[misc]
+
+
+def never_said(key: str, output: str) -> bool:
+    """Whether no part of message ``key`` shows up, whatever its arguments."""
+    chunks = t(key, *("\0",) * t(key).count("{}")).split("\0")
+    return max(chunks, key=len) not in output
+
+
+def test_subs_are_embedded_and_kept_as_files(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", SUBS)
+    assert code == 0
+    assert names(out) == SUBS_FILES
+    # --sub-langs order (es,en), not the extractor's.
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "spa"), ("mov_text", "eng")]
+    assert output.count(t("done")) == 1
+    assert never_said("subs_none", output)
+    assert never_said("subs_not_embedded", output)
+    assert len(history_rows()) == 1
+
+
+def test_subs_are_embedded_in_a_merged_mkv(run: Any, out: Path) -> None:
+    code, _ = run("-y", "-s", "--video-format", "mkv", "https://fake.test/subs-merged")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.es.vtt", "Clip.mkv"]
+    assert len(subtitle_streams(out / "Clip.mkv")) == 2
+
+
+def test_subs_are_embedded_in_a_webm(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "--video-format", "webm", "https://fake.test/subs-webm")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.webm"]
+    assert subtitle_streams(out / "Clip.webm") == [("webvtt", "eng")]
+    assert never_said("subs_not_embedded", output)
+
+
+@pytest.mark.parametrize("url", ["https://fake.test/subs-fr", VIDEO])
+def test_no_subtitles_in_the_languages_is_a_warning(run: Any, out: Path, url: str) -> None:
+    code, output = run("-y", "-s", url)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert output.count(t("done")) == 1
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert len(history_rows()) == 1
+
+
+def test_a_subtitle_ffmpeg_cannot_read_is_not_a_failure(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-ttml"
+    code, output = run("-y", "-s", url)
+    assert code == 0
+    assert output.count(t("done")) == 1
+    assert t("failed", url) not in output
+    assert t("subs_not_embedded", "Clip.mp4") in output
+    assert never_said("subs_none", output)
+    # Nothing left from the embed attempt: no Clip.temp.mp4.
+    assert names(out) == ["Clip.en.ttml", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == []
+    assert len(history_rows()) == 1
+
+
+def test_srt_cannot_go_in_a_webm(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "--video-format", "webm", "https://fake.test/subs-webm-srt")
+    assert code == 0
+    assert t("subs_not_embedded", "Clip.webm") in output
+    assert names(out) == ["Clip.en.srt", "Clip.webm"]
+    assert output.count(t("done")) == 1
+
+
+def test_carousel_with_subtitles_on_one_item(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-carousel")
+    assert code == 0
+    assert names(out) == ["01 - Clip [s1].en.vtt", "01 - Clip [s1].mp4", "02 - Clip [s2].mp4"]
+    assert subtitle_streams(out / "01 - Clip [s1].mp4") == [("mov_text", "eng")]
+    assert subtitle_streams(out / "02 - Clip [s2].mp4") == []
+    assert never_said("subs_none", output)
+    assert never_said("partial_result", output)
+    assert output.count(t("done")) == 1
+
+
+def test_carousel_item_with_an_unreadable_subtitle_still_counts(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-ttml-carousel")
+    assert code == 0
+    assert names(out) == [
+        "01 - Clip [s1].en.vtt",
+        "01 - Clip [s1].mp4",
+        "02 - Clip [s2].en.ttml",
+        "02 - Clip [s2].mp4",
+    ]
+    assert subtitle_streams(out / "01 - Clip [s1].mp4") == [("mov_text", "eng")]
+    assert t("subs_not_embedded", "02 - Clip [s2].mp4") in output
+    assert t("subs_not_embedded", "01 - Clip [s1].mp4") not in output
+    assert never_said("partial_result", output)
+    assert output.count(t("done")) == 1
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize("audio_format", ["mp3", "m4a"])
+def test_audio_keeps_subtitles_as_files_only(run: Any, out: Path, audio_format: str) -> None:
+    code, output = run("-y", "-a", "-f", audio_format, "-s", SUBS)
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.es.vtt", f"Clip.{audio_format}"]
+    assert subtitle_streams(out / f"Clip.{audio_format}") == []
+    assert never_said("subs_not_embedded", output)
+    assert never_said("subs_none", output)
+
+
+def test_audio_without_subtitles_warns(run: Any, out: Path) -> None:
+    code, output = run("-y", "-a", "-s", VIDEO)
+    assert code == 0
+    assert names(out) == ["Clip.mp3"]
+    assert output.count(t("subs_none", "es,en")) == 1
+
+
+def test_subs_rerun_keeps_one_stream_per_language(run: Any, out: Path) -> None:
+    run("-y", "-s", SUBS)
+    code, output = run("-y", "-s", SUBS)
+    assert code == 0
+    assert names(out) == SUBS_FILES
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "spa"), ("mov_text", "eng")]
+    assert never_said("subs_not_embedded", output)
+
+
+def test_wizard_carries_subs_from_the_command_line(run: Any, out: Path, answers: Any) -> None:
+    answers(*SINGLE_WALK)
+    code, _ = run("-i", "-s", SUBS)
+    assert code == 0
+    assert names(out) == SUBS_FILES
+    assert len(subtitle_streams(out / "Clip.mp4")) == 2
+
+
+def test_plain_wizard_writes_no_subtitles(run: Any, out: Path, answers: Any) -> None:
+    answers(*SINGLE_WALK)
+    code, output = run("-i", SUBS)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == []
+    assert never_said("subs_none", output)

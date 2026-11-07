@@ -89,7 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--playlist-items", dest="playlist_items", metavar="ITEMS",
                     help="Download only these playlist items, e.g. 1-3,5.")
 
-    p.add_argument("-s", "--subs", action="store_true", help="Download subtitles.")
+    p.add_argument(
+        "-s", "--subs", action="store_true",
+        help="Download subtitles, embed them in videos and keep them as files.",
+    )
     p.add_argument(
         "--sub-langs", default=DEFAULT_SUB_LANGS, dest="sub_langs",
         help=f"Subtitle languages, comma-separated (default: {DEFAULT_SUB_LANGS}).",
@@ -290,6 +293,10 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         return _Outcome(False, cookies_dropped, pmode)
     if result.skipped or result.failed:
         warn(t("partial_result", result.saved, result.total, result.skipped, result.failed))
+    for name in result.subs_not_embedded:
+        warn(t("subs_not_embedded", name))
+    if result.subs_missing:
+        warn(t("subs_none", effective.sub_langs))
     ok(t("done"))
     history.append(
         url,

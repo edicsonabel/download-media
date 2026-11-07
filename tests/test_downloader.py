@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from download_media.config import DownloadOptions
 from download_media.downloader import build_ydl_opts
 
@@ -68,8 +70,19 @@ def test_subs_enables_subtitle_options() -> None:
     opts = DownloadOptions(urls=["http://x"], subs=True, sub_langs="en,fr,es")
     ydl = build_ydl_opts(opts, Path("/tmp/out"))
     assert ydl["writesubtitles"] is True
-    assert ydl["embedsubtitles"] is True
+    assert ydl["writeautomaticsub"] is True
     assert ydl["subtitleslangs"] == ["en", "fr", "es"]
+    # A yt-dlp command-line option the library never reads.
+    assert "embedsubtitles" not in ydl
+
+
+@pytest.mark.parametrize("audio_only", [False, True])
+def test_subs_leave_the_postprocessors_alone(audio_only: bool) -> None:
+    # The embed step is added in download(); a postprocessor set here was overwritten.
+    plain = DownloadOptions(urls=["http://x"], audio_only=audio_only)
+    subs = DownloadOptions(urls=["http://x"], audio_only=audio_only, subs=True)
+    expected = build_ydl_opts(plain, Path("/tmp/out"))["postprocessors"]
+    assert build_ydl_opts(subs, Path("/tmp/out"))["postprocessors"] == expected
 
 
 def test_non_mp4_container_keeps_default_codec_order() -> None:

@@ -62,6 +62,10 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "cookies_keyring_hint": "  → si {0} guarda sus claves en otro keyring, indícalo: --cookies {0}+gnomekeyring (o +kwallet6, +basictext)",
         "item_no_media": "{}: sin video ni audio descargable (¿imagen?), se omite",
         "partial_result": "{} de {} items descargados ({} sin medio descargable, {} con error).",
+        "subs_none": "No se pudo guardar ningún subtítulo en {}; el contenido se guardó sin ellos.",
+        "subs_not_embedded": (
+            "{}: no se pudieron incrustar todos los subtítulos; todos se conservan como archivos aparte."
+        ),
         "equiv_cmd": "Comando equivalente para repetir esta descarga:",
         "yes_chars": "ys",
         "detected": "Detectado",
@@ -142,6 +146,10 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "cookies_keyring_hint": "  → if {0} stores its keys in another keyring, name it: --cookies {0}+gnomekeyring (or +kwallet6, +basictext)",
         "item_no_media": "{}: no downloadable video or audio (image?), skipping",
         "partial_result": "{} of {} items downloaded ({} without downloadable media, {} failed).",
+        "subs_none": "No subtitles in {} could be saved; the media was saved without them.",
+        "subs_not_embedded": (
+            "{}: not every subtitle could be embedded; they are all kept as separate files."
+        ),
         "equiv_cmd": "Equivalent command to repeat this download:",
         "yes_chars": "y",
         "detected": "Detected",

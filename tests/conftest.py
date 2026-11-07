@@ -189,6 +189,21 @@ def _write_generic_pages(root: Path, base: str) -> None:
         (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")
 
 
+_VTT = "WEBVTT\n\n00:00:00.000 --> 00:00:00.200\n{}\n"
+# TTML is a real subtitle format, but ffmpeg can't read it: embedding it fails.
+_TTML = (
+    '<?xml version="1.0" encoding="utf-8"?><tt xmlns="http://www.w3.org/ns/ttml"><body><div>'
+    '<p begin="00:00:00.000" end="00:00:00.200">Hello</p></div></body></tt>'
+)
+_SUBTITLES = {
+    "en.vtt": _VTT.format("Hello"),
+    "es.vtt": _VTT.format("Hola"),
+    "fr.vtt": _VTT.format("Bonjour"),
+    "en.srt": "1\n00:00:00,000 --> 00:00:00,200\nHello\n",
+    "en.ttml": _TTML,
+}
+
+
 @pytest.fixture(scope="session")
 def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     """Base URL of a loopback server hosting tiny real media and generic pages."""
@@ -251,6 +266,8 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         shutil.copy(root / "tiny.mp4", root / f"{copy}.mp4")
     for copy in ("a1", "a2"):
         shutil.copy(root / "tiny.m4a", root / f"{copy}.m4a")
+    for name, text in _SUBTITLES.items():
+        (root / name).write_text(text, encoding="utf-8")
     handler = functools.partial(_QuietHandler, directory=str(root))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -606,6 +623,52 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result([video, gated], "post", "Post")
         return None
 
+    def _subtitles(self, *files: str) -> dict[str, list[dict[str, str]]]:
+        """``lang.ext`` files on the media server, keyed by language."""
+        tracks: dict[str, list[dict[str, str]]] = {}
+        for name in files:
+            lang, ext = name.split(".")
+            tracks[lang] = [{"url": f"{self.media_url}/{name}", "ext": ext}]
+        return tracks
+
+    def _subtitled(
+        self, video: dict[str, Any], *files: str, auto: tuple[str, ...] = ()
+    ) -> dict[str, Any]:
+        return {
+            **video,
+            "subtitles": self._subtitles(*files),
+            "automatic_captions": self._subtitles(*auto),
+        }
+
+    def _subtitle_shape(self, page: str) -> dict[str, Any] | None:
+        """Pages whose videos carry subtitles and auto-captions, as YouTube's do."""
+        webm = {"format_id": "w", "url": f"{self.media_url}/tiny.webm", "ext": "webm"}
+        webm_video = self._with_formats("w1", {**webm, "vcodec": "vp8", "acodec": "vorbis"})
+        if page == "subs":
+            return self._subtitled(self._video("v1", page="subs"), "en.vtt", auto=("es.vtt",))
+        if page == "subs-en":
+            return self._subtitled(self._video("v1", page="subs-en"), "en.vtt")
+        if page == "subs-merged":
+            return self._subtitled(self._merged_video("v1", "subs-merged"), "en.vtt", "es.vtt")
+        if page == "subs-fr":
+            return self._subtitled(self._video("v1", page="subs-fr"), "fr.vtt")
+        if page == "subs-ttml":
+            return self._subtitled(self._video("v1", page="subs-ttml"), "en.ttml")
+        if page == "subs-webm":
+            return self._subtitled(webm_video, "en.vtt")
+        if page == "subs-webm-srt":
+            return self._subtitled(webm_video, "en.srt")
+        if page == "subs-carousel":
+            entries = [self._subtitled(self._video("s1"), "en.vtt"), self._video("s2")]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-ttml-carousel":
+            entries = [
+                self._subtitled(self._video("s1"), "en.vtt"),
+                self._subtitled(self._video("s2"), "en.ttml"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        return None
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -623,6 +686,7 @@ class FakeSiteIE(InfoExtractor):
             or self._failure_shape(page)
             or self._partial_shape(page)
             or self._edge_shape(page)
+            or self._subtitle_shape(page)
         )
         if shape is not None:
             return shape
