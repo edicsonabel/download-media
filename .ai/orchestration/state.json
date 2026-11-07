@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T17:05:29-04:00",
+  "updated": "2026-11-07T17:05:59-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1016,6 +1016,13 @@
           "result": "blocked",
           "at": "2026-11-07T17:05:29-04:00",
           "note": "No report: the laptop lost power mid-review. Repo and worktree intact (git fsck clean, trees clean). QA relaunched."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-07T17:05:59-04:00",
+          "note": "Human: if QA approves, merge and push. Conditional on QA approval."
         }
       ]
     }
