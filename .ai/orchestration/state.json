@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T01:25:48-04:00",
+  "updated": "2026-11-07T02:16:22-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -368,14 +368,16 @@
     "fix/probe-auth": {
       "type": "fix",
       "title": "Make the probe see extraction errors so the cookie step fires",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/18-probe-auth.md",
       "branch": "fix/probe-auth",
       "worktree": ".worktrees/fix-probe-auth",
       "commits": [
-        "65fbbcb"
+        "65fbbcb",
+        "7fd33c1",
+        "1770eed"
       ],
       "review": {
         "approved": false,
@@ -402,6 +404,13 @@
           "result": "approved",
           "at": "2026-11-07T01:25:48-04:00",
           "note": "Spec approved with every recommended option: D1 override process_video_result, D2 share one definition with cli.py, D3 keep the picker, D4 ask for cookies on Instagram's anonymous rate limit, D5 accept two prompts until row 06."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T02:16:22-04:00",
+          "note": "Gate exit 0, 995 passed, 2 xfailed, 98.51%. Floor yt-dlp 2024.10.07 also passes. 22/22 mutants. Release notes: picker titles change from (image #1) to the real title. Planner candidate: raw image entry with a string duration could raise TypeError in _classify_entry (reasoned, not reproduced)."
         }
       ]
     }
