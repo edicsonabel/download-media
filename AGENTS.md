@@ -174,7 +174,8 @@ Three layers, all required before a release:
   hardcode personal URLs.
 
 Every bug fix adds a test that fails without the fix. The autouse `isolated_env`
-fixture keeps tests away from the real history log and browser flag files.
+fixture keeps tests away from the real history log, browser flag files and, outside
+the live tests, the home folder.
 
 ## Agent system
 
