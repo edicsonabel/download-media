@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T07:15:57-04:00",
+  "updated": "2026-11-07T07:36:27-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -599,19 +599,24 @@
     "fix/audio-type-step": {
       "type": "fix",
       "title": "Wizard converts a video served as audio and drops its video",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/27-audio-type-step.md",
       "branch": "fix/audio-type-step",
       "worktree": ".worktrees/fix-audio-type-step",
       "commits": [
         "82d94fa",
-        "295e603"
+        "295e603",
+        "254af34",
+        "e828336"
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "medium probe.py:190 unknown_video ext is flagged: real audio in <audio> with no extension now fails on Enter, exit 1; main saved an mp3",
+          "low probe.py:190 extension compared case-sensitively: .MP3, .M4A, .WAV, .FLAC get the type step"
+        ]
       },
       "history": [
         {
@@ -641,6 +646,13 @@
           "result": "done",
           "at": "2026-11-07T07:15:57-04:00",
           "note": "Gate exit 0, 1314 passed, 3 xfailed (new strict one for the .ogg rerun). 84 new tests fail on unfixed code. Test hazard: the generic fixture runs in the process cwd, so a drifting wizard test can write a relative folder there; testing adds chdir to tmp_path."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-07T07:36:27-04:00",
+          "note": "Round 1. Tests now run from an empty tmp_path/cwd and fail if anything is left there. 1362 passed, 13 xfailed. Mutation 13/13. Two regressions against main. Orchestrator direction: lowercase the extension; don't flag unknown_video, since its video path fails anyway (row 29), so the flag only turns working audio into a failure; revisit when row 29 lands. Planner: <audio><source type=video/ogg codecs=theora,vorbis> isn't flagged; only measuring the stream could tell."
         }
       ]
     }
