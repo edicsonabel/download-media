@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06T21:18:12-04:00",
+  "updated": "2026-11-06T21:37:32-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -251,12 +251,12 @@
     "fix/probe-no-codec": {
       "type": "fix",
       "title": "Wizard refuses or mislabels videos whose formats have no codec info",
-      "stage": "planning",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "development",
+      "status": "in_progress",
+      "next_agent": "developer",
       "doc": ".ai/specs/17-probe-no-codec.md",
       "branch": "fix/probe-no-codec",
-      "worktree": null,
+      "worktree": ".worktrees/fix-probe-no-codec",
       "commits": [
         "fe91ce0"
       ],
@@ -278,6 +278,13 @@
           "result": "done",
           "at": "2026-11-06T21:18:12-04:00",
           "note": "Reproduced, and wider than reported: a video page can be saved as mp3 and reported Done. Spec needs decisions D1-D4. Planner follow-ups: relative og:image crashes -a; nested playlists labelled image; container ignored on single-format sources; all-audio playlists default to video; -a leaves a stray file on failure; ig_image_warning blames Instagram on any site."
+        },
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-06T21:37:32-04:00",
+          "note": "Spec approved with every recommended option: D1 A, D2 include, D3 A, D4 ship with its own row."
         }
       ]
     }
