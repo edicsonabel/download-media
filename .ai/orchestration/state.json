@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T05:35:53-04:00",
+  "updated": "2026-11-07T05:54:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -505,14 +505,18 @@
     "fix/wizard-multi-url": {
       "type": "fix",
       "title": "Wizard drops every URL after the first",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/19-wizard-multi-url.md",
       "branch": "fix/wizard-multi-url",
       "worktree": ".worktrees/fix-wizard-multi-url",
       "commits": [
-        "74e9670"
+        "74e9670",
+        "c30cd3b",
+        "41df9b2",
+        "82c99d4",
+        "2e58d6b"
       ],
       "review": {
         "approved": false,
@@ -539,6 +543,13 @@
           "result": "approved",
           "at": "2026-11-07T05:35:53-04:00",
           "note": "Spec approved under the human's delegation, every recommended option. Added to scope: isolated_env sets HOME, first commit, before any new wizard test runs. Human reviews in the morning."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T05:54:48-04:00",
+          "note": "HOME isolated in tests first; real ~/Vídeos and ~/Música had 0 new entries after the suite. Gate exit 0, 1177 passed, 2 xfailed, 98.34%. Planner: ruff format drift on main while AGENTS.md lists it as a check; README lists -l under direct mode."
         }
       ]
     }
