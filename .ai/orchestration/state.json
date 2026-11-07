@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T19:19:24-04:00",
+  "updated": "2026-11-07T19:44:14-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,9 +1054,9 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
       "worktree": ".worktrees/fix-audio-thumbnail",
@@ -1070,8 +1070,11 @@
         "dc78347"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor tests/test_e2e.py:2547,2840 own-png tests put the user's file at <name>.png, missing the pngs_there guard since .cover; only the unit test covers it",
+          "minor downloader.py:104-108 a fetch error on the preferred thumbnail skips lower-preference ones"
+        ]
       },
       "history": [
         {
@@ -1136,6 +1139,20 @@
           "result": "done",
           "at": "2026-11-07T19:19:24-04:00",
           "note": "Round 2 closed. Mutation 3/3. Accepted: yt-dlp deletes a user's own <title>.cover.jpg (main did this to <title>.jpg). Planner: a later item titled X with an .mp3 cover link deletes an earlier X.cover.mp3; per-item cover names would close it."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T19:44:14-04:00",
+          "note": "Gate exit 0, 1661 passed, 2 xfailed. Each commit stands alone. Mutation 8/8. Planner: m4a never keeps its cover; <name>.temp.<ext> consumed by yt-dlp's metadata step; thumbnail fallback."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T19:44:14-04:00",
+          "note": "Merge and push under the human's standing delegation ('dale, sigue')."
         }
       ]
     }
