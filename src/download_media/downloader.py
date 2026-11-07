@@ -300,13 +300,19 @@ class _TagSource(FFmpegMetadataPP):  # type: ignore[misc]
         return "Metadata"
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        path = info["filepath"]
+        # The step writes to a temp file and replaces the original only on success.
+        temp = Path(prepend_extension(path, "temp"))
+        temp_was_there = temp.exists()
         try:
             return super().run(info)  # type: ignore[no-any-return]
         except PostProcessingError:
-            # The step writes to a temp file and replaces the original only on success.
-            path = info["filepath"]
-            Path(prepend_extension(path, "temp")).unlink(missing_ok=True)
-            Path(replace_extension(path, "meta")).unlink(missing_ok=True)  # Chapters.
+            # Only what this step wrote: ffmpeg fails before opening the temp file when it
+            # has no muxer, and yt-dlp writes the .meta file only for chapters.
+            if not temp_was_there:
+                temp.unlink(missing_ok=True)
+            if self._add_chapters and info.get("chapters"):
+                Path(replace_extension(path, "meta")).unlink(missing_ok=True)
             # Asking ffprobe, not reading ffmpeg's error text: that varies by version.
             if not _has_media_streams(path):
                 raise

@@ -2332,10 +2332,6 @@ def test_an_untaggable_file_with_chapters_leaves_no_chapters_file(run: Any, out:
     assert t("untagged", "Clip.ogx") in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_TagSource deletes <name>.meta and <name>.temp.<ext> even when yt-dlp never wrote them",
-)
 @pytest.mark.parametrize("own", ["Clip.meta", "Clip.temp.ogx"])
 def test_an_untaggable_file_leaves_the_users_own_files_alone(run: Any, out: Path, own: str) -> None:
     # No chapters, so yt-dlp writes no .meta; ffmpeg has no .ogx muxer, so it opens no temp file.
