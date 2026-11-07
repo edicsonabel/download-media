@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T19:53:41-04:00",
+  "updated": "2026-11-07T19:59:27-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1169,6 +1169,30 @@
           "result": "validated",
           "at": "2026-11-07T19:53:41-04:00",
           "note": "19 criteria mapped; two not met as written with reasons (m4a cover stripped by yt-dlp; .temp.opus pin as unit test). Reproduction fixed. D1 and D5 await the human's review."
+        }
+      ]
+    },
+    "fix/cookie-fallback": {
+      "type": "fix",
+      "title": "Cookie fallback handles a missing browser and empty --cookies runs",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/26-cookie-fallback.md",
+      "branch": "fix/cookie-fallback",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T19:59:27-04:00",
+          "note": "Planner's recommended next item, under the human's standing delegation."
         }
       ]
     }
