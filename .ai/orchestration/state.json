@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T18:53:12-04:00",
+  "updated": "2026-11-07T19:00:26-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1054,9 +1054,9 @@
     "fix/audio-thumbnail": {
       "type": "fix",
       "title": "Relative og:image crashes -a; -a leaves a stray file on failure",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/28-audio-thumbnail.md",
       "branch": "fix/audio-thumbnail",
       "worktree": ".worktrees/fix-audio-thumbnail",
@@ -1065,13 +1065,13 @@
         "38c1931",
         "cbd49b2",
         "059c24a",
-        "1ae70f1"
+        "1ae70f1",
+        "c15be77"
       ],
       "review": {
         "approved": false,
         "findings": [
-          "medium _EmbedCover.run / drop_thumbs deletes the saved audio when the thumbnail link ends in the audio extension",
-          "medium _write_thumbnails catches only RequestError; _UnsafeExtensionError (thumb.php, .html links) still fails the whole audio download"
+          "medium downloader.py:100-117 thumbnail link ending in the media's own extension: cover written where the download goes, audio extraction fails, and the guard keeps the JPEG named .m4a"
         ]
       },
       "history": [
@@ -1116,6 +1116,13 @@
           "result": "done",
           "at": "2026-11-07T18:53:12-04:00",
           "note": "Round 1 fixed: media path never dropped; _UnsafeExtensionError caught. 1656 passed, 2 xfailed. Floor yt-dlp 2024.10.07: test_other_thumbnail_links_never_fail_the_audio[audio-short-thumb] leaves a partial .jpg, pre-existing at cbd49b2. Orchestrator ruling: cosmetic leftover at the floor only, goes to the planner as its own row, not this item."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-07T19:00:26-04:00",
+          "note": "Round 2. Round 1 findings closed. Mutation 2/4, 2 equivalent survivors. Orchestrator direction: fix the collision at the root with a thumbnail filename that can never equal a media path (separate thumbnail output template). Planner: rerun of the .mp3-named case overwrites last run's audio before the new download."
         }
       ]
     }
