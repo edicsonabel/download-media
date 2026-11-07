@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T13:46:20-04:00",
+  "updated": "2026-11-07T13:59:02-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -940,9 +940,9 @@
     "fix/false-failure": {
       "type": "fix",
       "title": "Don't report Download failed when the file was saved",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/29-false-failure.md",
       "branch": "fix/false-failure",
       "worktree": ".worktrees/fix-false-failure",
@@ -958,10 +958,7 @@
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "medium _TagSource.run deletes <name>.meta and <name>.temp.<ext> even when yt-dlp never wrote them; a user's own files go",
-          "low _has_media_streams passes a path starting with - to ffprobe as an option; same in _subtitle_streams"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -1005,6 +1002,13 @@
           "result": "done",
           "at": "2026-11-07T13:46:20-04:00",
           "note": "Round 1 fixed: cleanup only removes files the step created (.meta only with chapters); _EmbedSubtitles same rule; ffprobe gets absolute paths. 1603 passed, 3 xfailed. Planner: _source_url has the same relative '-' path gap. Developer used a named stash push and pop; stash list is empty."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T13:59:02-04:00",
+          "note": "Round 1 closed. Mutation 5/5. A user's Clip.meta with chapters is lost either way (yt-dlp overwrites it). A pre-existing temp ffmpeg opens and fails on stays as 0 bytes; not a regression."
         }
       ]
     }
