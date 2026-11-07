@@ -1,6 +1,6 @@
 # 29 — Stop reporting a saved file as a failed download
 
-Status: draft
+Status: approved
 Item: `fix/false-failure`
 
 ## Problem
@@ -304,6 +304,8 @@ Not needed. The behaviour sits in yt-dlp's post-processing and in ffmpeg, both r
 **Release note (for the planner):** "Files that ffmpeg can't write tags to (`.ogx`, `.weba`, `.m4r`, `.f4a`, `.f4b`, links with no extension, renamed files) were reported as `Download failed` with exit 1, though they were saved. They now end in `Done.`, with a warning that the file has no metadata and that running the same download again may save a second copy. `-p` no longer counts such items twice. A `-p` run in which every item fails now exits 1 instead of saying `Done.`. In the wizard, an `<audio>` tag on a file with no extension now shows the video/audio choice; Enter keeps the file as served."
 
 ## Open decisions
+
+Resolved by the roles under the human's delegation, each on the recommended option: D1 A, D2 A, D3 A, D4 A, D5 A, D6 A, D7 A. D6 (an all-failed `-p` run now exits 1) and D7 (extensionless `<audio>` gets the type step) change shipped behaviour; the human reviews.
 
 The human delegated these to the roles. Each one has a recommendation, chosen to lose no data and to be easy to undo.
 
