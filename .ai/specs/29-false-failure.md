@@ -1,7 +1,9 @@
 # 29 — Stop reporting a saved file as a failed download
 
-Status: approved
+Status: done
 Item: `fix/false-failure`
+
+> **For the human's review:** D6 (an all-failed `-p` run now exits 1, and a `-p` item with any failed post-processing step counts as failed only) and D7 (an extensionless `<audio src>` gets the type step again, Enter keeps the raw `.unknown_video`) were decided by the roles under delegation and change shipped behaviour. Both are merged. See Open decisions.
 
 ## Problem
 
@@ -267,27 +269,27 @@ Fixtures, in `tests/conftest.py`:
 
 Real yt-dlp, ffmpeg and ffprobe, loopback:
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `-y`, parametrized over direct `theora.ogx` and the typed `clip.weba`, `clip.m4r`, `clip.f4a`, `clip.wav`, `clip.oga` and `stream`. Expect exit 0; exactly one file in `out`, holding the expected streams; `t("untagged", name)` and `t("done")` in the output; `t("failed", url)` not; no leftovers; one history row
-- [ ] **[fix]** `test_wizard_keeps_an_ogx_and_reports_the_metadata_failure` becomes a success test on the same two sources, `video-ogx.html` and `theora.ogx`, with `SINGLE_WALK`: exit 0, `t("done")` and `t("untagged", saved)` in the output, the same file in `~/Videos` with a video stream
-- [ ] **[fix]** `-y -p` on the ogx + mp4 page: exit 0, two files, both with a video stream; `partial_result` never said; `t("untagged", …)` exactly once, naming the `.ogx`; one history row
-- [ ] **[fix]** `-y` without `-p` on the same page: exit 0, two files
-- [ ] **[fix]** `-y -p` on the junk + mp4 page: `t("partial_result", 1, 2, 0, 1)` and `t("done")` in the output, exit 0, `untagged` never said
-- [ ] **[fix]** `-y -p` on the all-junk page: exit 1, `t("failed", url)` in the output, `t("done")` not, no history row
-- [ ] **[pin]** `-y` on the direct junk URL: exit 1, `t("failed", url)`, `untagged` never said, no history row
-- [ ] **[fix]** `-y` three times on the typed `clip.weba`, in one output folder: exit 0 and `t("done")` each time; one file after run 1, two after run 2, still two after run 3
-- [ ] **[fix]** `fake_site` `.ogx` shape, `-y --cookies brave`: exit 0, only `Clip.ogx`, `t("cookies_retry", "brave")` not in the output, and `fake_site == [("brave",)]`
-- [ ] **[fix]** `fake_site` `.ogx` shape with chapters, `-y`: exit 0, no leftovers, no `Clip.meta`
-- [ ] **[fix]** `test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds` is replaced. On `audio-no-ext.html`: `t("audio_may_hold_video")` in the output; `SINGLE_WALK` gives exit 0, one `.unknown_video` file in `~/Videos`, `t("untagged", …)`, `~/Music` empty; answering `2` at the type step gives one `.mp3` in `~/Music`
-- [ ] **[fix]** The wizard on the `<audio>` page holding `tiny.mp4` with no extension, `SINGLE_WALK`: one `.unknown_video` in `~/Videos` with `"video"` in `streams()`, exit 0. Today: an `.mp3`, video gone
-- [ ] **[pin]** `-y -a` on `theora.ogx`: one `.mp3`, exit 0, `untagged` never said
-- [ ] **[pin]** `-y` on `tiny.mp4`: `_source_url` of the saved file equals the URL, so the tag is still written. The existing rerun tests (`test_wizard_twice_on_a_file_labelled_as_audio_keeps_one_file` and the like) and the subtitle-embed tests pass unchanged
+- [x] `scripts/pre-release.sh --no-live` passes (tech-lead's run on the merge, see Validation)
+- [x] **[fix]** `test_a_saved_file_ffmpeg_cannot_tag_is_a_success` (7 rows). `-y`, parametrized over direct `theora.ogx` and the typed `clip.weba`, `clip.m4r`, `clip.f4a`, `clip.wav`, `clip.oga` and `stream`. Expect exit 0; exactly one file in `out`, holding the expected streams; `t("untagged", name)` and `t("done")` in the output; `t("failed", url)` not; no leftovers; one history row
+- [x] **[fix]** `test_wizard_keeps_an_ogx_and_reports_it_untagged` (2 rows). `test_wizard_keeps_an_ogx_and_reports_the_metadata_failure` becomes a success test on the same two sources, `video-ogx.html` and `theora.ogx`, with `SINGLE_WALK`: exit 0, `t("done")` and `t("untagged", saved)` in the output, the same file in `~/Videos` with a video stream
+- [x] **[fix]** `test_playlist_with_an_untaggable_item_saves_both_and_counts_each_once`. `-y -p` on the ogx + mp4 page: exit 0, two files, both with a video stream; `partial_result` never said; `t("untagged", …)` exactly once, naming the `.ogx`; one history row
+- [x] **[fix]** `test_single_mode_goes_on_past_an_untaggable_item`. `-y` without `-p` on the same page: exit 0, two files
+- [x] **[fix]** `test_playlist_counts_an_item_that_is_not_media_as_failed_only`. `-y -p` on the junk + mp4 page: `t("partial_result", 1, 2, 0, 1)` and `t("done")` in the output, exit 0, `untagged` never said
+- [x] **[fix]** `test_playlist_where_no_item_is_media_is_a_failure`. `-y -p` on the all-junk page: exit 1, `t("failed", url)` in the output, `t("done")` not, no history row
+- [x] **[pin]** `test_a_body_that_is_not_media_is_still_a_failure`. `-y` on the direct junk URL: exit 1, `t("failed", url)`, `untagged` never said, no history row
+- [x] **[fix]** `test_rerunning_an_untaggable_file_adds_one_copy_at_most`. `-y` three times on the typed `clip.weba`, in one output folder: exit 0 and `t("done")` each time; one file after run 1, two after run 2, still two after run 3
+- [x] **[fix]** `test_an_untaggable_file_with_cookies_is_not_downloaded_again`. `fake_site` `.ogx` shape, `-y --cookies brave`: exit 0, only `Clip.ogx`, `t("cookies_retry", "brave")` not in the output, and `fake_site == [("brave",)]`
+- [x] **[fix]** `test_an_untaggable_file_with_chapters_leaves_no_chapters_file`. `fake_site` `.ogx` shape with chapters, `-y`: exit 0, no leftovers, no `Clip.meta`
+- [x] **[fix]** `test_wizard_offers_the_video_of_real_audio_with_no_extension_in_an_audio_tag` (Enter) and `test_wizard_can_still_save_such_audio_as_mp3` (`2`). `test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds` is replaced. On `audio-no-ext.html`: `t("audio_may_hold_video")` in the output; `SINGLE_WALK` gives exit 0, one `.unknown_video` file in `~/Videos`, `t("untagged", …)`, `~/Music` empty; answering `2` at the type step gives one `.mp3` in `~/Music`
+- [x] **[fix]** `test_wizard_keeps_the_video_behind_an_audio_tag_with_no_extension`. The wizard on the `<audio>` page holding `tiny.mp4` with no extension, `SINGLE_WALK`: one `.unknown_video` in `~/Videos` with `"video"` in `streams()`, exit 0. Today: an `.mp3`, video gone
+- [x] **[pin]** `test_audio_from_an_untaggable_file_is_tagged_as_usual`. `-y -a` on `theora.ogx`: one `.mp3`, exit 0, `untagged` never said
+- [x] **[pin]** `test_a_taggable_file_still_gets_its_source_url`. `-y` on `tiny.mp4`: `_source_url` of the saved file equals the URL, so the tag is still written. The existing rerun tests (`test_wizard_twice_on_a_file_labelled_as_audio_keeps_one_file` and the like) and the subtitle-embed tests pass unchanged
 
 Unit:
 
-- [ ] **[fix]** `tests/test_probe.py`: the `unknown_video` row of `test_audio_known_only_by_a_label_may_hold_a_video` expects `True`
-- [ ] `tests/test_downloader.py`: `build_ydl_opts` lists no `FFmpegMetadata` in either mode, and video mode still has a `postprocessors` key
-- [ ] `untagged` is in both the `es` and the `en` blocks
+- [x] **[fix]** `tests/test_probe.py`: the `unknown_video` row of `test_audio_known_only_by_a_label_may_hold_a_video` expects `True`
+- [x] `test_metadata_step_is_added_in_download_not_in_the_options` (both modes; it indexes `postprocessors`, as `test_subs_leave_the_postprocessors_alone` still does). `tests/test_downloader.py`: `build_ydl_opts` lists no `FFmpegMetadata` in either mode, and video mode still has a `postprocessors` key
+- [x] `untagged` is in both the `es` and the `en` blocks (`i18n.py:59`, `:147`): `test_es_and_en_have_same_keys`, and `test_untagged_and_broken_in_both_languages` (2 rows)
 
 The pre-existing tests that change are these four flips seen on the prototype, and no others in the selection run: the two `test_wizard_keeps_an_ogx_and_reports_the_metadata_failure` rows, `test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds`, and the `unknown_video` row of `test_audio_known_only_by_a_label_may_hold_a_video`. The rest of the suite wasn't run against the prototype. Any other flip must be explained in the developer's report.
 
@@ -303,7 +305,46 @@ Not needed. The behaviour sits in yt-dlp's post-processing and in ffmpeg, both r
 
 **Release note (for the planner):** "Files that ffmpeg can't write tags to (`.ogx`, `.weba`, `.m4r`, `.f4a`, `.f4b`, links with no extension, renamed files) were reported as `Download failed` with exit 1, though they were saved. They now end in `Done.`, with a warning that the file has no metadata and that running the same download again may save a second copy. `-p` no longer counts such items twice. A `-p` run in which every item fails now exits 1 instead of saying `Done.`. In the wizard, an `<audio>` tag on a file with no extension now shows the video/audio choice; Enter keeps the file as served."
 
+## Changes after approval
+
+From the testing round (test-engineer's findings, plus the orchestrator's direction on spec 21's step). Each has its own test, and the gate covers them. They supersede the cleanup lines of Scope and of the Design snippet in `_TagSource.run`.
+
+**The tag-failure cleanup only removes files the step created** (`c58f7ef`). The approved design deleted `<name>.meta` and `<name>.temp.<ext>` unconditionally. yt-dlp writes the `.meta` file only when the item has chapters, and ffmpeg fails before opening the temp file when it has no muxer for the container, so a user's own files of those names in the output folder were lost. `_TagSource.run` now notes whether the temp file existed before calling the step, deletes it only if it didn't, and deletes the `.meta` file only when chapters were added (`self._add_chapters and info.get("chapters")`). Test: `test_an_untaggable_file_leaves_the_users_own_files_alone` (`Clip.meta`, `Clip.temp.ogx`), with `test_an_untaggable_file_with_chapters_leaves_no_chapters_file` still passing.
+
+**The same rule for spec 21's `_EmbedSubtitles`** (`0310713`). Outside this spec's Files intent but in `downloader.py`, same data-safety class, and small, so the orchestrator directed it into this item. Its failure cleanup deleted `<name>.temp.<ext>` whether or not it had written it. It now deletes it only if it wasn't there before the step ran. Test: `test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write` (`tests/test_downloader.py`).
+
+**ffprobe gets absolute paths** (`f8ef735`). A relative output folder starting with `-` (`--output=-clips`) reached ffprobe as an option: `_has_media_streams` found no media and a saved file read as `Download failed`, and spec 21's `_subtitle_streams` found no streams and an unembedded subtitle went unreported. A new `_probe_path` passes `Path(path).absolute()` to both. Tests: `test_an_untaggable_file_in_a_relative_folder_starting_with_a_dash`, `test_a_subtitle_left_out_in_a_relative_folder_starting_with_a_dash`.
+
+**More coverage than the criteria asked:** ffprobe verdicts, a missing ffprobe and a hung one (`test_media_streams_by_what_ffprobe_says`, `test_no_ffprobe_means_no_media`, `test_a_hung_ffprobe_is_given_up_on`); `-s` on an untaggable file (`test_untaggable_subtitled_file_warns_twice_and_keeps_both_files`, the Cases row that was "not run"); `--playlist-items` on the untaggable item; several URLs with an untaggable and a broken one; an all-junk `-p` run with cookies; D6's `-p -a` edge with a thumbnail that can't be embedded (`test_audio_item_whose_thumbnail_cannot_be_embedded`, now measured: `-p` gives `1 of 2 … 1 failed`, exit 0; single mode `Download failed`, exit 1); reruns under `-p` (`test_rerun_of_an_untaggable_file_under_p_counts_each_run_once`).
+
+**Files outside the table:** none. Outside `.ai/`, the merge `3f25864..f08a7c2` touches exactly the eight files listed.
+
+### Remaining risks, for the planner
+
+None blocks the item. As reported through testing, review and development:
+
+- **QA, minor:** `cli.py:298` prints the `untagged` warning on a rerun that wrote nothing new, such as the third run of the same `.weba` (Findings, Reruns). The run saved nothing, yet it is told the file couldn't be tagged. Left open.
+- **A user's own `Clip.meta` next to an item with chapters** is lost either way: yt-dlp overwrites it when it writes the chapters file, before this step. Not a regression (test-engineer).
+- **A pre-existing `<name>.temp.<ext>` that ffmpeg does open and then fails on** is left as 0 bytes, because ffmpeg truncated it. The guard keeps it from being deleted, not from being truncated. Not a regression (test-engineer).
+- **`_source_url` has the same relative `-` path gap** that `_probe_path` closes for ffprobe (developer). A rerun into `--output=-clips` may not recognise a tagged file. Not touched here.
+- **D6 edge:** under `-p -a`, an item whose `EmbedThumbnail` or `ExtractAudio` step fails counts as failed only, though a file stays on disk. Single mode already says `Download failed` for it.
+- From the spec, still open: a non-media body stays on disk after a real failure (Out), and xattrs for rerun detection (D5 C).
+
+## Validation
+
+On `main` at `b14e98b` (merge `f08a7c2`), yt-dlp 2026.10.26, ffmpeg n9.0.2, Python 3.14.9. GitHub CI run 42415755776 was in progress at validation time; the orchestrator checks its result.
+
+- **Gate:** not re-run here, to keep the load down. The tech-lead ran `scripts/pre-release.sh --no-live` on the merge commit: exit 0, lint and types clean, 1603 passed, 9 deselected, 3 xfailed in each locale run (es, en). The xfails are known and unrelated: spec 17's D4 relative `og:image`, and the two `.ogg`/`opus` rerun pins of row 25. `b14e98b` only changes `.ai/orchestration/state.json`.
+- **Criteria:** each one is mapped to its test above, all in the gate's run. The pre-existing tests that changed are exactly the four flips the spec named: the two `test_wizard_keeps_an_ogx_and_reports_the_metadata_failure` rows (now `test_wizard_keeps_an_ogx_and_reports_it_untagged`), `test_wizard_enter_on_real_audio_with_no_extension_in_an_audio_tag_succeeds` (replaced), and the `unknown_video` row of `test_audio_known_only_by_a_label_may_hold_a_video`.
+- **Reverting the fix:** not repeated here. The testing and review stages showed it: test-engineer mutation 16/16 in round 1 and 5/5 on the round-1 fixes, QA 3/3.
+- **Reproduction:** the Problem's command with the real console script (`.venv/bin/download-media`, importing from this checkout's `src/`) against a scratch `http.server` on `127.0.0.1:18977` that sends `/v/vid.ogx` (0.2 s of Theora and Vorbis, made with ffmpeg) as `video/ogx`. Under `env -i` with `HOME` and `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME` in a temp folder, `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR` unset, `LANG=en_US.UTF-8`, an absolute `-o`, no clipboard, no cookies, run from the scratch folder.
+  - `download-media -y -o "$OUT" http://127.0.0.1:18977/v/vid.ogx`: `[Metadata] Adding metadata to ".../vid.ogx"`, then `vid.ogx: saved, but ffmpeg couldn't write its metadata, so a rerun won't recognize it and may save another copy.`, `Done.`, the equivalent command `download-media -y -o <out> <url>`, exit 0. No `ERROR:` line.
+  - On disk: one file, `vid.ogx`, 9.8 KB; ffprobe lists `theora,video` and `vorbis,audio`. No `.temp.*`, `.meta` or `.part`. One history row of kind `video` for that URL. Before the fix: `Download failed`, exit 1, no history row.
+- **Scope:** outside `.ai/`, `3f25864..f08a7c2` touches the eight files in the Files table and nothing else. No change to `pyproject.toml`, `PKGBUILD`, `equivalent.py`, `wizard.py`, `history.py` or the version.
+
 ## Open decisions
+
+**Changes shipped behaviour, for the human's review: D6 and D7.** Both were decided by the roles under delegation and are merged. D6: under `-p`, an item with any failed post-processing step counts as failed only, so a `-p` run where every item fails now says `Download failed` and exits 1, where it said `Done.` and exited 0. D7: an `<audio src>` with no extension gets spec 27's type step, and Enter keeps the raw `.unknown_video` in `~/Videos`; real audio there needs `2` for an `.mp3`. Each is easy to undo: D7 is a one-line revert in `_audio_by_label_only`, D6 the post hook in `download()`.
 
 Resolved by the roles under the human's delegation, each on the recommended option: D1 A, D2 A, D3 A, D4 A, D5 A, D6 A, D7 A. D6 (an all-failed `-p` run now exits 1) and D7 (extensionless `<audio>` gets the type step) change shipped behaviour; the human reviews.
 
