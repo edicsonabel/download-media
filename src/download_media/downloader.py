@@ -43,6 +43,8 @@ class DownloadResult:
 class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
+    count_entries = False
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.errors: list[str] = []
         super().__init__(*args, **kwargs)
@@ -50,6 +52,14 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     def report_error(self, message: Any, *args: Any, **kwargs: Any) -> None:
         self.errors.append(str(message))
         super().report_error(message, *args, **kwargs)
+
+    def process_ie_result(self, ie_result: Any, *args: Any, **kwargs: Any) -> Any:
+        if self.count_entries and ie_result.get("_type") in ("playlist", "multi_video"):
+            # yt-dlp keeps an extractor's declared count over the entries it read, and YouTube
+            # declares the header's "N videos", hidden ones included. Without it, yt-dlp counts
+            # the list once it reads to the end, and leaves the count unset otherwise.
+            ie_result.pop("playlist_count", None)
+        return super().process_ie_result(ie_result, *args, **kwargs)
 
 
 def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
@@ -171,7 +181,7 @@ class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
 
 
 class _PlaylistCount(PostProcessor):  # type: ignore[misc]
-    """Record each list's size; nested lists finish inner first, so the last is the outer one."""
+    """Record each list's size as yt-dlp read it (see ``_Ydl``); the last call is the outer list."""
 
     def __init__(self, counts: list[int | None]) -> None:
         super().__init__()
@@ -218,6 +228,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
         counts: list[int | None] = []
         items = opts.playlist_items if opts.playlist_mode == "yes" else None
+        ydl.count_entries = bool(items)
         if items:
             ydl.add_post_processor(_PlaylistCount(counts), when="playlist")
         returncode = int(ydl.download([url]))

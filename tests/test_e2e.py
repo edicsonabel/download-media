@@ -388,10 +388,6 @@ def test_lazy_list_not_read_to_the_end_has_no_note(run: Any, out: Path) -> None:
     assert t("done") in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the note is checked against the extractor's playlist_count, not the list yt-dlp read",
-)
 @pytest.mark.parametrize(
     ("page", "spec", "saved", "notes"),
     [
@@ -399,6 +395,10 @@ def test_lazy_list_not_read_to_the_end_has_no_note(run: Any, out: Path) -> None:
         ("hidden-items", "2,3", ["02 - Clip [v2].mp4"], ["3"]),
         # Header says 2, the list holds 3: item 3 is saved, and the note says it was skipped.
         ("stale-count", "3", ["03 - Clip [v3].mp4"], []),
+        # The same header on a paged list: asking for item 3 reads it to the end.
+        ("lazy-hidden", "2,3", ["02 - Clip [v3].mp4"], ["3"]),
+        # Not read to the end: the size is unknown, and nothing requested is missing.
+        ("lazy-hidden", "1", ["01 - Clip [v2].mp4"], []),
     ],
 )
 def test_missing_items_follow_the_entries_not_the_declared_count(
@@ -409,6 +409,13 @@ def test_missing_items_follow_the_entries_not_the_declared_count(
     assert names(out) == saved
     assert [note.rsplit(" ", 1)[-1] for note in not_found_notes(output)] == notes
     assert t("done") in output
+
+
+@pytest.mark.parametrize("page", ["hidden-items", "lazy-hidden"])
+def test_missing_items_note_counts_the_entries_read(run: Any, out: Path, page: str) -> None:
+    code, output = run("-y", "--playlist-items", "2,3", f"https://fake.test/{page}")
+    assert code == 0
+    assert not_found_notes(output) == [t("items_not_found", 2, "3")]
 
 
 def test_rerun_of_a_plain_video_in_playlist_mode_keeps_one_file(run: Any, out: Path) -> None:
