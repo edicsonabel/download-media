@@ -90,6 +90,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "pl_single": "Solo este video",
         "pl_all": "Toda la playlist",
         "wizard_skipped": "Omitida, no hay nada que descargar: {}",
+        "items_not_found": "No están en esta playlist ({} items), se omiten: {}",
     },
     "en": {
         "wizard_title": "Download wizard",
@@ -168,6 +169,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "pl_single": "Just this video",
         "pl_all": "Whole playlist",
         "wizard_skipped": "Skipped, nothing to download: {}",
+        "items_not_found": "Not in this playlist ({} items), skipped: {}",
     },
 }
 

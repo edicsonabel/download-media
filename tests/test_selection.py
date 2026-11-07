@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from download_media.selection import is_playlist_url, parse_selection
+from download_media.selection import is_playlist_url, missing_items, parse_selection
 
 
 @pytest.mark.parametrize(
@@ -65,3 +65,17 @@ def test_parse_selection_invalid(input_str: str, max_n: int) -> None:
 
 def test_non_numeric_range_is_rejected() -> None:
     assert parse_selection("a-b", 5) is None
+
+
+def test_missing_items_names_segments_that_select_nothing() -> None:
+    assert missing_items("2,9,-7,5-9,3-9,-1,0", 4) == ["9", "-7", "5-9", "0"]
+
+
+def test_missing_items_follows_yt_dlp_slices() -> None:
+    assert missing_items("1:", 4) == []
+    assert missing_items("-2:,::2,4:1:-1", 4) == []
+
+
+@pytest.mark.parametrize("spec", ["x", "1,,2", "::0"])
+def test_missing_items_never_raises_on_a_bad_spec(spec: str) -> None:
+    assert missing_items(spec, 4) == []

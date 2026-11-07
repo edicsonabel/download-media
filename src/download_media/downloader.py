@@ -21,6 +21,7 @@ from yt_dlp.utils import DownloadError
 from .config import DownloadOptions
 from .cookies import ydl_cookies
 from .i18n import t
+from .selection import missing_items
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +31,9 @@ class DownloadResult:
     saved: int = 0
     skipped: int = 0
     failed: int = 0
+    # --playlist-items segments that select nothing; not counted in total.
+    missing: tuple[str, ...] = ()
+    playlist_count: int | None = None
 
     @property
     def total(self) -> int:
@@ -166,6 +170,18 @@ class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
         return [], info
 
 
+class _PlaylistCount(PostProcessor):  # type: ignore[misc]
+    """Record each list's size; nested lists finish inner first, so the last is the outer one."""
+
+    def __init__(self, counts: list[int | None]) -> None:
+        super().__init__()
+        self._counts = counts
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        self._counts.append(info.get("playlist_count"))
+        return [], info
+
+
 def _skip_items_without_media(skipped: list[str]) -> Callable[..., str | None]:
     """``match_filter`` dropping carousel items yt-dlp has no formats for.
 
@@ -200,11 +216,24 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     with _Ydl(ydl_opts) as ydl:
         final_ext = opts.audio_format if opts.audio_only else None
         ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
+        counts: list[int | None] = []
+        items = opts.playlist_items if opts.playlist_mode == "yes" else None
+        if items:
+            ydl.add_post_processor(_PlaylistCount(counts), when="playlist")
         returncode = int(ydl.download([url]))
     # ignoreerrors turns a total failure into a bare return code.
     if returncode != 0 and not saved:
         raise DownloadError("\n".join(ydl.errors) or t("failed", url))
-    return DownloadResult(saved=len(saved), skipped=len(skipped), failed=len(ydl.errors))
+    count = counts[-1] if counts else None
+    # yt-dlp drops items past the end without a word; an empty list keeps its own report.
+    missing = tuple(missing_items(items, count)) if items and count else ()
+    return DownloadResult(
+        saved=len(saved),
+        skipped=len(skipped),
+        failed=len(ydl.errors),
+        missing=missing,
+        playlist_count=count,
+    )
 
 
 def list_formats(url: str, opts: DownloadOptions) -> int:

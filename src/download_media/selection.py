@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import re
 
+from yt_dlp.utils import PlaylistEntries
+
 _PLAYLIST_PATTERNS = [
     re.compile(r"[?&]list="),
     re.compile(r"/playlist", re.IGNORECASE),
@@ -58,3 +60,16 @@ def parse_selection(input_str: str, max_n: int) -> list[int] | None:
 def to_yt_dlp_items(indices: list[int]) -> str:
     """Convert sorted indices to the comma-separated string yt-dlp expects."""
     return ",".join(str(i) for i in indices)
+
+
+def missing_items(spec: str, count: int) -> list[str]:
+    """Segments of a yt-dlp item spec that select nothing in a list of ``count`` items."""
+    # yt-dlp's own parser and slicing, so "3-9" clamps and "-1" counts from the end.
+    entries = PlaylistEntries(None, {"entries": [None] * count})
+    try:
+        segments = list(
+            zip(spec.split(","), PlaylistEntries.parse_playlist_items(spec), strict=True)
+        )
+    except ValueError:
+        return []
+    return [text for text, segment in segments if next(iter(entries[segment]), None) is None]

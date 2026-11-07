@@ -266,9 +266,46 @@ def test_playlist_items_out_of_range_is_a_failure(run: Any, out: Path) -> None:
     code, output = run("-y", "--playlist-items", "9", CAROUSEL)
     assert code == 1
     assert names(out) == []
-    assert t("no_supported_items") in output
+    assert t("items_not_found", 4, "9") in output
+    assert t("failed", CAROUSEL) in output
+    assert t("no_supported_items") not in output
     assert t("done") not in output
     assert history_rows() == []
+
+
+def test_playlist_items_names_the_missing_item_before_done(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "2,9", CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    note = t("items_not_found", 4, "9")
+    assert note in output
+    assert output.index(note) < output.index(t("done"))
+    assert len(history_rows()) == 1
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("--playlist-items") + 1] == "2,9"
+
+
+def test_playlist_items_names_each_segment_that_selects_nothing(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items=2,-7,5-9,3-9,-1", CAROUSEL)
+    assert code == 0
+    assert names(out) == BOTH_ITEMS
+    assert t("items_not_found", 4, "-7,5-9") in output
+
+
+def test_playlist_items_counts_the_outermost_list(run: Any, out: Path) -> None:
+    # Inner lists are filtered too, silently (roadmap row 32); only the outer one is checked.
+    code, output = run("-y", "--playlist-items", "1,3", "https://fake.test/nested-gated")
+    assert code == 0
+    assert t("items_not_found", 1, "3") in output
+    assert names(out) == ["01 - Clip [v2].mp4"]
+
+
+def test_playlist_items_on_an_empty_playlist_has_no_note(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "1", EMPTY)
+    assert code == 1
+    assert t("no_supported_items") in output
+    assert t("items_not_found", 0, "1").split("(")[0] not in output
 
 
 def test_playlist_items_with_a_bad_spec_is_a_clean_failure(run: Any, out: Path) -> None:
@@ -905,7 +942,8 @@ def test_cookie_retry_that_finds_nothing_is_a_failure(run: Any, out: Path) -> No
     code, output = run("-y", "--cookies", "brave", "--playlist-items", "9", url)
     assert code == 1
     assert t("cookies_retry", "brave") in output
-    assert t("no_supported_items") in output
+    assert t("items_not_found", 4, "9") in output
+    assert t("failed", url) in output
     assert t("done") not in output
     assert names(out) == []
     assert history_rows() == []
@@ -1382,13 +1420,13 @@ def test_single_answer_next_to_a_plain_url_shares_one_flagged_command(
         (
             "es",
             "Comando equivalente para repetir esta descarga:",
-            "Ningún item es descargable.",
+            "No están en esta playlist (4 items), se omiten: 9",
             "Listo.",
         ),
         (
             "en",
             "Equivalent command to repeat this download:",
-            "No items are downloadable.",
+            "Not in this playlist (4 items), skipped: 9",
             "Done.",
         ),
     ],
