@@ -1,6 +1,6 @@
 # 26 — Handle a browser whose cookies can't be read
 
-Status: draft
+Status: approved
 Item: `fix/cookie-fallback`
 
 ## Problem
@@ -286,6 +286,8 @@ Not needed. A missing browser is fully simulated by an empty `HOME`, with the re
 **Release note (for the planner):** "When the browser passed to `--cookies`, or picked in the wizard, isn't installed or its cookies can't be read, the tool now says so and goes on without cookies. `-p`, `--playlist-items` and the wizard's item picker used to end in a traceback, and the URLs after it never ran. Single downloads no longer say `Failed with <browser> cookies` or suggest another keyring when the browser simply isn't there. `-l` lists the formats without cookies instead of failing."
 
 ## Open decisions
+
+Resolved by the roles under the human's delegation, each on the recommended option: D1 A, D2 A, D3 A, D4 A, D5 B, D6 A, D7 A, D8 A. D1 (go on without cookies after a cookie-load failure) changes shipped behaviour; the human reviews.
 
 The human delegated these to the roles. Each one has a recommendation, chosen to lose no data and to be easy to undo.
 
