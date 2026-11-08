@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T14:23:05-04:00",
+  "updated": "2026-11-08T14:43:45-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1756,6 +1756,27 @@
           "result": "published",
           "at": "2026-11-08T14:23:05-04:00",
           "note": "CI 42508869262 green. Deploy to AUR 42508869447: test and deploy success, zero Node.js 20 annotations (spec 10 criterion). Pages 42508869285 shows v0.3.0. cgit pkgver=0.3.0 (one stale miss first), RPC 0.3.0-1 under 2 min. PLAN marked shipped (34c3e71), spec 10 criterion checked (7c6cbb8). Planner: actionlint criterion still unchecked (runner label); cgit stale read retry; annotated vs lightweight tag in runbook; RPC lag under 2 min."
+        }
+      ]
+    },
+    "feature/instagram-images": {
+      "type": "feature",
+      "title": "Save Instagram carousel images alongside videos",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/01-instagram-images.md",
+      "branch": "feature/instagram-images",
+      "worktree": ".worktrees/feature-instagram-images",
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-08T14:43:45-04:00",
+          "note": "Human asked to make Instagram carousel images downloadable when a carousel mixes videos and images (example: https://www.instagram.com/p/DfYDfesmtyV/, 4 videos + 16 images). Reuses PLAN row 01 instagram-images. Opens 0.4.0."
         }
       ]
     }
