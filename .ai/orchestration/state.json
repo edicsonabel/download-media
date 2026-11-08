@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T23:14:18-04:00",
+  "updated": "2026-11-07T23:21:30-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1485,6 +1485,20 @@
           "result": "merged",
           "at": "2026-11-07T23:14:18-04:00",
           "note": "Merge f7d6439, no conflicts. Gate exit 0: lint and types clean, 1740 passed, 2 xfail (row 25), es and en. QA minor (release-manager.md:31) left for the planner."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T23:21:30-04:00",
+          "note": "11/11 criteria hold on main 36f28a2. Test 19 passed; 15 fail on the pre-merge role file. Out-of-spec work recorded in the spec (7013abf). CI 42441872866 success, 1740 passed. Planner: fetch exit code at release-manager.md:31, AGENTS.md tag archive wording, runbook proven only by 0.3.0."
+        },
+        {
+          "stage": "complete",
+          "agent": "orchestrator",
+          "result": "done",
+          "at": "2026-11-07T23:21:30-04:00",
+          "note": "Worktree and branch removed."
         }
       ]
     }
