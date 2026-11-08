@@ -1,6 +1,6 @@
 # 10 — Pin and bound the workflows
 
-Status: approved
+Status: done
 Item: `fix/workflow-pins`
 
 ## Problem
@@ -191,16 +191,16 @@ Wizard, direct, `-y`, `-p`, `-P`, `-l`, cookies, single, carousel, playlist, rer
 
 ## Acceptance criteria
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] The workflow diff matches the Design diff (or the options the human picks): `git diff main -- .github/workflows` touches only `runs-on`, `timeout-minutes` and `uses:` lines
-- [ ] `grep -rnE 'ubuntu-latest|checkout@v4|setup-python@v5|configure-pages@v5|upload-pages-artifact@v3|deploy-pages@v4' .github/workflows` finds nothing
-- [ ] `grep -c 'timeout-minutes' .github/workflows/ci.yml .github/workflows/deploy-aur.yml .github/workflows/deploy-pages.yml` gives 2, 3 and 1
-- [ ] All three files are still valid YAML: `python3 -I -c 'import sys,yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]' .github/workflows/*.yml` exits 0 (system Python, PyYAML)
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] The workflow diff matches the Design diff (or the options the human picks): `git diff main -- .github/workflows` touches only `runs-on`, `timeout-minutes` and `uses:` lines
+- [x] `grep -rnE 'ubuntu-latest|checkout@v4|setup-python@v5|configure-pages@v5|upload-pages-artifact@v3|deploy-pages@v4' .github/workflows` finds nothing
+- [x] `grep -c 'timeout-minutes' .github/workflows/ci.yml .github/workflows/deploy-aur.yml .github/workflows/deploy-pages.yml` gives 2, 3 and 1
+- [x] All three files are still valid YAML: `python3 -I -c 'import sys,yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]' .github/workflows/*.yml` exits 0 (system Python, PyYAML)
 - [ ] `podman run --rm -v "$PWD:/repo:ro,Z" -w /repo docker.io/rhysd/actionlint:latest` exits 0. In the architect's session the permission classifier blocked this command, so the human may need to allow it. If it stays blocked, say so in the report, and the YAML check above plus the first CI run stand in for it
-- [ ] `tests/test_workflows.py` passes on the branch, and fails when the three workflows are reverted to `main`'s (`git checkout main -- .github/workflows`, run the test, restore): it must name the same 16 problems
-- [ ] `git diff main --stat` lists only the four files in Files
-- [ ] After the push (D6), `gh run list --workflow ci.yml --commit <full sha> --json conclusion,databaseId` shows `success`. That job's log has `Image: ubuntu-26.04`, and `gh api .../jobs --jq '.jobs[].labels'` shows `ubuntu-26.04`
-- [ ] After the same push, `gh run list --workflow deploy-pages.yml --commit <full sha>` shows `success`, and its job's annotations have no `Node.js 20` warning. `curl -s https://edicsonabel.github.io/download-media/` still shows the same `vX.Y.Z` label as `docs/index.html`
+- [x] `tests/test_workflows.py` passes on the branch, and fails when the three workflows are reverted to `main`'s (`git checkout main -- .github/workflows`, run the test, restore): it must name the same 16 problems
+- [x] `git diff main --stat` lists only the four files in Files
+- [x] After the push (D6), `gh run list --workflow ci.yml --commit <full sha> --json conclusion,databaseId` shows `success`. That job's log has `Image: ubuntu-26.04`, and `gh api .../jobs --jq '.jobs[].labels'` shows `ubuntu-26.04`
+- [x] After the same push, `gh run list --workflow deploy-pages.yml --commit <full sha>` shows `success`, and its job's annotations have no `Node.js 20` warning. `curl -s https://edicsonabel.github.io/download-media/` still shows the same `vX.Y.Z` label as `docs/index.html`
 - [ ] At the next release, the `release-manager` checks that the `Deploy to AUR` tag run succeeded with no `Node.js 20` warning on either job. This one can't be checked at validation, so record it as a release step, not a validation failure
 
 ## Live check
@@ -208,6 +208,32 @@ Wizard, direct, `-y`, `-p`, `-P`, `-l`, cookies, single, carousel, playlist, rer
 No download check is needed: no download path changes. The live check here is the first real run of each workflow, and nothing local stands in for it. Two of them happen on the push that lands this item: `CI` and `Deploy GitHub Pages`, the latter because its own file changed. `Deploy to AUR` only runs on a tag, or on a `workflow_dispatch` that would publish to the AUR. So it gets proven at the next release, and its `test` job is the same steps `ci.yml` proves on that push.
 
 If the tag run's `deploy` job fails because of this change: fix it on `main`, then run `workflow_dispatch` with the same version. A dispatch runs the workflow file from the default branch, so nobody has to re-tag.
+
+## Changes after approval
+
+- **Quoted values (test-engineer, `bc1f5d9`, `test(ci): read quoted workflow values like bare ones`).** The text parser kept the quotes on a quoted value, so `uses: 'actions/checkout@v4'` skipped the `actions/` check and a quoted `runs-on` was misreported. Matching quotes are now stripped, and `test_quoted_values_are_read_like_bare_ones` pins both cases. Test-only, inside D5. Mutation 27/28; the survivor is by design: actions from owners other than `actions/` aren't checked.
+- **actionlint was not run** at any stage: the permission classifier blocked the `podman` command, as it did at planning. The YAML parse check and the first real runs of `CI` and `Deploy GitHub Pages` stand in for it, as the criterion allows.
+
+## Validation
+
+On `main` at `8f24c5f` (merge `025b40c`; `8f24c5f` only changes `.ai/orchestration/state.json`). `gh` calls read-only, as `edicsonabel`.
+
+- **Gate:** not re-run here, to keep the load down. The tech-lead ran `scripts/pre-release.sh --no-live` on `025b40c`: exit 0, `All checks passed.`, 1721 passed, 9 deselected, 2 xfailed. CI run 42435709897 ran the same gate on `8f24c5f`: 1721 passed, 2 xfailed in both locales, `All checks passed.`
+- **Diff:** `git diff 9782822 025b40c --stat` lists exactly the four files in Files. The workflow diff is the Design diff line for line: only `runs-on`, `timeout-minutes` and `uses:` lines.
+- **grep:** the old labels and majors grep finds nothing (exit 1). `timeout-minutes` counts: `ci.yml` 2, `deploy-aur.yml` 3, `deploy-pages.yml` 1.
+- **YAML:** the PyYAML `safe_load` check over the three files exits 0.
+- **Test:** `tests/test_workflows.py` passes on `main` (6 passed). Run in a scratch copy against `9782822`'s workflows, it fails 4 of 6 tests with 3 + 4 + 2 + 7 = 16 problems (job limits, runners, apt step limits, action majors), the same 16 the spec named.
+- **CI run 42435709897** on `8f24c5f5e5ae7d86d2b10606ab5240bd9f091cab`: `success`. Job `gate` labels `ubuntu-26.04`, log `Image: ubuntu-26.04`, `checkout@v7` and `setup-python@v7` at the SHAs in the target table, `Setting up ffmpeg (7:8.0.1-3ubuntu2)`. Annotations: none, so no `ubuntu-latest` notice.
+- **Deploy GitHub Pages run 42435709966** on the same SHA: `success`. Job `deploy` labels `ubuntu-26.04`, log `Image: ubuntu-26.04`, and `checkout@v7`, `configure-pages@v6`, `upload-pages-artifact@v5`, `deploy-pages@v5` and `upload-artifact@bbbca2d` at the SHAs in the target table. Annotations: none, so no `Node.js 20` warning. `curl` of the live page shows `v0.2.0`, the same label as `docs/index.html`.
+- **Deploy to AUR:** not proven yet, as the spec says. It only runs on a tag or a publishing `workflow_dispatch`. The `release-manager` checks the next tag run: both jobs green, no `Node.js 20` annotation. Its `test` job is the same steps CI run 42435709897 proved.
+- **Scope:** nothing outside the four files changed; no `src/`, `pyproject.toml`, `PKGBUILD`, `AGENTS.md` or version change.
+
+### Remaining risks
+
+- The AUR `deploy` job runs `checkout@v7` inside `archlinux:base-devel` for the first time at the next tag. v0.2.0 already ran `checkout@v4` there on forced Node 24, so it should work, but only the tag run proves it. If it fails: fix on `main`, then `workflow_dispatch` with the same version.
+- `test_workflows.py` reads YAML as text, not with a parser. It covers the shapes these files use, plus quoted values, and its count check (3 files, 4 jobs) catches a parse that sees nothing; an exotic layout (flow mappings, anchors) could still slip past.
+- Actions from owners other than `actions/` aren't version-checked (the mutation survivor). None exist today.
+- `ubuntu-26.04` needs a commit when GitHub retires it; its deprecation notices will say when. If a green gate step ever passes about 10 minutes, raise the 15-minute `gate` and `test` limits together.
 
 ## Open decisions
 
