@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T13:59:48-04:00",
+  "updated": "2026-11-08T14:23:05-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1694,14 +1694,17 @@
     "release/0.3.0": {
       "type": "release",
       "title": "Release 0.3.0",
-      "stage": "publishing",
-      "status": "in_progress",
-      "next_agent": "release-manager",
+      "stage": "published",
+      "status": "published",
+      "next_agent": null,
       "doc": ".ai/releases/0.3.0.md",
       "branch": null,
       "worktree": null,
       "commits": [
-        "ad9f905"
+        "ad9f905",
+        "dd04c90",
+        "34c3e71",
+        "7c6cbb8"
       ],
       "review": null,
       "history": [
@@ -1739,6 +1742,20 @@
           "result": "approved",
           "at": "2026-11-08T13:59:48-04:00",
           "note": "Human approved publishing 0.3.0 (bump, tag v0.3.0, push main and tag, GitHub release, Pages). Delegated decisions reviewed; no live step waived; actionlint run (runner-label false positive only)."
+        },
+        {
+          "stage": "publishing",
+          "agent": "release-manager",
+          "result": "done",
+          "at": "2026-11-08T14:23:05-04:00",
+          "note": "Preflight OK. CI 42507759489 green on 0daa5d0. Bump dd04c90 (build: release 0.3.0), gate exit 0. Annotated tag v0.3.0. push --atomic main and tag. gh release https://github.com/edicsonabel/download-media/releases/tag/v0.3.0."
+        },
+        {
+          "stage": "verification",
+          "agent": "release-manager",
+          "result": "published",
+          "at": "2026-11-08T14:23:05-04:00",
+          "note": "CI 42508869262 green. Deploy to AUR 42508869447: test and deploy success, zero Node.js 20 annotations (spec 10 criterion). Pages 42508869285 shows v0.3.0. cgit pkgver=0.3.0 (one stale miss first), RPC 0.3.0-1 under 2 min. PLAN marked shipped (34c3e71), spec 10 criterion checked (7c6cbb8). Planner: actionlint criterion still unchecked (runner label); cgit stale read retry; annotated vs lightweight tag in runbook; RPC lag under 2 min."
         }
       ]
     }
