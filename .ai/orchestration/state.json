@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T19:43:45-04:00",
+  "updated": "2026-11-08T19:50:21-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1899,9 +1899,9 @@
     "fix/format-baseline": {
       "type": "fix",
       "title": "Format the 6 files ruff format flags and enforce it in the gate",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/05-format-baseline.md",
       "branch": "fix/format-baseline",
       "worktree": ".worktrees/fix-format-baseline",
@@ -1909,7 +1909,8 @@
         "72398ad",
         "7f11724",
         "6d3821e",
-        "bf578da"
+        "bf578da",
+        "cabcc97"
       ],
       "review": {
         "approved": true,
@@ -1964,6 +1965,13 @@
           "result": "approved",
           "at": "2026-11-08T19:43:45-04:00",
           "note": "Merge and push under the human's standing delegation. Tech-lead: --no-ff merge (no rebase) to keep the .git-blame-ignore-revs SHA."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-08T19:50:21-04:00",
+          "note": "cabcc97 --no-ff, no conflicts, 10 files +219/-79. Gate on main exit 0 (format: 37 files already formatted; 1936 passed + 2 xfailed). blame-ignore SHA reachable from main; blame on probe.py:78-89 credits 6fd8fdd/66b98a2, not 72398ad."
         }
       ]
     }
