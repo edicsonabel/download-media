@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T13:44:47-04:00",
+  "updated": "2026-11-08T13:57:44-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1725,6 +1725,13 @@
           "result": "done",
           "at": "2026-11-08T13:44:47-04:00",
           "note": "Full gate with live tests exit 0: 1839 passed es and en, 9 live passed, 2 xfail (row 25), 98.70%. Version 0.3.0 minor: 15 new messages, --playlist-items, nothing removed, no breaking marker, no dep change. Notes .ai/releases/0.3.0.md (ad9f905, local). Preflight OK: gh and ssh edicsonabel, push true, no v0.3.0 tag. actionlint: runner-label false positive only. Pending: spec 18 live steps (human). Planner: spec 42 SemVer line says 0.4.0; actionlint.yaml for ubuntu-26.04; shellcheck missing."
+        },
+        {
+          "stage": "preparation",
+          "agent": "human",
+          "result": "done",
+          "at": "2026-11-08T13:57:44-04:00",
+          "note": "Human ran spec 18 live steps (corrected replies, es). All hold. 1: IG public carousel, no up-front cookies line, picker 20 items/4 video, 4 files = -y -p 4 files (same names and sizes); orchestrator rerun exit 0. 2: YouTube HtVdAasjOgU \"Este contenido requiere iniciar sesión: Sign in to confirm your age...\", no --cookies-from-browser in that line, exit 1, no files. 3: anonymous \"There is no video in this post\", no files; logged in \"El contenido es una imagen y no es soportado por yt-dlp\", exit 0. 4: gated IG \"only available for registered users who follow this account\", one cookies prompt after the probe, brave, carousel 6 items/2 video, 2 files, summary lists Cookies: brave. None waived. Planner: cli.py:384 cookies hint English in es (row 02); anonymous lone image walks the manual flow (probe-fail-fast)."
         }
       ]
     }
