@@ -20,6 +20,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install ffmpeg
+        timeout-minutes: 5
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Set up the venv pre-release.sh expects
