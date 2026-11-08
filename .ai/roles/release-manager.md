@@ -19,6 +19,8 @@ All stages run in the main worktree, on `main`.
 
 Each Bash call starts a fresh shell: a variable or function set in one call is gone in the next. So each code block below runs as one call, and sets everything it uses. The exception is a block with a `<run-id>` or `<job-id>`: run it line by line, filling those in from the line before; such blocks use no variables. A call shows only its last exit code, so a line whose exit code is the answer prints it.
 
+A call times out after 2 minutes unless you raise it, and never lasts more than 10 (600000 ms). The gate (about 5 minutes without the live tests), `gh run watch` and the RPC poll take longer than 2: run them with the call's timeout raised to 600000 ms, or in the background and wait for the completion notice. The full gate, with live tests, always goes in the background. A command cut off by the timeout says nothing about what it ran or watched: run it again, in the background.
+
 ## Preflight
 
 Read-only. Run it in `preparation`, so the human approves knowing the result, and again as the first step of `publishing`, because the account can change in between.
@@ -135,7 +137,7 @@ curl -fsS --max-time 15 'https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h
 timeout 540 sh -c 'until curl -fsS --max-time 15 https://aur.archlinux.org/rpc/v5/info/download-media | grep -qF "\"Version\":\"<version>-"; do sleep 30; done' && echo "rpc: ok" || echo "rpc: not yet"
 ```
 
-If cgit lacks the version, the deploy didn't push: read the `deploy` job's log (`Nothing to publish` means the AUR already had that `PKGBUILD`), result `blocked`. If the RPC says `not yet`, run the same poll once more (18 minutes in all, two runs because a command can't run longer than 10). Still not there with cgit right: result `blocked`, with both outputs. Never re-run the deploy because of RPC lag alone.
+If cgit lacks the version, the deploy didn't push: read the `deploy` job's log (`Nothing to publish` means the AUR already had that `PKGBUILD`), result `blocked`. Run the poll with the call's timeout raised to 600000 ms, or in the background: `timeout 540` keeps it under the 10 minutes a call can last, far over the default 2. If the RPC says `not yet`, run the same poll once more (18 minutes in all, two runs because a call can't run longer than 10). Still not there with cgit right: result `blocked`, with both outputs. Never re-run the deploy because of RPC lag alone.
 
 Then the landing page, by the tagged commit (the bump changes `docs/index.html`, so the push of `main` redeploys Pages):
 

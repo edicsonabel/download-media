@@ -228,3 +228,8 @@ def test_version_evidence_sees_every_flag() -> None:
     assert all("comm -13" in ln and "flags" in ln for ln in evidence), (
         f"{PREPARATION}: new flags aren't a set diff: {evidence}"
     )
+
+
+def test_long_waits_raise_the_call_timeout() -> None:
+    # The Bash tool's default call timeout is 2 minutes; the poll and the watches run longer.
+    _assert_contains(_section(VERIFICATION), ["600000"], VERIFICATION)
