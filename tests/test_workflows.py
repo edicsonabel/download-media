@@ -49,6 +49,14 @@ def _indent(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
+def _scalar(value: str | None) -> str:
+    # 'actions/checkout@v4' is the same action to GitHub as the bare form.
+    value = value or ""
+    if len(value) > 1 and value[0] == value[-1] and value[0] in "'\"":
+        return value[1:-1]
+    return value
+
+
 def _parse(workflow: str, text: str) -> list[Job]:
     lines = [line.rstrip() for line in text.splitlines()]
     lines = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
@@ -83,7 +91,7 @@ def _parse(workflow: str, text: str) -> list[Job]:
             key_indent = indent
         if indent == key_indent and match and not match["dash"]:
             in_steps = match["key"] == "steps"
-            job.keys[match["key"]] = match["value"] or ""
+            job.keys[match["key"]] = _scalar(match["value"])
             continue
         if not in_steps or not match:
             continue
@@ -93,7 +101,7 @@ def _parse(workflow: str, text: str) -> list[Job]:
         elif indent != step_indent:
             continue
         step = job.steps[-1]
-        value = match["value"] or ""
+        value = _scalar(match["value"])
         step.keys[match["key"]] = value
         if match["key"] == "run":
             step.run = "" if value in ("|", ">") else value + "\n"
@@ -171,6 +179,21 @@ def test_every_apt_step_has_its_own_time_limit() -> None:
 
 def test_every_action_is_at_its_node_24_major() -> None:
     assert action_problems(_all_jobs()) == []
+
+
+def test_quoted_values_are_read_like_bare_ones() -> None:
+    text = (
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: 'ubuntu-26.04'\n"
+        "    timeout-minutes: 5\n"
+        "    steps:\n"
+        "      - uses: 'actions/checkout@v4'\n"
+        '      - uses: "actions/deploy-pages@v5"\n'
+    )
+    jobs = _parse("x.yml", text)
+    assert runner_problems(jobs) == []
+    assert action_problems(jobs) == ["x.yml: job build uses actions/checkout@v4, below v7"]
 
 
 def test_the_parser_sees_every_workflow_and_job() -> None:
