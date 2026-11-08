@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T19:59:27-04:00",
+  "updated": "2026-11-07T20:11:27-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1175,13 +1175,15 @@
     "fix/cookie-fallback": {
       "type": "fix",
       "title": "Cookie fallback handles a missing browser and empty --cookies runs",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/26-cookie-fallback.md",
       "branch": "fix/cookie-fallback",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-cookie-fallback",
+      "commits": [
+        "be7ea9d"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -1193,6 +1195,20 @@
           "result": "approved",
           "at": "2026-11-07T19:59:27-04:00",
           "note": "Planner's recommended next item, under the human's standing delegation."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T20:11:27-04:00",
+          "note": "Reproduced with fake browsers and a dead D-Bus, no real keyring read. -p gets a bare CookieLoadError; single mode prints a false retry message; keyring hint misleads. Decisions D1-D8. Planner: direct preview swallows the cookie failure; safari offered on Linux; missing secretstorage under -p goes on with undecryptable cookies."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T20:11:27-04:00",
+          "note": "Spec approved under the human's delegation, every recommended option. D1 changes shipped behaviour; flagged for review."
         }
       ]
     }
