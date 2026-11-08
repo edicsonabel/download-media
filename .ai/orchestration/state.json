@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T11:47:20-04:00",
+  "updated": "2026-11-08T11:54:30-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1505,9 +1505,9 @@
     "fix/unexpected-errors": {
       "type": "fix",
       "title": "Stop errors other than DownloadError ending _download_one in a traceback",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/42-unexpected-errors.md",
       "branch": "fix/unexpected-errors",
       "worktree": ".worktrees/fix-unexpected-errors",
@@ -1579,6 +1579,20 @@
           "result": "merged",
           "at": "2026-11-08T11:47:20-04:00",
           "note": "Merge 59638cc, no conflicts, src/ and tests/ only. Gate exit 0, 1775 passed, 2 xfailed, es and en."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-08T11:54:30-04:00",
+          "note": "13/13 criteria on main 01977a6, reproduction clean in es and en. Spec done (b5a034e). Test-engineer added 26 tests, not 31. v0.3.0 is untagged, so /release 0.3.0 from main ships row 42: D1-D5 join the 0.3.0 review list. CI 42496586384 success, 1775 passed. Planner: translate common errno reasons (row 02); test files missing from spec Files tables (row 14)."
+        },
+        {
+          "stage": "complete",
+          "agent": "orchestrator",
+          "result": "done",
+          "at": "2026-11-08T11:54:30-04:00",
+          "note": "Worktree and branch removed."
         }
       ]
     }
