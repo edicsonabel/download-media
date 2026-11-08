@@ -83,12 +83,15 @@ def is_saveable_image(info: Any) -> bool:
 
 # What ``yt-dlp --ignore-no-formats-error --skip-download --write-thumbnail`` sets, scoped to
 # one image entry: set globally, they would hide a site's own errors, skip the videos and
-# leave a .jpg next to each one. overwrites=False reuses an image already saved.
+# leave a .jpg next to each one. overwrites=False reuses an image already saved. no_warnings
+# hides the "No video formats found!" that ignore_no_formats_error turns into a warning; only
+# -l doesn't set it already, and it names the image as skipped instead.
 _IMAGE_PARAMS: dict[str, Any] = {
     "ignore_no_formats_error": True,
     "skip_download": True,
     "writethumbnail": True,
     "overwrites": False,
+    "no_warnings": True,
 }
 
 
@@ -135,7 +138,9 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
     count_entries = False
-    # Save list items that are images (download() sets it, outside -a).
+    # Take list items that are images past yt-dlp's "No video formats found!", in every mode:
+    # one behind a link reaches the match_filter only after that check, and the filter
+    # decides whether it's saved (-a and -l skip it).
     save_images = False
     # len(errors) when the current item started.
     item_errors = 0
@@ -626,7 +631,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     no_cover: list[str] = []
     with _Ydl(ydl_opts) as ydl:
         _load_browser_cookies(ydl, opts.cookies_browser)
-        ydl.save_images = not opts.audio_only
+        ydl.save_images = True
 
         def keep(path: str) -> None:
             if not ydl.item_failed():
@@ -682,6 +687,7 @@ def list_formats(url: str, opts: DownloadOptions) -> int:
     }
     if opts.cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
-    with YoutubeDL(ydl_opts) as ydl:
+    with _Ydl(ydl_opts) as ydl:
         _load_browser_cookies(ydl, opts.cookies_browser)
+        ydl.save_images = True
         return int(ydl.download([url]))

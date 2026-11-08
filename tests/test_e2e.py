@@ -3801,11 +3801,6 @@ def test_audio_mode_never_saves_an_image_known_only_once_its_link_is_followed(
     assert names(out) == ["02 - Clip [v1].mp3"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="behind a link, -a and -l see the image only after the match_filter: yt-dlp's "
-    "'No video formats found!' then fails the item (-a) or the whole URL (-l)",
-)
 @pytest.mark.parametrize(
     ("flags", "result"),
     [(("-a", "-p"), ("partial_result", 1, 2, 1, 0)), (("-l",), None)],
