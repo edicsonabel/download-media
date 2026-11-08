@@ -233,3 +233,11 @@ def test_version_evidence_sees_every_flag() -> None:
 def test_long_waits_raise_the_call_timeout() -> None:
     # The Bash tool's default call timeout is 2 minutes; the poll and the watches run longer.
     _assert_contains(_section(VERIFICATION), ["600000"], VERIFICATION)
+
+
+def test_gate_and_watches_raise_the_call_timeout() -> None:
+    # The gate (~5 min) and `gh run watch` outlast the 2-minute default call timeout
+    # in preparation and publishing too, not only the RPC poll in verification.
+    paragraphs = [p for p in _text().split("\n\n") if "600000" in p and "`gh run watch`" in p]
+    assert paragraphs, "release-manager.md doesn't raise the call timeout for `gh run watch`"
+    _assert_contains(paragraphs[0], ["gate", "background"], "the call-timeout paragraph")
