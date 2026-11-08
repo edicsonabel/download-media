@@ -15,6 +15,8 @@ from download_media.probe import ContentKind, Probe, ProbeItem
 
 URL = "https://site.test/watch"
 BRAVE = str(BROWSERS.index("brave") + 2)
+# detect_site says "x", so the wizard asks for cookies before the probe.
+X_STATUS = "https://x.com/u/status/1"
 FIREFOX = str(BROWSERS.index("firefox") + 2)
 
 
@@ -178,6 +180,13 @@ def test_back_from_first_cookies_prompt_restarts_url(walk: Any) -> None:
     site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
     opts = walk(video_probe(), "", "b", "", "1", "", "", "", "", opts=site)
     assert opts is not None
+
+
+def test_back_at_the_first_cookies_prompt_can_be_pressed_again(walk: Any) -> None:
+    site = DownloadOptions(urls=[X_STATUS])
+    opts = walk(video_probe(), "", "b", "", "b", "", BRAVE, "", "", "", "", opts=site)
+    assert opts is not None
+    assert opts.cookies_browser == "brave"
 
 
 def test_cancel_at_first_cookies_prompt(walk: Any) -> None:
@@ -514,6 +523,17 @@ def test_run_all_splits_urls_typed_after_back_from_the_first_cookies_prompt(
     assert len(prompts) == 13
     assert [url for url, _ in walked] == [hungry, OTHER]
     assert [opts.urls for _, opts in walked] == [[hungry], [OTHER]]
+
+
+def test_run_all_survives_back_twice_at_the_first_cookies_prompt(walk_all: Any) -> None:
+    # URL, back, URL, back, URL, cookies, type, quality, container, folder.
+    replies = ("", "b", X_STATUS, "b", X_STATUS, "1", "", "", "", "")
+    walked, prompts = walk_all([X_STATUS], *replies)
+    assert len(prompts) == 10
+    assert walked is not None
+    [(url, opts)] = walked
+    assert url == X_STATUS
+    assert opts is not None
 
 
 @pytest.mark.parametrize(

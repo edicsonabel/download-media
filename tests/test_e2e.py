@@ -3770,6 +3770,44 @@ def test_a_public_carousel_on_a_cookie_hungry_site_asks_once(wizard_on: Any) -> 
     assert output.count(t("ask_cookies")) == 1
 
 
+X_CAROUSEL = "https://fake.test/carousel?from=x.com"
+BACK_TWICE = ("", "b", "", "b")
+
+
+def test_back_at_the_prompt_before_the_probe_can_be_pressed_again_and_again(
+    wizard_on: Any, out: Path
+) -> None:
+    # Each back reaches the URL prompt again, and the URL asks again.
+    code, output = wizard_on(X_CAROUSEL, *BACK_TWICE, "", NO_COOKIES, "", *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == 3
+    assert output.count(t("ask_cookies")) == 3
+    assert len(names(out)) == 2
+
+
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_cancelling_at_the_url_prompt_after_backing_twice_ends_the_run(
+    wizard_on: Any, out: Path, reply: Any
+) -> None:
+    code, output = wizard_on(X_CAROUSEL, *BACK_TWICE, reply)
+    assert code == 0
+    assert t("cancelled") in output
+    assert t("equiv_cmd") not in output
+    assert names(out) == []
+
+
+def test_a_url_typed_after_back_that_needs_no_cookies_is_not_asked_up_front(
+    wizard_on: Any, out: Path
+) -> None:
+    # The late cookies step stays, since nothing asked before the walk.
+    code, output = wizard_on(X_CAROUSEL, "", "b", CAROUSEL, *PICKER_WALK[1:])
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == 1
+    assert output.count(t("ask_cookies")) == 2
+    assert output.rindex(t("ask_cookies")) > output.index(t("probing"))
+    assert len(names(out)) == 2
+
+
 def test_cookies_that_do_not_help_end_the_retry_without_a_loop(wizard_on: Any, out: Path) -> None:
     code, output = wizard_on(PRIVATE, "", FIRST_BROWSER, *VIDEO_STEPS, "")
     assert code == 1
@@ -4734,6 +4772,17 @@ def test_cancel_at_a_later_walk_s_cookie_prompts_downloads_nothing(
     assert names(out) == []
     assert history_rows() == []
     assert t("equiv_cmd") not in output
+
+
+def test_back_at_a_later_walk_s_prompt_before_the_probe_can_be_pressed_again(
+    wizard_urls: Any, out: Path
+) -> None:
+    second = (*BACK_TWICE, "", NO_COOKIES, "", "", "", "", str(out))
+    code, output, asked = wizard_urls([VIDEO, X_CAROUSEL], *walk_into(out, 6), *second)
+    assert asked == 17
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == 3
+    assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
 
 
 def test_cancel_after_a_refusal_skips_nothing_and_downloads_nothing(

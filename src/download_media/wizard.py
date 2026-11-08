@@ -537,22 +537,22 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
     # The command line's value: run_all starts every walk from it.
     preset = opts.playlist_items
     # ---- Phase 1.5: pre-emptive cookies for sites that always need them ----
-    site = detect_site(opts.urls[0])
     cookies_asked = False
-    if site_likely_needs_cookies(site) and not opts.cookies_browser:
+    while site_likely_needs_cookies(detect_site(opts.urls[0])) and not opts.cookies_browser:
         info(f"  {t('auth_needed_pre')}")
         try:
             step_cookies(opts)
         except _Cancel:
             return None
         except _Back:
-            # Back from first cookies → restart URL step
+            # Back to the URL prompt; the URL typed there decides whether to ask again.
             try:
                 step_url(opts)
-                step_cookies(opts)
             except _Cancel:
                 return None
+            continue
         cookies_asked = True
+        break  # "No cookies" leaves cookies_browser unset, so the condition alone would ask again.
 
     # ---- Phase 2: probe with auth retry ----
     info(t("probing"))
