@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:36:44-04:00",
+  "updated": "2026-11-07T22:37:55-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1377,9 +1377,7 @@
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "keys() in release-manager.md preparation uses [a-z_]+, missing message keys with digits"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -1423,6 +1421,13 @@
           "result": "done",
           "at": "2026-11-07T22:36:44-04:00",
           "note": "Regex counts digits; live.env checked before sourcing; keys() fixed for zsh (old form failed silently with an empty count). 27 commands identical under zsh and bash. Gate exit 0, 1736 passed. Pages lookup for v0.2.0 is empty because that bump didn't touch docs/; expected to work at 0.3.0."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T22:37:55-04:00",
+          "note": "Round 1 closed. zsh and bash identical. Mutation 2/2."
         }
       ]
     }
