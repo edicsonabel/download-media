@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T13:11:46-04:00",
+  "updated": "2026-11-08T13:22:47-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1599,9 +1599,9 @@
     "fix/wizard-ig-cookies": {
       "type": "fix",
       "title": "Fix the up-front cookies prompt: Instagram, b-Enter-b _Back traceback, summary",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/06-wizard-ig-cookies.md",
       "branch": "fix/wizard-ig-cookies",
       "worktree": ".worktrees/fix-wizard-ig-cookies",
@@ -1674,6 +1674,20 @@
           "result": "merged",
           "at": "2026-11-08T13:11:46-04:00",
           "note": "Merge 3199a0c, no conflicts, 5 files. Gate exit 0, 1839 passed, 2 xfailed."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-08T13:22:47-04:00",
+          "note": "20/20 criteria on main 13f2839; reproduction clean in es and en. 48 merged tests fail on the parent src. Test-engineer added 39 cases, not 40. Spec 06 D1-D2 and three release-note bullets added to 0.3.0; spec 18 live step 1 replies change too (printf now 7 Enters), written in Next release item 2. CI 42503757343 success, 1839 passed. Planner: refresh Next release status; detect_site lookalikes (host parsing breaks ?from= trick); spec Out items; row 55 takes item 2 replies."
+        },
+        {
+          "stage": "complete",
+          "agent": "orchestrator",
+          "result": "done",
+          "at": "2026-11-08T13:22:47-04:00",
+          "note": "Worktree and branch removed."
         }
       ]
     }
