@@ -1,6 +1,6 @@
 # 01 — Save carousel images
 
-Status: draft
+Status: done
 Item: `feature/instagram-images`
 
 > **For the human's review before the release:** the architect took every decision below under the human's delegation, and recommends an option for each. Three of them change published behaviour. Carousels now save their images in every mode, and today `-y`, `-p` and the picker skip them (Goal). The picker's Enter now means "everything downloadable", where it meant "videos only" (D2). A selection made only of images skips the type, quality and container steps (D3). None renames a flag, moves a path or changes a state format, so the architect reads this as a minor change, not a breaking one. D2 is the one to look at if you count the picker's Enter as a default.
@@ -27,7 +27,7 @@ A carousel processed normally stops at the first image: `ERROR: [Instagram] <id>
 
 ### Which thumbnail yt-dlp picks
 
-`_sort_thumbnails` (`YoutubeDL.py:2724-2730`) sorts on `(preference, width, height, id, url)`, and the last one wins (`:2895`, `_write_thumbnails` walks the list from the end). With no width, height or preference, the order comes down to the URL string. On this post, the candidate that sorts last is the uncropped original for all 16 images: `stp` is the first query parameter, and `dst-jpg_e35_tt6` sorts after every `c0.…` and `dst-jpg_e35_p…`/`_s…` value. That is luck in Instagram's URL format, not a rule (see Risks). The saved images measure **3024×4032** (ffprobe), and the square crops top out at 1080×1080.
+`_sort_thumbnails` (`YoutubeDL.py:2724-2730`) sorts on `(preference, width, height, id, url)`, and the last one wins (`:2895`, `_write_thumbnails` walks the list from the end). With no width, height or preference, the order comes down to the URL string. On this post, the candidate that sorts last is the uncropped original for all 16 images: `stp` is the first query parameter, and `dst-jpg_e35_tt6` sorts after every `c0.…` and `dst-jpg_e35_p…`/`_s…` value. That is luck in Instagram's URL format, not a rule (see Risks). Each saved image is its post's uncropped original (ffprobe): 15 measure **3024×4032** and one **1653×2204**, the size its crop token (`c0.275.1653.1653a`) points to. The square crops top out at 1080×1080. (Measured at validation; this line first said all 16 were 3024×4032.)
 
 ### How yt-dlp saves a thumbnail for an entry with no formats
 
