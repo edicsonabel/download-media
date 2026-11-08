@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T13:05:57-04:00",
+  "updated": "2026-11-08T13:11:46-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1599,9 +1599,9 @@
     "fix/wizard-ig-cookies": {
       "type": "fix",
       "title": "Fix the up-front cookies prompt: Instagram, b-Enter-b _Back traceback, summary",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/06-wizard-ig-cookies.md",
       "branch": "fix/wizard-ig-cookies",
       "worktree": ".worktrees/fix-wizard-ig-cookies",
@@ -1611,7 +1611,8 @@
         "878de9e",
         "c065492",
         "5b0ea45",
-        "6f438b6"
+        "6f438b6",
+        "3199a0c"
       ],
       "review": {
         "approved": true,
@@ -1666,6 +1667,13 @@
           "result": "approved",
           "at": "2026-11-08T13:05:57-04:00",
           "note": "Merge approved under the human delegation (roles decide). Launching tech-lead."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-08T13:11:46-04:00",
+          "note": "Merge 3199a0c, no conflicts, 5 files. Gate exit 0, 1839 passed, 2 xfailed."
         }
       ]
     }
