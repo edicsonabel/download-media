@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T10:58:42-04:00",
+  "updated": "2026-11-08T11:09:27-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1505,9 +1505,9 @@
     "fix/unexpected-errors": {
       "type": "fix",
       "title": "Stop errors other than DownloadError ending _download_one in a traceback",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/42-unexpected-errors.md",
       "branch": "fix/unexpected-errors",
       "worktree": ".worktrees/fix-unexpected-errors",
@@ -1520,6 +1520,20 @@
           "result": "approved",
           "at": "2026-11-08T10:58:42-04:00",
           "note": "Human chose option b: continue with unexpected-errors (row 42) and release 0.3.0 later. The delegated decisions and the release still wait on the human."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-08T11:09:27-04:00",
+          "note": "Spec 2cd0dc4. Reproduced in es and en: -y -o /proc/x → FileNotFoundError traceback, second URL never runs. Also escapes: -o regular file, -a thumbnail PermissionError, extractor TypeError in single and -l. Decisions D1-D5, all recommended A. Planner: re-ask unusable folder in wizard; thumbnail OSError as saved without cover; row cites downloader.py:449, now :479. Row 23 collides on the except chain."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T11:09:27-04:00",
+          "note": "D1-D5 option A under the human delegation. All change published behaviour: human reviews them before the release that ships them (0.4.0)."
         }
       ]
     }
