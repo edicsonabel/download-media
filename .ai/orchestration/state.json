@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T21:04:41-04:00",
+  "updated": "2026-11-07T21:10:01-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1175,19 +1175,20 @@
     "fix/cookie-fallback": {
       "type": "fix",
       "title": "Cookie fallback handles a missing browser and empty --cookies runs",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/26-cookie-fallback.md",
       "branch": "fix/cookie-fallback",
-      "worktree": ".worktrees/fix-cookie-fallback",
+      "worktree": null,
       "commits": [
         "be7ea9d",
         "f107b29",
         "0b8ffa6",
         "443cd23",
         "d62b358",
-        "a6f31bf"
+        "a6f31bf",
+        "f4839f6"
       ],
       "review": {
         "approved": true,
@@ -1253,6 +1254,13 @@
           "result": "merged",
           "at": "2026-11-07T21:04:41-04:00",
           "note": "Merged as a6f31bf, no conflicts. Gate exit 0, 1715 passed, 2 xfailed. Pushed by the orchestrator under delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-07T21:10:01-04:00",
+          "note": "Criteria mapped, reproduction fixed. D1 awaits the human. Planner: Spanish wording, closing line, cookies_retry text on rejects-cookies-carousel, interleaved output when redirected."
         }
       ]
     }
