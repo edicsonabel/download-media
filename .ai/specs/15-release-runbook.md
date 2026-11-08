@@ -1,6 +1,6 @@
 # 15 — Release runbook
 
-Status: approved
+Status: done
 Item: `fix/release-runbook`
 
 ## Problem
@@ -262,21 +262,47 @@ The tool doesn't change, so the cases are release situations. Wizard, direct, `-
 
 ## Acceptance criteria
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] `git diff main --stat` lists only the four files in Files. Check it on the branch, before the merge
-- [ ] `grep -nE '→ (patch|minor|major)' .ai/roles/release-manager.md` finds nothing, and the preparation stage names `AGENTS.md` `Versioning`
-- [ ] `grep -n -- '--limit 1' .ai/roles/release-manager.md` finds nothing
-- [ ] Reading the role: the Preflight section has the eight commands of Design, runs in preparation and again as publishing's step 0, and says to stop and never switch accounts
-- [ ] Reading the role: publishing's order is preflight, push of `main`, CI watch, bump and gate, commit, tag, `git push --atomic`, `gh release create --verify-tag`
-- [ ] Reading the role: verification picks the tag run by `headBranch`, checks both jobs and their annotations for `Node.js 20`, names the three failed-job cases with `gh run rerun --failed` and `workflow_dispatch`, checks cgit, then polls the RPC with `timeout 540`, at most twice
-- [ ] Reading the role: preparation builds the checklist (gate, live steps, release steps, delegated decisions, preflight), and publishing refuses to start without the human's review and named waivers
-- [ ] `.ai/commands/release.md` step 4 and `WORKFLOW.md`'s release table mention the checklist
-- [ ] `.venv/bin/pytest -q tests/test_release_runbook.py` passes on the branch, and fails when the role file is put back to `main`'s (`git show main:.ai/roles/release-manager.md > .ai/roles/release-manager.md`, run, then `git checkout -- .ai/roles/release-manager.md`), with failures on assertions 1 to 6. Check it before the merge: after it, `main` has the new file
-- [ ] The commands the role uses, run read-only against v0.2.0, give what Evidence shows (tag-run `select`, annotations, `ls-remote --exit-code`, cgit and RPC greps). No push, tag, release or dispatch is run to check this item
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] `git diff main --stat` lists only the four files in Files. Check it on the branch, before the merge
+- [x] `grep -nE '→ (patch|minor|major)' .ai/roles/release-manager.md` finds nothing, and the preparation stage names `AGENTS.md` `Versioning`
+- [x] `grep -n -- '--limit 1' .ai/roles/release-manager.md` finds nothing
+- [x] Reading the role: the Preflight section has the eight commands of Design, runs in preparation and again as publishing's step 0, and says to stop and never switch accounts
+- [x] Reading the role: publishing's order is preflight, push of `main`, CI watch, bump and gate, commit, tag, `git push --atomic`, `gh release create --verify-tag`
+- [x] Reading the role: verification picks the tag run by `headBranch`, checks both jobs and their annotations for `Node.js 20`, names the three failed-job cases with `gh run rerun --failed` and `workflow_dispatch`, checks cgit, then polls the RPC with `timeout 540`, at most twice
+- [x] Reading the role: preparation builds the checklist (gate, live steps, release steps, delegated decisions, preflight), and publishing refuses to start without the human's review and named waivers
+- [x] `.ai/commands/release.md` step 4 and `WORKFLOW.md`'s release table mention the checklist
+- [x] `.venv/bin/pytest -q tests/test_release_runbook.py` passes on the branch, and fails when the role file is put back to `main`'s (`git show main:.ai/roles/release-manager.md > .ai/roles/release-manager.md`, run, then `git checkout -- .ai/roles/release-manager.md`), with failures on assertions 1 to 6. Check it before the merge: after it, `main` has the new file
+- [x] The commands the role uses, run read-only against v0.2.0, give what Evidence shows (tag-run `select`, annotations, `ls-remote --exit-code`, cgit and RPC greps). No push, tag, release or dispatch is run to check this item
 
 ## Live check
 
 Not needed for downloads: no runtime path changes. The runbook's real check is the 0.3.0 release, the first run of the new publishing order, of the `checkout@v7` deploy job (spec 10) and of the RPC poll. The read-only commands were run against v0.2.0 in this session (Evidence). Nothing that writes to GitHub or the AUR can be tried before a real release.
+
+## Changes after approval
+
+Brought in by the orchestrator after the six planned commits, each with a test in `tests/test_release_runbook.py` that fails without it. All stay inside the four files of Files.
+
+- **zsh-safe expansions (`64b7617`).** The agents' shell on this machine is zsh, where `"$1:src/..."` reads `:s` as a history modifier: the Design's `keys()` fails with `bad substitution` (checked: `zsh -c 'k() { git show "$1:src/download_media/i18n.py"; }; k v0.2.0'` → `k: bad substitution`). The helpers now write `"${1}:..."`, which bash and zsh read alike. Test: `test_commands_avoid_zsh_modifiers`.
+- **`live.env` checked before it is sourced (`a6d5308`).** The Design sourced `.ai/live.env` on the line before the gate, and only step 3 said a missing file means `blocked`. With `;` the shell goes on after the failed `.` (checked in bash and zsh), and the gate runs with every live test skipped and still prints `All checks passed.`, the 0.2.0 hole D7 closes. The block now tests for the file first and prints `no .ai/live.env` with exit 1, sourcing nothing. Test: `test_preparation_checks_live_env_before_sourcing_it`.
+- **Key regex `[a-z0-9_]+` (`8d3e3ff`, test in `5f237ec`).** `[a-z_]+` skips keys with digits; `mp4_h264_cap` and `vformat_desc_mp4` exist since `v0.1.0`, so today's counts don't change (still 4 and 12), but a new key with a digit would go uncounted. Test: `test_version_evidence_sees_every_message_key`, which checks the regex against every key of both `i18n.py` blocks.
+- **Self-contained shell blocks (`70cddd9`).** Each Bash call is a fresh shell, so the Design's evidence block, which reused `$last` and `keys()` from the block above, would run `keys ""` and `git log ..HEAD`: empty evidence, exit 0. Every block now sets what it uses; blocks with `<run-id>` or `<job-id>` run line by line and use no variables, and lines whose exit code is the answer print it. An empty `since` is `blocked`. Test: `test_code_blocks_set_what_they_use`.
+- **Flag-set diff with `comm` (`fe6ac1f`).** The Design grepped `git diff` for `"--flag"` lines, which over-counts a reworded or moved line, the same flaw the Evidence found for keys. It is now `comm -13` over the flag sets of the two `cli.py`s; `v0.2.0` to `HEAD` gives `--playlist-items` only. Test: `test_version_evidence_sees_every_flag`, which also compares the regex with the parser's options.
+- **GitHub Pages outcomes (`888bbb8`).** The Design gave the Pages commands but no rule for what they show. An empty list means the run hasn't appeared: list again and watch it. A red run or a missing `v<version> ·` label doesn't block, because the package is already out (D8's reasoning): it goes in `notes` and the result is `published`. No test: prose only.
+- **Call timeouts for the gate and the watches (`e227151`, test in `a414259`).** The Evidence named the 10-minute cap but not the 2-minute default, and the gate (about 5 minutes), `gh run watch` and the RPC poll all outlast it; a cut-off command reads as nothing. The role now says to raise the call timeout to 600000 ms or run in the background, the full gate always in the background, and to rerun a cut-off command in the background. Tests: `test_long_waits_raise_the_call_timeout`, `test_gate_and_watches_raise_the_call_timeout`.
+- **Extra pins (`5f237ec`).** Besides the six assertions of Test, `test_verification_runs_the_cgit_check` pins the cgit command itself (the word is also in the prose), and `test_tag_leaves_only_through_the_atomic_push` fails if any publishing line pushes the tag without `--atomic`.
+
+## Validation
+
+On `main` at `36f28a2` (merge `f7d6439`; `36f28a2` only changes `.ai/orchestration/state.json`). Network and `gh` calls read-only.
+
+- **Gate:** not re-run here, at the orchestrator's request. The tech-lead ran `scripts/pre-release.sh --no-live` on the merge: exit 0, 1740 passed. CI run 42441872866 on `36f28a2` was `in_progress` at validation; the orchestrator watches it.
+- **Diff:** `git diff f7d6439^1 f7d6439 --stat` lists exactly the four files of Files (348 insertions, 19 deletions).
+- **grep:** `grep -nE '→ (patch|minor|major)'` and `grep -n -- '--limit 1'` on the role both exit 1. Preparation names `AGENTS.md` `Versioning`. `release.md` step 4 and `WORKFLOW.md`'s release table (lines 119-120) name the checklist, the review of delegated decisions and the named waivers.
+- **Role, read:** the Preflight has the eight commands, in preparation step 4 and as publishing's step 0, and says `blocked`, never `gh auth switch`/`login`/`GH_TOKEN`. Publishing order is preflight, `git push origin main`, CI watch, bump and gate, commit, tag, `git push --atomic`, `gh release create --verify-tag`, behind the (a)/(b)/(c) gate. Verification picks the run by `headBranch`, reads both jobs and their annotations for `Node.js 20`, names the three failed-job cases, checks cgit, then the `timeout 540` poll at most twice.
+- **Test:** `.venv/bin/pytest -q tests/test_release_runbook.py` → 19 passed. Run in a scratch copy against `f7d6439^1`'s role file: 15 failed, 4 passed; the failures cover assertions 1 to 6 (`test_version_follows_agents_md`, `test_preflight_checks_write_access`, `test_publishing_order`, `test_publishing_needs_review_and_waivers`, `test_verification_waits_for_the_tag_run_and_the_aur`, `test_preparation_builds_the_checklist`) and every later addition.
+- **Evidence commands against v0.2.0:** the evidence block, run in both zsh and bash, gives the 4 keys `v0.1.0`→`v0.2.0`, 12 keys and `--playlist-items` `v0.2.0`→`HEAD`, `no breaking marker`. Tag-run `select` → run 42290009457 `success`. Annotations of job 128140651499 → `Node.js 20 is deprecated ...`. `ls-remote --exit-code` → 2 for `v9.9.9`, 0 for `v0.2.0`; `rev-parse -q --verify refs/tags/v9.9.9` → 1. cgit grep → `pkgver=0.2.0`; RPC → `"Version":"0.2.0-1"`.
+- **Pages by commit:** for `v0.2.0` the list is `[]`, because `51c8e45` didn't touch `docs/` (the landing page became the fourth version place later). From 0.3.0 the bump changes `docs/index.html` and `tests/test_packaging.py` enforces it, so the run exists; if it ever doesn't, the role's new rule (list again, never block) covers it.
+- **Scope:** no `src/`, `AGENTS.md`, workflow, packaging or version change.
 
 ## Open decisions
 
