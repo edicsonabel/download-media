@@ -4005,26 +4005,44 @@ def test_wizard_explains_a_real_http_error_without_a_prompt(
     assert asked_for_login() not in output
 
 
-def test_a_browser_picked_at_the_retry_that_is_not_installed_is_named(
+def test_a_browser_picked_at_the_retry_that_is_not_installed_ends_the_retry(
     generic: Any, home: Path
 ) -> None:
-    chrome = str(BROWSERS.index("chrome") + 2)
-    code, output = generic("status/401", "", chrome, *VIDEO_STEPS, "")
+    code, output = generic("status/401", "", CHROME, *VIDEO_STEPS, "")
     assert code == 1
-    assert "could not find chrome cookies database" in output
-    assert t("auth_still_needed", "chrome") not in output
+    assert output.count(no_browser()) == 1
+    reason = "Unable to download webpage: HTTP Error 401: Unauthorized"
+    assert t("probe_failed", reason) in output
     assert t("probe_falling_back") in output
+    assert t("auth_still_needed", "chrome") not in output
+    assert "could not find chrome cookies database" not in output
+    assert output.count(t("ask_cookies")) == 1
     assert names(home / "Videos") == []
 
 
-def test_a_browser_that_is_not_installed_is_named_and_the_retry_still_saves(
+def test_a_browser_that_is_not_installed_is_named_and_the_page_still_detected(
     generic: Any, home: Path
 ) -> None:
-    code, output = generic("poster.html", *SINGLE_WALK, "", flags=("-i", "--cookies", "chrome"))
+    # No preview: the cookieless probe found the video.
+    code, output = generic("poster.html", *SINGLE_WALK, flags=("-i", "--cookies", "chrome"))
     assert code == 0
-    assert "could not find chrome cookies database" in output
-    assert "failed to load cookies" not in output
-    assert t("auth_still_needed", "chrome") not in output
+    assert output.count(no_browser()) == 1
+    assert t("probe_failed", "") not in output
+    assert detected("kind_video") in output
+    assert len(names(home / "Videos")) == 1
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+def test_a_browser_that_is_not_installed_picked_up_front_still_detects_the_page(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("poster.html?from=instagram.com", "", CHROME, *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    # detect_site reads the whole URL.
+    assert f"instagram / {t('kind_video')}" in output
+    assert output.count(t("ask_cookies")) == 1
     assert len(names(home / "Videos")) == 1
 
 
