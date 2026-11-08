@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T23:08:25-04:00",
+  "updated": "2026-11-07T23:14:18-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "integration",
-      "status": "in_progress",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1378,7 +1378,8 @@
         "fe6ac1f",
         "e227151",
         "888bbb8",
-        "a414259"
+        "a414259",
+        "f7d6439"
       ],
       "review": {
         "approved": true,
@@ -1477,6 +1478,13 @@
           "result": "approved",
           "at": "2026-11-07T23:08:25-04:00",
           "note": "Merge approved under the human delegation (roles decide). Launching tech-lead."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-07T23:14:18-04:00",
+          "note": "Merge f7d6439, no conflicts. Gate exit 0: lint and types clean, 1740 passed, 2 xfail (row 25), es and en. QA minor (release-manager.md:31) left for the planner."
         }
       ]
     }
