@@ -27,6 +27,14 @@ from yt_dlp.utils import ExtractorError
 from download_media import downloader
 from download_media import probe as probe_module
 
+# What yt-dlp reads to pick a Linux keyring for a Chromium browser.
+_DESKTOP_VARS = (
+    "XDG_CURRENT_DESKTOP",
+    "DESKTOP_SESSION",
+    "KDE_FULL_SESSION",
+    "GNOME_DESKTOP_SESSION_ID",
+)
+
 
 @pytest.fixture(autouse=True)
 def isolated_env(
@@ -44,6 +52,11 @@ def isolated_env(
     # Desktops export these, and some xdg-user-dir builds read them first.
     for kind in ("VIDEOS", "MUSIC"):
         monkeypatch.delenv(f"XDG_{kind}_DIR", raising=False)
+    # A fake browser profile with an encrypted cookie would ask the real session keyring for
+    # its key. A bus that isn't there fails at once, and without a desktop yt-dlp picks none.
+    monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", f"unix:path={tmp_path / 'no-bus' / 'socket'}")
+    for name in _DESKTOP_VARS:
+        monkeypatch.delenv(name, raising=False)
     # A scripted wizard answer that drifts by one step can become a relative folder:
     # it lands here instead of the checkout, and the test fails instead of passing.
     cwd = tmp_path / "cwd"

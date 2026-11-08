@@ -39,6 +39,24 @@ def test_exported_user_dirs_cannot_send_tests_to_the_real_folders(
     assert xdg_dir("MUSIC", "Music").is_relative_to(tmp_path)
 
 
+def test_no_test_can_reach_the_real_session_bus(tmp_path: Path) -> None:
+    bus = os.environ["DBUS_SESSION_BUS_ADDRESS"]
+    assert bus.startswith("unix:path=")
+    socket = Path(bus.removeprefix("unix:path="))
+    assert socket.is_relative_to(tmp_path)
+    assert not socket.exists()
+
+
+def test_no_desktop_picks_a_keyring() -> None:
+    desktop = (
+        "XDG_CURRENT_DESKTOP",
+        "DESKTOP_SESSION",
+        "KDE_FULL_SESSION",
+        "GNOME_DESKTOP_SESSION_ID",
+    )
+    assert not [name for name in desktop if name in os.environ]
+
+
 def test_live_tests_keep_the_real_home(tmp_path: Path) -> None:
     inner = tmp_path / "inner"
     inner.mkdir()
@@ -52,21 +70,29 @@ def test_live_tests_keep_the_real_home(tmp_path: Path) -> None:
 
         HOME = os.environ["HOME"]
         VIDEOS = os.environ["XDG_VIDEOS_DIR"]
+        BUS = os.environ["DBUS_SESSION_BUS_ADDRESS"]
 
 
         @pytest.mark.live
         def test_live_sees_the_real_home():
             assert os.environ["HOME"] == HOME
             assert os.environ["XDG_VIDEOS_DIR"] == VIDEOS
+            assert os.environ["DBUS_SESSION_BUS_ADDRESS"] == BUS
 
 
         def test_others_do_not():
             assert os.environ["HOME"] != HOME
             assert "XDG_VIDEOS_DIR" not in os.environ
+            assert os.environ["DBUS_SESSION_BUS_ADDRESS"] != BUS
     """
     (inner / "test_inner.py").write_text(textwrap.dedent(probe), encoding="utf-8")
     real = tmp_path / "real-home"
-    env = {**os.environ, "HOME": str(real), "XDG_VIDEOS_DIR": str(real / "Videos")}
+    env = {
+        **os.environ,
+        "HOME": str(real),
+        "XDG_VIDEOS_DIR": str(real / "Videos"),
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/real-bus",
+    }
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", "pytest.ini"],
         cwd=inner,
