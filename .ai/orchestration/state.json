@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T17:17:38-04:00",
+  "updated": "2026-11-08T17:23:54-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1762,9 +1762,9 @@
     "feature/instagram-images": {
       "type": "feature",
       "title": "Save Instagram carousel images alongside videos",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/01-instagram-images.md",
       "branch": "feature/instagram-images",
       "worktree": ".worktrees/feature-instagram-images",
@@ -1775,7 +1775,8 @@
         "fd39f23",
         "a989643",
         "f1a2b61",
-        "b3d9d04"
+        "b3d9d04",
+        "c835421"
       ],
       "review": {
         "approved": true,
@@ -1869,6 +1870,13 @@
           "result": "approved",
           "at": "2026-11-08T17:17:38-04:00",
           "note": "Merge and push under the human's standing delegation. Live check runs in validation. Human reviews before 0.4.0: images saved in every mode, D2 (incl. generic lists), D3, and the _WholeBody/existing_file additions beyond the spec."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-08T17:23:54-04:00",
+          "note": "c835421 --no-ff merge, no conflicts, 13 files +1130/-118. Gate on merged main exit 0; 1931 passed + 2 xfailed (row 25)."
         }
       ]
     }
