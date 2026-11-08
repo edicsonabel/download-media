@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T12:18:48-04:00",
+  "updated": "2026-11-08T13:05:57-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1599,14 +1599,24 @@
     "fix/wizard-ig-cookies": {
       "type": "fix",
       "title": "Fix the up-front cookies prompt: Instagram, b-Enter-b _Back traceback, summary",
-      "stage": "development",
-      "status": "in_progress",
-      "next_agent": "developer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/06-wizard-ig-cookies.md",
       "branch": "fix/wizard-ig-cookies",
       "worktree": ".worktrees/fix-wizard-ig-cookies",
-      "commits": [],
-      "review": null,
+      "commits": [
+        "66b98a2",
+        "caa3c19",
+        "878de9e",
+        "c065492",
+        "5b0ea45",
+        "6f438b6"
+      ],
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -1628,6 +1638,34 @@
           "result": "approved",
           "at": "2026-11-08T12:18:48-04:00",
           "note": "D1-D4 recommended options under the human delegation. D1 (Instagram leaves the early list) and D2 (x.com lookalike fix) change published behaviour: human reviews before 0.3.0."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-08T12:43:57-04:00",
+          "note": "5 commits to 5b0ea45. Gate exit 0, 1800 passed, 2 xfailed, 98.70%. 23 of 37 new/changed tests fail on main src; 14 pass (old detect_site rows, pins). Real script: b, Enter, b loop ends Cancelled, exit 0, es and en. probe.py and wizard.py left unformatted (row 05). Planner: double blank line after detection banner."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-08T12:59:04-04:00",
+          "note": "No bugs. 40 cases (6f438b6), 1839 passed, 2 xfailed. Mutation 13/13; developer tests alone missed 3. fixupx/vxtwitter/fxtwitter now generic (yt-dlp TwitterIE rejects them too). Planner (low): approved regex still matches my-x.com, x.com.evil.org, x.com@evil.org, facebook path /x.com/ (not a regression); (?<![\\w-])(twitter|x)\\.com(?![\\w-]) would fix most."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-08T13:05:57-04:00",
+          "note": "No findings. Gate exit 0, 1839 passed, 2 xfailed, 98.70%. Real runs on loopback in es and en: back loop, IG public and gated, decline, X, several URLs, -i -l, dropbox. Each fix reverted alone fails 16/11/6/14 tests. No URL that worked on main breaks. Risk: gated IG untested live (DM_LIVE_IG_GATED on the 0.3.0 list)."
+        },
+        {
+          "stage": "integration",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T13:05:57-04:00",
+          "note": "Merge approved under the human delegation (roles decide). Launching tech-lead."
         }
       ]
     }
