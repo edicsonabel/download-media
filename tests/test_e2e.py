@@ -3912,6 +3912,164 @@ def test_the_summary_has_no_cookies_line_before_the_late_step(wizard_on: Any) ->
     assert cookies_line("") not in output[: output.index(t("ask_cookies"))]
 
 
+@pytest.mark.parametrize("backs", [1, 2])
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_cancelling_the_prompt_before_the_probe_after_going_back_ends_the_run(
+    wizard_on: Any, out: Path, backs: int, reply: Any
+) -> None:
+    code, output = wizard_on(X_CAROUSEL, *("", "b") * backs, "", reply)
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == backs + 1
+    assert t("cancelled") in output
+    assert t("probing") not in output
+    assert t("equiv_cmd") not in output
+    assert names(out) == []
+
+
+def test_the_browser_picked_after_going_back_twice_reaches_the_probe_and_the_command(
+    wizard_on: Any, fake_site: list[Any], replay: Any, out: Path, again: Path
+) -> None:
+    code, output = wizard_on(COOKIE_HUNGRY, *BACK_TWICE, "", FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert asked_for_login() not in output
+    assert fake_site[0][0] == BROWSERS[0]  # The probe, not just the download.
+    assert names(out) == ["Clip.mp4"]
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == ["Clip.mp4"]
+
+
+def test_a_decline_after_going_back_leaves_cookies_out_of_the_command(
+    wizard_on: Any, out: Path
+) -> None:
+    code, output = wizard_on(X_CAROUSEL, *BACK_TWICE, "", NO_COOKIES, "", *VIDEO_STEPS)
+    assert code == 0
+    assert len(names(out)) == 2
+    [line] = commands(output)
+    assert "--cookies" not in line
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_the_summary_lists_the_retry_s_browser_after_a_decline_up_front(
+    wizard_on: Any, monkeypatch: pytest.MonkeyPatch, out: Path, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    code, output = wizard_on(COOKIE_HUNGRY, "", NO_COOKIES, FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(t("ask_cookies")) == 2
+    # The summary shows the answer the download uses, not the one the retry replaced.
+    assert cookies_line(BROWSERS[0]) in output
+    assert cookies_line(t("no_cookies")) not in output
+    assert output.index(cookies_line(BROWSERS[0])) < output.index(t("ask_type"))
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_the_summary_keeps_cookies_first_after_back_at_the_first_step(
+    wizard_on: Any, monkeypatch: pytest.MonkeyPatch, out: Path, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    # Back at the type step asks the type again, never the cookies answered before the probe.
+    code, output = wizard_on(COOKIE_HUNGRY, "", FIRST_BROWSER, "b", *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(t("ask_cookies")) == 1
+    assert output.count(t("ask_type")) == 2
+    # Type, type again, quality, container, folder: each shows the summary.
+    assert output.count(cookies_line(BROWSERS[0])) == 5
+    last = output[output.rindex(t("summary")) :]
+    assert last.index(cookies_line(BROWSERS[0])) < last.index(
+        f"✓ {wizard._summary_label('type')}: "
+    )
+    assert names(out) == ["Clip.mp4"]
+
+
+def test_the_summary_says_no_cookies_when_the_browser_picked_up_front_cannot_be_read(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("poster.html?from=x.com", "", CHROME, *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    # What the download will do: the unreadable browser was dropped before the walk.
+    assert cookies_line(t("no_cookies")) in output
+    assert cookies_line("chrome") not in output
+    [line] = commands(output)
+    assert "--cookies" not in line
+    assert len(names(home / "Videos")) == 1
+
+
+def test_the_manual_flow_lists_a_browser_given_up_front_and_keeps_it_in_the_command(
+    wizard_on: Any,
+) -> None:
+    # The probe fails without a login wall: no retry, no late step, the browser stays.
+    url = "https://fake.test/rate-limited?from=x.com"
+    code, output = wizard_on(url, "", FIRST_BROWSER, *VIDEO_STEPS, "")
+    assert code == 1
+    assert t("probe_falling_back") in output
+    assert output.count(t("ask_cookies")) == 1
+    assert cookies_line(BROWSERS[0]) in output
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+
+
+def test_the_manual_flow_without_a_prompt_before_it_keeps_the_late_step(wizard_on: Any) -> None:
+    # Type, quality, container, folder, cookies, then the preview.
+    code, output = wizard_on("https://fake.test/rate-limited", "", *VIDEO_STEPS, FIRST_BROWSER, "")
+    assert code == 1
+    assert t("auth_needed_pre") not in output
+    assert output.count(t("ask_cookies")) == 1
+    assert output.index(t("probe_falling_back")) < output.index(t("ask_cookies"))
+    assert cookies_line("") not in output
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+
+
+def test_a_keyring_from_the_command_line_skips_the_prompt_before_the_probe(
+    wizard_on: Any, fake_site: list[Any], out: Path
+) -> None:
+    # The late step preselects the browser, and Enter keeps its keyring.
+    code, output = wizard_on(X_CAROUSEL, *PICKER_WALK, flags=("--cookies", "brave+kwallet6"))
+    assert code == 0
+    assert t("auth_needed_pre") not in output
+    assert output.count(t("ask_cookies")) == 1
+    assert fake_site[0] == ("brave", None, "KWALLET6", None)
+    assert len(names(out)) == 2
+    [line] = commands(output)
+    assert "--cookies brave+kwallet6" in line
+
+
+def test_an_instagram_url_typed_after_back_is_probed_without_a_second_prompt(
+    wizard_on: Any, out: Path
+) -> None:
+    ig = f"{CAROUSEL}?from=instagram.com"
+    code, output = wizard_on(X_CAROUSEL, "", "b", ig, *PICKER_WALK[1:])
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == 1
+    assert output.count(t("ask_cookies")) == 2
+    assert f"instagram / {t('kind_playlist')}" in output
+    # The second question is the late step, after the probe.
+    assert output.rindex(t("ask_cookies")) > output.index(t("probing"))
+    assert len(names(out)) == 2
+
+
+def test_list_formats_in_the_wizard_survives_back_twice_before_the_probe(
+    wizard_urls: Any, fake_site: list[Any], out: Path
+) -> None:
+    # URL, back, URL, back, URL, cookies, picker, type, quality, container, folder.
+    replies = (*BACK_TWICE, "", FIRST_BROWSER, "", "", "", "", str(out))
+    code, output, asked = wizard_urls(["-l", X_CAROUSEL], *replies)
+    assert asked == 11
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == 3
+    assert "Available formats for v1" in output
+    assert fake_site and {used[0] for used in fake_site} == {BROWSERS[0]}
+    assert names(out) == []
+
+
 def test_cookies_that_do_not_help_end_the_retry_without_a_loop(wizard_on: Any, out: Path) -> None:
     code, output = wizard_on(PRIVATE, "", FIRST_BROWSER, *VIDEO_STEPS, "")
     assert code == 1
@@ -4887,6 +5045,40 @@ def test_back_at_a_later_walk_s_prompt_before_the_probe_can_be_pressed_again(
     assert code == 0
     assert output.count(t("auth_needed_pre")) == 3
     assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
+
+
+def test_each_url_s_cookies_answer_before_the_probe_gets_its_own_command(
+    wizard_urls: Any, out: Path
+) -> None:
+    # A browser up front on the first, nothing asked before the probe on the second.
+    first = ("", FIRST_BROWSER, "", "", "", str(out))
+    code, output, asked = wizard_urls([COOKIE_HUNGRY, VIDEO], *first, *walk_into(out, 6))
+    assert asked == 12
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == 1
+    # Both pages hold a "Clip", so one of the names carries its id.
+    assert names(out) == ["Clip [v1].mp4", "Clip.mp4"]
+    assert commands(output) == [
+        f"download-media -y -o {out} --cookies {BROWSERS[0]} {shlex.quote(COOKIE_HUNGRY)}",
+        f"download-media -y -o {out} {VIDEO}",
+    ]
+
+
+def test_urls_typed_after_back_ask_again_only_for_the_one_that_needs_it(
+    wizard_urls: Any, out: Path
+) -> None:
+    # Back at the first URL's prompt, then a URL off the list followed by an X one: the first
+    # is walked with the late step, the X one gets its own prompt before its probe.
+    retyped = f"{VIDEO} {X_CAROUSEL}"
+    first = ("", "b", retyped, *walk_into(out, 5))
+    second = ("", NO_COOKIES, "", "", "", "", str(out))
+    code, output, asked = wizard_urls([X_CAROUSEL], *first, *second)
+    assert asked == 15
+    assert code == 0
+    assert output.count(t("auth_needed_pre")) == 2
+    assert output.count(t("ask_cookies")) == 3
+    assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
+    assert f"{t('wizard_title')} (2/2)" in output
 
 
 def test_cancel_after_a_refusal_skips_nothing_and_downloads_nothing(

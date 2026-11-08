@@ -536,6 +536,29 @@ def test_run_all_survives_back_twice_at_the_first_cookies_prompt(walk_all: Any) 
     assert opts is not None
 
 
+def test_run_all_keeps_only_the_urls_typed_at_the_last_answer(walk_all: Any) -> None:
+    # URL, back, two URLs, back, the X one alone, cookies, type, quality, container, folder.
+    replies = ("", "b", f"{X_STATUS} {OTHER}", "b", X_STATUS, "1", "", "", "", "")
+    walked, prompts = walk_all([X_STATUS], *replies)
+    assert len(prompts) == 10
+    assert walked is not None
+    assert [url for url, _ in walked] == [X_STATUS]
+
+
+def test_run_all_asks_before_the_probe_only_for_the_url_that_needs_it(walk_all: Any) -> None:
+    # Back, then a URL off the list ahead of an X one. The first is walked with the late step
+    # (URL, back, URLs, type, quality, container, folder, cookies). The second is queued, so no
+    # URL prompt, and asks first (cookies, type, quality, container, folder).
+    replies = ("", "b", f"{OTHER} {X_STATUS}", *[""] * 5, BRAVE, *[""] * 4)
+    walked, prompts = walk_all([X_STATUS], *replies)
+    assert len(prompts) == 13
+    assert walked is not None
+    assert [url for url, _ in walked] == [OTHER, X_STATUS]
+    [first, second] = [opts for _, opts in walked]
+    assert first is not None and second is not None
+    assert (first.cookies_browser, second.cookies_browser) == (None, "brave")
+
+
 @pytest.mark.parametrize(
     "typed",
     [f"{URL}\t{OTHER}", f"  {URL}   {OTHER}  ", f"{URL} \t {OTHER}\t"],

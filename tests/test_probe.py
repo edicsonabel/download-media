@@ -53,6 +53,54 @@ def test_detect_site(url: str, expected: str) -> None:
     assert detect_site(url) == expected
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://mobile.x.com/u/status/1",
+        "https://www.twitter.com/u/status/1",
+        "HTTPS://X.COM/U/STATUS/1",
+        "https://x.com:443/u/status/1",
+        "https://user@x.com/u/status/1",
+        "https://x.com",
+        # The whole URL is read, so a query naming X counts (the e2e tests rely on it).
+        "https://example.com/?u=x.com",
+    ],
+)
+def test_detect_site_finds_x_wherever_its_whole_name_appears(url: str) -> None:
+    assert detect_site(url) == "x"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://xx.com/a",
+        "https://spacex.com/a",
+        "https://my_x.com/a",
+        "https://x.company.com/a",
+        "https://x.comics.org/a",
+        "https://twitter.community/a",
+        "https://x.co/a",
+        "https://fixupx.com/u/status/1",
+        "https://vxtwitter.com/u/status/1",
+    ],
+)
+def test_detect_site_ignores_names_that_only_contain_x_com(url: str) -> None:
+    assert detect_site(url) == "generic"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://m.facebook.com/watch/?v=1",
+        "https://web.facebook.com/u/videos/1",
+        # Used to read "x", since "fox.com" holds "x.com".
+        "https://www.facebook.com/u/videos/1?ref=fox.com",
+    ],
+)
+def test_detect_site_still_finds_facebook(url: str) -> None:
+    assert detect_site(url) == "facebook"
+
+
 def test_cookie_hungry_sites() -> None:
     # A login wall on Instagram reaches the retry after the probe: public posts need no cookies.
     assert site_likely_needs_cookies("instagram") is False
