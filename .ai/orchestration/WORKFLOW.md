@@ -116,8 +116,8 @@ After a `changes_requested` from `testing`, the item returns to `testing` before
 
 | From → to                      | Trigger                        | Orchestrator action                                    |
 | ------------------------------ | ------------------------------ | ------------------------------------------------------ |
-| `preparation` → ⏸              | release-manager: `done`        | `status: awaiting_human`. Shows version, gate, notes   |
-| ⏸ → `publishing`               | human approves                 | Launches release-manager                               |
+| `preparation` → ⏸              | release-manager: `done`        | `status: awaiting_human`. Shows version, gate, notes and the pre-publish checklist |
+| ⏸ → `publishing`               | human approves, having reviewed the delegated decisions and waived by name any live step not run | Records the review and the waivers in `history`. Launches release-manager with them |
 | `publishing` → `verification`  | release-manager: `done`        | Launches release-manager                               |
 | `verification` → `published`   | release-manager: `published`   | Reports the AUR version                                |
 | any → ⏸                        | release-manager: `blocked`     | `status: awaiting_human`. A publishing step is never retried without asking |
