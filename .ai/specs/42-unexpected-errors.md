@@ -1,6 +1,6 @@
 # 42 — Stop errors other than `DownloadError` ending a run in a traceback
 
-Status: draft
+Status: done
 Item: `fix/unexpected-errors`
 
 ## Problem
@@ -219,19 +219,19 @@ Equivalent command to repeat this download:
 
 ## Acceptance criteria
 
-- [ ] `scripts/pre-release.sh --no-live` passes.
-- [ ] `LANG=en_US.UTF-8 .venv/bin/download-media -y -o /proc/x 'http://127.0.0.1:9/a.mp4' 'http://127.0.0.1:9/b.mp4'` prints no `Traceback`. It prints `Can't save to /proc/x: No such file or directory. Choose another folder with -o.` twice and `Download failed:` for both URLs, then the equivalent command `download-media -y -o /proc/x http://127.0.0.1:9/a.mp4 http://127.0.0.1:9/b.mp4`, and exits 1. Under `LANG=es_ES.UTF-8`, the same with `No se puede guardar en /proc/x: …` and `Falló la descarga:`.
-- [ ] e2e: `-y -o <file>/sub VIDEO VIDEO_B`, where `<file>` is a regular file under `tmp_path`, returns 1 from `cli.main` without raising. The output holds `t("output_unusable", <path>, "Not a directory")` once per URL, `t("failed", url)` for both, and one equivalent command with both URLs. No history row, and `<file>` is left as it was.
-- [ ] e2e: the same with `-y -p` on `CAROUSEL` gives one `output_unusable`, exit 1, no traceback.
-- [ ] e2e: a scripted wizard on two URLs, where the first walk's folder answer can't be created and the second's is `out`. The second URL is saved in `out`, the first gets `output_unusable` and `failed`, exit 1, and two commands are printed.
-- [ ] e2e: `-y -o out https://fake.test/crash VIDEO` returns 1 without raising. The output holds `Traceback`, `TypeError`, `t("unexpected_bug", "TypeError: 'NoneType' object is not subscriptable")` and `t("failed", crash url)`. `VIDEO` is saved in `out` (`Clip.mp4`) with `Done.`, and one command lists both URLs. The test fails on `main`.
-- [ ] e2e: `-y -p -o out https://fake.test/crash VIDEO` keeps its output on `main`. There is no `unexpected_bug`, since yt-dlp reported the error itself, `VIDEO` is saved, and the exit is 1.
-- [ ] e2e: `-y -a -o <ro> https://fake.test/junk-thumb`, with `<ro>` mode `0500`, returns 1 without raising. The output holds `t("unexpected_error", …)` with `Permission denied` and the `.cover.jpg` path, and no `Traceback`. `<ro>` is empty. Skipped when `os.geteuid() == 0`. The test fails on `main`.
-- [ ] e2e: `-y -l https://fake.test/crash` returns 1 without raising, with `unexpected_bug` and `failed` (D4).
-- [ ] unit (`test_cli.py`): `_download_one` with `download` monkeypatched to raise `OSError(28, "No space left on device", "/x/f")` returns `_Outcome(False, False, "no")` and prints `t("unexpected_error", …)`. With `--cookies firefox`, `download` is called once: no retry without cookies.
-- [ ] unit: `_download_one` with `download` raising `KeyboardInterrupt` still raises it (the existing `test_interrupt_propagates_after_cancel_message`, `test_cli.py:402-412`, stays green).
-- [ ] `test_i18n.py::test_es_and_en_have_same_keys` passes with the three new keys.
-- [ ] Every new e2e test that "fails on `main`" is shown to fail with the `src/` change reverted (constraints, Verification 5).
+- [x] `scripts/pre-release.sh --no-live` passes.
+- [x] `LANG=en_US.UTF-8 .venv/bin/download-media -y -o /proc/x 'http://127.0.0.1:9/a.mp4' 'http://127.0.0.1:9/b.mp4'` prints no `Traceback`. It prints `Can't save to /proc/x: No such file or directory. Choose another folder with -o.` twice and `Download failed:` for both URLs, then the equivalent command `download-media -y -o /proc/x http://127.0.0.1:9/a.mp4 http://127.0.0.1:9/b.mp4`, and exits 1. Under `LANG=es_ES.UTF-8`, the same with `No se puede guardar en /proc/x: …` and `Falló la descarga:`.
+- [x] e2e: `-y -o <file>/sub VIDEO VIDEO_B`, where `<file>` is a regular file under `tmp_path`, returns 1 from `cli.main` without raising. The output holds `t("output_unusable", <path>, "Not a directory")` once per URL, `t("failed", url)` for both, and one equivalent command with both URLs. No history row, and `<file>` is left as it was.
+- [x] e2e: the same with `-y -p` on `CAROUSEL` gives one `output_unusable`, exit 1, no traceback.
+- [x] e2e: a scripted wizard on two URLs, where the first walk's folder answer can't be created and the second's is `out`. The second URL is saved in `out`, the first gets `output_unusable` and `failed`, exit 1, and two commands are printed.
+- [x] e2e: `-y -o out https://fake.test/crash VIDEO` returns 1 without raising. The output holds `Traceback`, `TypeError`, `t("unexpected_bug", "TypeError: 'NoneType' object is not subscriptable")` and `t("failed", crash url)`. `VIDEO` is saved in `out` (`Clip.mp4`) with `Done.`, and one command lists both URLs. The test fails on `main`.
+- [x] e2e: `-y -p -o out https://fake.test/crash VIDEO` keeps its output on `main`. There is no `unexpected_bug`, since yt-dlp reported the error itself, `VIDEO` is saved, and the exit is 1.
+- [x] e2e: `-y -a -o <ro> https://fake.test/junk-thumb`, with `<ro>` mode `0500`, returns 1 without raising. The output holds `t("unexpected_error", …)` with `Permission denied` and the `.cover.jpg` path, and no `Traceback`. `<ro>` is empty. Skipped when `os.geteuid() == 0`. The test fails on `main`.
+- [x] e2e: `-y -l https://fake.test/crash` returns 1 without raising, with `unexpected_bug` and `failed` (D4).
+- [x] unit (`test_cli.py`): `_download_one` with `download` monkeypatched to raise `OSError(28, "No space left on device", "/x/f")` returns `_Outcome(False, False, "no")` and prints `t("unexpected_error", …)`. With `--cookies firefox`, `download` is called once: no retry without cookies.
+- [x] unit: `_download_one` with `download` raising `KeyboardInterrupt` still raises it (the existing `test_interrupt_propagates_after_cancel_message`, `test_cli.py:402-412`, stays green).
+- [x] `test_i18n.py::test_es_and_en_have_same_keys` passes with the three new keys.
+- [x] Every new e2e test that "fails on `main`" is shown to fail with the `src/` change reverted (constraints, Verification 5).
 
 ## Live check
 
@@ -241,7 +241,46 @@ Not needed. Every failure here happens on the local machine: creating the folder
 
 Minor (counted in the 0.4.0 batch): three new messages. Nothing breaking. No flag, default or state path changes.
 
+## Validation
+
+On `main` at `01977a6` (merge `59638cc`; `01977a6` only changes `.ai/orchestration/state.json`), with yt-dlp 2026.10.26, ffmpeg n9.0.2 and Python 3.14.9. GitHub CI run 42496586384 was `in_progress` at validation time (`gh run view 42496586384`). The orchestrator checks its result.
+
+- **Gate:** not re-run here, as the orchestrator asked. The tech-lead ran `scripts/pre-release.sh --no-live` on the merge: exit 0, 1775 passed, 2 xfailed. Here, `ruff check src tests` is clean and `mypy` reports `no issues found in 14 source files`. `ruff format --check` flags 6 files, the same 6 as on the parent `59638cc^1`. None of the flagged hunks is in a line this merge touched, and the gate doesn't run it (row 05).
+- **Targeted run:** `.venv/bin/pytest tests/test_cli.py tests/test_downloader.py tests/test_e2e.py tests/test_i18n.py -k <every test the merge added or changed, plus test_interrupt_propagates_after_cancel_message and test_es_and_en_have_same_keys>` gives 39 passed, none skipped. That includes the read-only folder tests, run as a non-root user. `tests/test_cli.py tests/test_downloader.py tests/test_i18n.py` in full gives 133 passed.
+- **Reverting the fix:** the merged tests ran against the parent's `src/`. The trees came from `git archive` into the scratchpad, with `PYTHONPATH` pointing at the parent's `src`. Result: 30 failed, 9 passed. The failures are the original uncaught `NotADirectoryError`, `TypeError` and `PermissionError`, which shows the tests fail on the bug and not only on the missing message keys. The 9 that pass were meant to: the `KeyboardInterrupt`, `SystemExit` and `GeneratorExit` pins, the i18n key check, `-p crash VIDEO` (the criterion that its output stays the same), the `-p` half of the spec-28 D9 test, and `test_listing_formats_never_creates_the_folder`.
+- **Criteria, one by one:**
+  - Folder, two URLs: `test_a_folder_that_cannot_be_created_fails_each_url`.
+  - `-p` carousel: `test_a_folder_that_cannot_be_created_fails_a_list_once`.
+  - Wizard with two URLs: `test_wizard_with_a_folder_that_cannot_be_created_saves_the_next_url`.
+  - `crash VIDEO`: `test_an_extractor_bug_fails_only_its_url`.
+  - `-p crash VIDEO`: `test_an_extractor_bug_in_a_list_is_still_reported_by_yt_dlp`, which also passes on the parent.
+  - `-a` into a read-only folder: `test_a_thumbnail_that_cannot_be_written_fails_with_the_system_error`.
+  - `-l crash`: `test_an_extractor_bug_while_listing_formats_is_reported`.
+  - Unit tests: `test_system_error_fails_only_the_url[flags0, flags1]` and `test_interrupt_propagates_after_cancel_message`.
+  - i18n: `test_es_and_en_have_same_keys`.
+- **Reproduction:** the Problem's command, run through the real console script with `HOME` and `XDG_STATE_HOME` in an empty scratch folder.
+  - `LANG=en_US.UTF-8 .venv/bin/download-media -y -o /proc/x 'http://127.0.0.1:9/a.mp4' 'http://127.0.0.1:9/b.mp4'` exits 1 with no `Traceback`. On stderr, `Can't save to /proc/x: No such file or directory. Choose another folder with -o.` appears twice. On stdout, `Download failed:` appears for each URL, followed by `download-media -y -o /proc/x http://127.0.0.1:9/a.mp4 http://127.0.0.1:9/b.mp4`.
+  - `LANG=es_ES.UTF-8` gives the same, with `No se puede guardar en /proc/x: No such file or directory. Elige otra carpeta con -o.`, `Falló la descarga:` and `Comando equivalente para repetir esta descarga:`.
+  - Afterwards the scratch `HOME` and `XDG_STATE_HOME` were still empty: no history row. Nothing reached the network, and no file was written.
+- **Scope:** the merge `59638cc^1..59638cc` touches the six files in the Files table plus `tests/test_downloader.py` (below). There are no changes to `pyproject.toml`, `PKGBUILD`, `equivalent.py`, `history.py` or the version.
+
+### What changed after approval
+
+- **`tests/test_downloader.py`** isn't in the Files table. The test-engineer added `test_a_folder_that_cannot_be_created_raises_before_yt_dlp_starts`, which pins that `download()` raises `OutputUnusable`, with `reason == "Not a directory"`, before `_Ydl` is built, and leaves the blocking file alone. QA flagged it as minor. It's a test-only file, so a collision with another item's Files table would only show up at merge time.
+- **The spec-28 D9 test was tightened.** The developer changed `test_a_folder_the_thumbnail_cannot_be_written_to_still_fails` (`test_e2e.py`), which used to accept the single-mode `OSError` escaping as a traceback (`code = None`). Now both its cases (single and `-p`) require exit 1 and `Download failed`. This is the behaviour spec 28 D9 left for "its own row", which is this one. Its single-mode case fails with the fix reverted.
+- **The test-engineer added 26 tests, not 31.** The collected count went 1742 (parent) → 1751 (`2ba6ef1`, the developer: 9) → 1777 (`0a2ae8a`, the test-engineer: 26, from 17 functions), and 1777 = 1775 passed + 2 xfailed, as in the gate. The handoff said 31. The tests themselves are the ones listed in `0a2ae8a`'s message: each reason a folder can't be created, direct mode after the preview, `-P`, `--playlist-items` and `-p` on a carousel, a bug between two URLs, total failure, cookies with no retry, the wizard's manual flow and picker, `-l` never creating the folder, both languages, the stream each message goes to, the `BaseException` pins, an `OSError` in `-l`, a bug on the cookie retry, an `OSError` with no `strerror`, and `main`'s exit and command after a bug.
+- **The folder reason stays English inside a Spanish message** (QA, minor, `downloader.py:492`). Design chose `exc.strerror`, which is the C library's text: Python doesn't call `setlocale`, so it's English in both locales. The reproduction shows it as `No se puede guardar en /proc/x: No such file or directory.` Known, and within the spec.
+
+### Remaining risks (for the planner)
+
+1. The reason comes from the OS and is English under `es`. Translating the common `errno`s (`ENOENT`, `EEXIST`, `ENOTDIR`, `EACCES`, `EROFS`, `ENOSPC`) would be a small i18n item. It would fit row 02's batch.
+2. A run that fails on the folder still creates every parent it could before the failing one, as before this item (D5 A).
+
 ## Open decisions
+
+**Changes published behaviour, for the human's review before the release that ships it (0.4.0 as planned): D1 to D5.** The orchestrator approved all five on option A, under the human's delegation, and they are merged. In single mode (wizard, direct, `-y`, `-P`) and in `-l`, an error that isn't a `DownloadError` now fails only its URL. The run goes on, prints the command and exits 1, where it used to end in a traceback that skipped the later URLs. An `OSError` gets one line (`unexpected_error`). Anything else gets its traceback on stderr followed by `unexpected_bug` (D2). A folder that can't be created gets `output_unusable` (D3), and our `mkdir` stays (D5). Undoing one means a revert commit. D1 B means narrowing the `except Exception` in `_download_one` to `except OSError`. D2 B means dropping the `traceback.print_exception` line in `_report_unexpected`. D4 B means removing the `except Exception` from `_list_formats`.
+
+Resolved by the orchestrator under the human's delegation, each on the recommended option: D1 A, D2 A, D3 A, D4 A, D5 A.
 
 The human delegated these to the roles. Each one has a recommended option for the orchestrator to approve and record. **They change published behaviour, so they are marked for the human's review before the release that ships them.**
 
