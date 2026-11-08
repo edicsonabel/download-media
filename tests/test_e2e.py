@@ -3624,7 +3624,8 @@ def test_what_the_user_reads_about_each_kind_in_both_languages(
 
 GATED = "https://fake.test/needs-cookies"
 # detect_site reads the whole URL, and FakeSiteIE ignores the query.
-COOKIE_HUNGRY = f"{GATED}?from=instagram.com"
+COOKIE_HUNGRY = f"{GATED}?from=x.com"
+X_CAROUSEL = f"{CAROUSEL}?from=x.com"
 NO_COOKIES = "1"
 FIRST_BROWSER = "2"
 # Type, quality, container, folder.
@@ -3740,6 +3741,43 @@ def test_a_host_that_only_ends_in_x_com_is_not_asked_for_cookies_up_front(
     assert len(names(out)) == 2
 
 
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_a_public_instagram_carousel_is_probed_before_any_cookies_question(
+    wizard_on: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    # URL, picker, type, quality, container, folder, and the late cookies step.
+    code, output = wizard_on("https://fake.test/carousel?from=instagram.com", *PICKER_WALK)
+    assert code == 0
+    assert t("auth_needed_pre") not in output
+    assert output.count(t("ask_cookies")) == 1
+    assert f"instagram / {t('kind_playlist')}" in output
+    assert len(names(out)) == 2
+
+
+def test_a_gated_instagram_post_asks_for_cookies_once_after_the_probe(
+    wizard_on: Any, out: Path
+) -> None:
+    url = f"{GATED}?from=instagram.com"
+    code, output = wizard_on(url, "", FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert t("auth_needed_pre") not in output
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert output.count(t("ask_cookies")) == 1
+    assert names(out) == ["Clip.mp4"]
+    [line] = commands(output)
+    assert f"--cookies {BROWSERS[0]}" in line
+
+
+def test_declining_cookies_on_a_gated_instagram_post_asks_once(wizard_on: Any, out: Path) -> None:
+    # Then the manual steps and the preview.
+    code, output = wizard_on(f"{GATED}?from=instagram.com", "", NO_COOKIES, *VIDEO_STEPS, "")
+    assert code == 1
+    assert output.count(t("ask_cookies")) == 1
+    assert names(out) == []
+
+
 def test_declining_twice_on_a_cookie_hungry_site_asks_no_third_time(
     wizard_on: Any, out: Path
 ) -> None:
@@ -3764,13 +3802,11 @@ def test_a_browser_given_up_front_needs_no_retry(wizard_on: Any, out: Path) -> N
 
 
 def test_a_public_carousel_on_a_cookie_hungry_site_asks_once(wizard_on: Any) -> None:
-    url = "https://fake.test/carousel?from=instagram.com"
-    code, output = wizard_on(url, "", NO_COOKIES, "", *VIDEO_STEPS)
+    code, output = wizard_on(X_CAROUSEL, "", NO_COOKIES, "", *VIDEO_STEPS)
     assert code == 0
     assert output.count(t("ask_cookies")) == 1
 
 
-X_CAROUSEL = "https://fake.test/carousel?from=x.com"
 BACK_TWICE = ("", "b", "", "b")
 
 
@@ -4083,11 +4119,11 @@ def test_a_browser_that_is_not_installed_is_named_and_the_page_still_detected(
 def test_a_browser_that_is_not_installed_picked_up_front_still_detects_the_page(
     generic: Any, home: Path
 ) -> None:
-    code, output = generic("poster.html?from=instagram.com", "", CHROME, *VIDEO_STEPS)
+    code, output = generic("poster.html?from=x.com", "", CHROME, *VIDEO_STEPS)
     assert code == 0
     assert output.count(no_browser()) == 1
     # detect_site reads the whole URL.
-    assert f"instagram / {t('kind_video')}" in output
+    assert f"x / {t('kind_video')}" in output
     assert output.count(t("ask_cookies")) == 1
     assert len(names(home / "Videos")) == 1
 
@@ -5917,7 +5953,7 @@ def test_a_login_wall_after_a_missing_browser_up_front_asks_once_more_only(
 ) -> None:
     # Up front: chrome can't be read, the cookieless probe meets the login wall, and the retry
     # prompt gets one more browser. That one can't be read either: no fourth probe, no loop.
-    page = "status/401/login?from=instagram.com"
+    page = "status/401/login?from=x.com"
     code, output = generic(page, "", CHROME, CHROME, *VIDEO_STEPS, "")
     assert code == 1
     assert output.count(no_browser()) == 2

@@ -171,13 +171,13 @@ def test_clipboard_prompt_eof_cancels(
 
 
 def test_cookie_hungry_site_asks_before_probing(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     opts = walk(video_probe(), "", BRAVE, "", "", "", "", opts=site)
     assert opts.cookies_browser == "brave"
 
 
 def test_back_from_first_cookies_prompt_restarts_url(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     opts = walk(video_probe(), "", "b", "", "1", "", "", "", "", opts=site)
     assert opts is not None
 
@@ -190,12 +190,12 @@ def test_back_at_the_first_cookies_prompt_can_be_pressed_again(walk: Any) -> Non
 
 
 def test_cancel_at_first_cookies_prompt(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     assert walk(video_probe(), "", "c", opts=site) is None
 
 
 def test_cancel_after_back_from_first_cookies_prompt(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     assert walk(video_probe(), "", "b", "c", opts=site) is None
 
 
@@ -516,7 +516,7 @@ def test_run_all_splits_urls_typed_together(walk_all: Any) -> None:
 def test_run_all_splits_urls_typed_after_back_from_the_first_cookies_prompt(
     walk_all: Any,
 ) -> None:
-    hungry = "https://www.instagram.com/p/x/"
+    hungry = X_STATUS
     # URL, back from cookies, URL again, cookies, type, quality, container, folder.
     first = ("", "b", f"{hungry} {OTHER}", "1", "", "", "", "")
     walked, prompts = walk_all([hungry], *first, *[""] * 5)

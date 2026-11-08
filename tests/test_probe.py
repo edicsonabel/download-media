@@ -54,7 +54,8 @@ def test_detect_site(url: str, expected: str) -> None:
 
 
 def test_cookie_hungry_sites() -> None:
-    assert site_likely_needs_cookies("instagram") is True
+    # A login wall on Instagram reaches the retry after the probe: public posts need no cookies.
+    assert site_likely_needs_cookies("instagram") is False
     assert site_likely_needs_cookies("x") is True
     assert site_likely_needs_cookies("facebook") is True
     assert site_likely_needs_cookies("youtube") is False
