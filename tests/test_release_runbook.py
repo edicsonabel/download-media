@@ -180,3 +180,25 @@ def test_commands_avoid_zsh_modifiers() -> None:
     code += re.findall(r"`[^`\n]+`", re.sub(r"```.*?```", "", text, flags=re.DOTALL))
     hits = [m for block in code for m in re.findall(r"\$\w+:[A-Za-z]\S*", block)]
     assert not hits, f"release-manager.md has zsh-unsafe expansions {hits}"
+
+
+def _code_blocks() -> list[str]:
+    return re.findall(r"```[a-z]*\n(.*?)```", _text(), flags=re.DOTALL)
+
+
+def test_code_blocks_set_what_they_use() -> None:
+    # Each Bash call starts a fresh shell. A block that reads $last or calls keys()
+    # from an earlier block runs `keys ""` and `git log ..HEAD`: no evidence, exit 0.
+    assert "fresh shell" in _text(), "release-manager.md doesn't say each call is a fresh shell"
+    blocks = [re.sub(r"(^|\s)#.*$", "", b, flags=re.MULTILINE) for b in _code_blocks()]
+    defined = {f for b in blocks for f in re.findall(r"^\s*(\w+)\(\)\s*\{", b, flags=re.MULTILINE)}
+    assert "keys" in defined, "release-manager.md defines no keys() helper"
+    problems = []
+    for block in blocks:
+        here = set(re.findall(r"^\s*(\w+)\(\)\s*\{", block, flags=re.MULTILINE))
+        assigned = set(re.findall(r"(?:^|[\s;(])([a-z_]\w*)=", block, flags=re.MULTILINE))
+        used = set(re.findall(r"\$\{?([a-z_]\w*)", block))
+        problems += [f"${v}" for v in sorted(used - assigned - here)]
+        calls = {f for f in defined if re.search(rf"(?<![\w-]){f}(?![\w(-])", block)}
+        problems += [f"{f}()" for f in sorted(calls - here)]
+    assert not problems, f"release-manager.md blocks use what they don't set: {problems}"

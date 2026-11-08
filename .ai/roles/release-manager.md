@@ -17,6 +17,8 @@ Get a verified version into users' hands, and be sure it arrived. It is the only
 
 All stages run in the main worktree, on `main`.
 
+Each Bash call starts a fresh shell: a variable or function set in one call is gone in the next. So each code block below runs as one call, and sets everything it uses. The exception is a block with a `<run-id>` or `<job-id>`: run it line by line, filling those in from the line before; such blocks use no variables. A call shows only its last exit code, so a line whose exit code is the answer prints it.
+
 ## Preflight
 
 Read-only. Run it in `preparation`, so the human approves knowing the result, and again as the first step of `publishing`, because the account can change in between.
@@ -24,9 +26,9 @@ Read-only. Run it in `preparation`, so the human approves knowing the result, an
 ```bash
 git status --porcelain                                         # empty
 git rev-parse --abbrev-ref HEAD                                # main
-git fetch origin && git merge-base --is-ancestor origin/main HEAD   # exit 0: main fast-forwards
-git rev-parse -q --verify "refs/tags/v<version>"               # exit 1: no local tag
-git ls-remote --exit-code --tags origin "v<version>"           # exit 2: no remote tag
+git fetch origin && git merge-base --is-ancestor origin/main HEAD; echo "fast-forward: exit $?"   # 0
+git rev-parse -q --verify "refs/tags/v<version>"; echo "local tag: exit $?"     # 1: no local tag
+git ls-remote --exit-code --tags origin "v<version>"; echo "remote tag: exit $?"   # 2: no remote tag
 gh api user --jq .login                                        # the gh account
 gh api repos/{owner}/{repo} --jq .permissions.push             # must print true
 ssh -T git@github.com                                          # "Hi <login>!": the same login as gh
@@ -44,23 +46,28 @@ Changes nothing that leaves the machine.
 git status                                  # must be clean
 last="$(git describe --tags --abbrev=0)"
 git log --oneline "$last"..HEAD
-test -f .ai/live.env                        # fails: result blocked (step 3), stop here
-set -a; . .ai/live.env; set +a
-scripts/pre-release.sh                      # the full gate, with live tests
+if test -f .ai/live.env; then
+  set -a; . .ai/live.env; set +a
+  scripts/pre-release.sh                    # the full gate, with live tests
+else
+  echo "no .ai/live.env"; false             # result blocked (step 3)
+fi
 ```
 
 1. **Version.** Follow the `Versioning` section of `AGENTS.md`. It goes by what changed for users, so commit types alone don't decide it: a `fix` commit that adds a message counts as what `AGENTS.md` says new messages are. If the human named a version, use it, and report it if yours differs. Report this evidence:
 
    ```bash
+   last="$(git describe --tags --abbrev=0)"
    keys() { git show "${1}:src/download_media/i18n.py" | grep -oE '^\s+"[a-z0-9_]+":' | tr -d ' ":' | sort -u; }
+   echo "since $last"
    comm -13 <(keys "$last") <(keys HEAD)                                            # new messages
    git diff "$last"..HEAD -- src/download_media/cli.py | grep -E '^\+.*"--[a-z-]+"'   # new flags
-   git log "$last"..HEAD --format=%B | grep -E '^BREAKING CHANGE|^[a-z]+(\(.+\))?!:'  # breaking
+   git log "$last"..HEAD --format=%B | grep -E '^BREAKING CHANGE|^[a-z]+(\(.+\))?!:' || echo "no breaking marker"
    ```
 
-   plus the `SemVer` section of each spec in Read first, where it has one.
+   If `since` names no tag, the evidence is empty, not zero: result `blocked`. Add the `SemVer` section of each spec in Read first, where it has one.
 2. Write `.ai/releases/<version>.md`: what changed for users, in plain words, and anything they must do. Commit: `docs(release): add <version> notes`.
-3. If `.ai/live.env` is missing, the `test -f` line above fails before anything sources it: result `blocked`. Skipping the live tests is not an option here.
+3. If `.ai/live.env` is missing, the block above prints `no .ai/live.env` and exits 1, with nothing sourced and no gate run: result `blocked`. Skipping the live tests is not an option here.
 4. Run the Preflight.
 5. Build the **pre-publish checklist** and put it in the report, one line per entry, each marked done, not run or pending:
    - **Gate:** the full gate's result, every `xfail`, every skipped test. A skipped live test is a live step not run.
