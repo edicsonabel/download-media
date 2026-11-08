@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T21:10:14-04:00",
+  "updated": "2026-11-07T21:19:18-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1267,13 +1267,15 @@
     "fix/workflow-pins": {
       "type": "fix",
       "title": "Pin workflow actions and runner, add job timeouts, harden the ffmpeg step",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/10-workflow-pins.md",
       "branch": "fix/workflow-pins",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-workflow-pins",
+      "commits": [
+        "4c2aafd"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -1285,6 +1287,20 @@
           "result": "approved",
           "at": "2026-11-07T21:10:14-04:00",
           "note": "Next in the planner's order; container-choice waits on a human decision (remux or recode), so it is skipped for now. Under the human's standing delegation."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T21:19:18-04:00",
+          "note": "Evidence from recorded runs: slow mirror at 58 KB/s, not a hang; Node 20 in both deploy workflows; runner already ubuntu-26.04. Decisions D1-D6. Planner: AUR deploy job could drop checkout; SHA pinning plus Dependabot; row 12's premise is wrong (pre-release.sh has set -euo pipefail)."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T21:19:18-04:00",
+          "note": "Spec approved under the human's delegation, every recommended option."
         }
       ]
     }
