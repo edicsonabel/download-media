@@ -71,15 +71,26 @@ Only after the human approves. In this order:
 ```bash
 # 0. The Preflight again. Any failure: blocked.
 
-# 1. Bump the 4 places listed in AGENTS.md
+# 1. Push what's waiting on main, and let CI prove it before anything is tagged
+git push origin main
+gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json databaseId,conclusion
+gh run watch <run-id> --exit-status
+
+# 2. Bump the 4 places listed in AGENTS.md
 scripts/pre-release.sh --no-live            # version sync is part of the gate
 git commit -am "build: release <version>"
 git tag v<version>
-git push origin main "v<version>"
-gh release create "v<version>" --title "v<version>" --notes-file .ai/releases/<version>.md
+
+# 3. Both refs, or neither
+git push --atomic origin main "v<version>"
+
+# 4. The release, on the tag just pushed, never a new tag
+gh release create "v<version>" --verify-tag --title "v<version>" --notes-file .ai/releases/<version>.md
 ```
 
-If any step fails, stop there with result `blocked`. Don't retry a publishing step, delete a tag or force-push on your own.
+- Step 1: the run can take a few seconds to appear after the push; list again. If `HEAD` was already on `origin`, its existing run counts. A red run is `blocked`: nothing is tagged, and the fix goes through the pipeline.
+- Step 4: if it fails, the tag is out and the AUR deploy runs anyway, since it downloads the tag's archive, not a release asset. Result `blocked`; the human decides whether to run step 4 again.
+- If any step fails, stop there with result `blocked`. Don't retry a publishing step, delete or move a tag, or force-push on your own.
 
 ## Stage `verification`
 
