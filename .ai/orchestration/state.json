@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T19:50:21-04:00",
+  "updated": "2026-11-08T19:58:26-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1899,9 +1899,9 @@
     "fix/format-baseline": {
       "type": "fix",
       "title": "Format the 6 files ruff format flags and enforce it in the gate",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/05-format-baseline.md",
       "branch": "fix/format-baseline",
       "worktree": ".worktrees/fix-format-baseline",
@@ -1910,7 +1910,8 @@
         "7f11724",
         "6d3821e",
         "bf578da",
-        "cabcc97"
+        "cabcc97",
+        "1958c24"
       ],
       "review": {
         "approved": true,
@@ -1972,6 +1973,20 @@
           "result": "merged",
           "at": "2026-11-08T19:50:21-04:00",
           "note": "cabcc97 --no-ff, no conflicts, 10 files +219/-79. Gate on main exit 0 (format: 37 files already formatted; 1936 passed + 2 xfailed). blame-ignore SHA reachable from main; blame on probe.py:78-89 credits 6fd8fdd/66b98a2, not 72398ad."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-08T19:58:26-04:00",
+          "note": "10/10 criteria, 5/5 cases on main a5e7aa5. Gate exit 0 (format step). Mutations and probe re-proved. blame-ignore OK. CI 42537098110 green. 1958c24: spec done, PLAN row 05 done."
+        },
+        {
+          "stage": "complete",
+          "agent": "orchestrator",
+          "result": "done",
+          "at": "2026-11-08T19:58:26-04:00",
+          "note": "Worktree and branch removed. No behaviour change; nothing for the 0.4.0 review list."
         }
       ]
     }
