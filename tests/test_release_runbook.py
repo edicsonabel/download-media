@@ -5,6 +5,7 @@ Each check pins a step of the 0.2.0 release that went wrong or nearly did (spec 
 
 from __future__ import annotations
 
+import re
 import subprocess
 from itertools import pairwise
 from pathlib import Path
@@ -169,3 +170,13 @@ def test_preparation_checks_live_env_before_sourcing_it() -> None:
     assert source is not None, f"{PREPARATION} never sources .ai/live.env"
     checks = [ln for ln in lines[:source] if "-f .ai/live.env" in ln]
     assert checks, f"{PREPARATION} sources .ai/live.env before checking that it exists"
+
+
+def test_commands_avoid_zsh_modifiers() -> None:
+    # The release-manager's shell may be zsh, where "$1:src" reads ":s" as a modifier
+    # and fails with "bad substitution". "${1}:src" works in bash and zsh alike.
+    text = _text()
+    code = re.findall(r"```.*?```", text, flags=re.DOTALL)
+    code += re.findall(r"`[^`\n]+`", re.sub(r"```.*?```", "", text, flags=re.DOTALL))
+    hits = [m for block in code for m in re.findall(r"\$\w+:[A-Za-z]\S*", block)]
+    assert not hits, f"release-manager.md has zsh-unsafe expansions {hits}"

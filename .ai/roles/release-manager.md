@@ -52,7 +52,7 @@ scripts/pre-release.sh                      # the full gate, with live tests
 1. **Version.** Follow the `Versioning` section of `AGENTS.md`. It goes by what changed for users, so commit types alone don't decide it: a `fix` commit that adds a message counts as what `AGENTS.md` says new messages are. If the human named a version, use it, and report it if yours differs. Report this evidence:
 
    ```bash
-   keys() { git show "$1:src/download_media/i18n.py" | grep -oE '^\s+"[a-z0-9_]+":' | tr -d ' ":' | sort -u; }
+   keys() { git show "${1}:src/download_media/i18n.py" | grep -oE '^\s+"[a-z0-9_]+":' | tr -d ' ":' | sort -u; }
    comm -13 <(keys "$last") <(keys HEAD)                                            # new messages
    git diff "$last"..HEAD -- src/download_media/cli.py | grep -E '^\+.*"--[a-z-]+"'   # new flags
    git log "$last"..HEAD --format=%B | grep -E '^BREAKING CHANGE|^[a-z]+(\(.+\))?!:'  # breaking
