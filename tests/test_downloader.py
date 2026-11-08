@@ -13,6 +13,7 @@ import pytest
 
 from download_media.config import DownloadOptions
 from download_media.downloader import build_ydl_opts
+from download_media.i18n import t
 
 
 def test_default_video_options() -> None:
@@ -175,42 +176,70 @@ def test_carousel_items_always_get_their_id(tmp_path: Path) -> None:
     assert pp.run(info)[1]["_name_suffix"] == " [A]"
 
 
-def _filtered(**info) -> tuple[str | None, list[str]]:
+def _filtered(keep_images: bool = True, **info) -> tuple[str | None, list[str]]:
     from download_media.downloader import _skip_items_without_media
 
     skipped: list[str] = []
-    return _skip_items_without_media(skipped)(info, incomplete=True), skipped
+    match_filter = _skip_items_without_media(skipped, keep_images=keep_images)
+    return match_filter(info, incomplete=True), skipped
 
 
-def test_filter_skips_playlist_entry_without_media() -> None:
-    reason, skipped = _filtered(id="a", playlist_index=1, formats=[])
-    assert reason
+IMAGE_THUMBS = [{"url": "http://x/img.jpg"}]
+
+
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_skips_playlist_entry_without_media(keep_images: bool) -> None:
+    reason, skipped = _filtered(keep_images, id="a", playlist_index=1, formats=[])
+    assert reason == t("item_no_media", "a")
     assert skipped == ["a"]
 
 
-def test_filter_passes_playlist_metadata() -> None:
-    assert _filtered(playlist="Post", playlist_id="p") == (None, [])
+@pytest.mark.parametrize("extra", [{"thumbnails": IMAGE_THUMBS}, {"thumbnail": "http://x/i.jpg"}])
+def test_filter_passes_an_image_when_images_are_kept(extra: dict[str, Any]) -> None:
+    assert _filtered(True, id="a", playlist_index=1, formats=[], **extra) == (None, [])
 
 
-def test_filter_passes_lone_urls() -> None:
-    assert _filtered(id="a", formats=[]) == (None, [])
+@pytest.mark.parametrize("extra", [{"thumbnails": IMAGE_THUMBS}, {"thumbnail": "http://x/i.jpg"}])
+def test_filter_skips_an_image_as_an_image_in_audio_and_list_modes(extra: dict[str, Any]) -> None:
+    reason, skipped = _filtered(False, id="a", playlist_index=1, formats=[], **extra)
+    assert reason == t("item_image_skipped", "a")
+    assert skipped == ["a"]
 
 
-def test_filter_passes_entries_with_media() -> None:
-    assert _filtered(id="a", playlist_index=1, formats=[{"url": "u"}]) == (None, [])
-    assert _filtered(id="a", playlist_index=1, url="u") == (None, [])
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_passes_playlist_metadata(keep_images: bool) -> None:
+    assert _filtered(keep_images, playlist="Post", playlist_id="p") == (None, [])
+
+
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_passes_lone_urls(keep_images: bool) -> None:
+    assert _filtered(keep_images, id="a", formats=[]) == (None, [])
+    assert _filtered(keep_images, id="a", formats=[], thumbnails=IMAGE_THUMBS) == (None, [])
+
+
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_passes_entries_with_media(keep_images: bool) -> None:
+    media = {"id": "a", "playlist_index": 1, "thumbnails": IMAGE_THUMBS}
+    assert _filtered(keep_images, **media, formats=[{"url": "u"}]) == (None, [])
+    assert _filtered(keep_images, **media, url="u") == (None, [])
 
 
 def test_filter_passes_entries_resolved_later() -> None:
     assert _filtered(id="a", playlist_index=1, _type="url") == (None, [])
+    assert _filtered(False, id="a", playlist_index=1, _type="url", thumbnails=IMAGE_THUMBS) == (
+        None,
+        [],
+    )
 
 
 def test_filter_ignores_complete_entries() -> None:
     from download_media.downloader import _skip_items_without_media
 
     skipped: list[str] = []
-    match_filter = _skip_items_without_media(skipped)
+    match_filter = _skip_items_without_media(skipped, keep_images=False)
     assert match_filter({"id": "a", "playlist_index": 1}, incomplete=False) is None
+    image = {"id": "a", "playlist_index": 1, "formats": [], "thumbnails": IMAGE_THUMBS}
+    assert match_filter(image, incomplete=False) is None
     assert skipped == []
 
 

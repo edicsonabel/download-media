@@ -271,21 +271,17 @@ def step_select(opts: DownloadOptions, items: list[ProbeItem], preset: str | Non
     """Show carousel items and ask the user which to download.
 
     Default (Enter) keeps the command line's ``--playlist-items`` as given,
-    or else selects supported videos only. Unsupported items
-    (e.g. Instagram carousel images) are visually flagged and skipped if
-    selected.
+    or else selects every supported item. Unsupported items are visually
+    flagged and skipped if selected.
     """
     print()
-    has_unsupported_image = any(
-        not it.supported and it.kind == ContentKind.SINGLE_IMAGE for it in items
-    )
-    if has_unsupported_image:
-        warn(f"  ⚠ {t('ig_image_warning')}")
     for it in items:
         if it.supported and it.kind == ContentKind.SINGLE_VIDEO:
             tag, color = t("kind_video").lower(), C.GREEN
         elif it.supported and it.kind == ContentKind.SINGLE_AUDIO:
             tag, color = t("kind_audio").lower(), C.CYAN
+        elif it.supported and it.kind == ContentKind.SINGLE_IMAGE:
+            tag, color = t("kind_image").lower(), C.YELLOW
         elif it.kind == ContentKind.SINGLE_IMAGE:
             tag, color = t("kind_image").lower(), C.DIM
         else:
@@ -299,7 +295,7 @@ def step_select(opts: DownloadOptions, items: list[ProbeItem], preset: str | Non
             reply = input(
                 t("ask_selection_default_preset", preset)
                 if preset
-                else t("ask_selection_default_videos")
+                else t("ask_selection_default")
             )
         except EOFError as e:
             raise _Cancel from e
@@ -311,9 +307,7 @@ def step_select(opts: DownloadOptions, items: list[ProbeItem], preset: str | Non
         if not low and preset:
             opts.playlist_items = preset
         elif not low:
-            indices = [it.index for it in items if it.supported and it.kind == ContentKind.SINGLE_VIDEO]
-            if not indices:
-                indices = [it.index for it in items if it.supported]
+            indices = [it.index for it in items if it.supported]
             if not indices:
                 warn(t("no_supported_items"))
                 raise _Cancel
@@ -401,8 +395,21 @@ def _build_post_probe_plan(
     return steps
 
 
-def _step_applies(name: str, opts: DownloadOptions) -> bool:
+def _images_only(opts: DownloadOptions, items: list[ProbeItem]) -> bool:
+    """Whether every item the selection names is an image the tool can save."""
+    if not items or opts.playlist_items is None:
+        return False
+    picked = parse_selection(opts.playlist_items, len(items))
+    if picked is None:  # A --playlist-items spec only yt-dlp reads, like "-1".
+        return False
+    chosen = [items[i - 1] for i in picked] if picked else items
+    return all(it.supported and it.kind == ContentKind.SINGLE_IMAGE for it in chosen)
+
+
+def _step_applies(name: str, opts: DownloadOptions, images_only: bool = False) -> bool:
     """Whether a step actually has work to do given current opts."""
+    if images_only and name in ("type", "quality", "container", "aformat"):
+        return False
     if name in ("quality", "container"):
         return not opts.audio_only
     if name == "aformat":
@@ -441,10 +448,18 @@ def _walk_plan(
     ``asked`` holds steps answered before the walk: listed in the summary, never gone back to.
     """
     history: list[str] = []
+    # -a as it stood before a selection of images only turned it off.
+    audio_before_images: bool | None = None
     i = 0
     while i < len(plan):
         name = plan[i]
-        if not _step_applies(name, opts):
+        images_only = _images_only(opts, items)
+        if images_only and audio_before_images is None:
+            # Images are saved as images: audio mode would skip them all.
+            audio_before_images, opts.audio_only = opts.audio_only, False
+        elif not images_only and audio_before_images is not None:
+            opts.audio_only, audio_before_images = audio_before_images, None
+        if not _step_applies(name, opts, images_only):
             # Silent skip; don't push to history (so back navigates correctly)
             i += 1
             continue

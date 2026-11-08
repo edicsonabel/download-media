@@ -331,8 +331,8 @@ MIXED = [
 
 @pytest.mark.parametrize(
     "items,selected",
-    [(MIXED, "3"), ([MIXED[0], MIXED[1], MIXED[3]], "2,4"), ([MIXED[3]], "4")],
-    ids=["videos-win", "fallback-keeps-audio-and-unknown", "audio-alone"],
+    [(MIXED, "2,3,4"), ([MIXED[0], MIXED[1], MIXED[3]], "2,4"), ([MIXED[3]], "4")],
+    ids=["every-supported-kind", "unsupported-left-out", "audio-alone"],
 )
 def test_enter_on_mixed_kinds(walk: Any, items: list[ProbeItem], selected: str) -> None:
     opts = walk(carousel(items), "", "", "", "", "", "", "")
@@ -354,10 +354,10 @@ def test_summary_and_preselection_on_a_playlist_of_unknown_items(
     assert "1,2" in capsys.readouterr().out
 
 
-def test_carousel_default_selects_videos(walk: Any) -> None:
+def test_carousel_default_selects_every_supported_item(walk: Any) -> None:
     opts = walk(carousel(), "", "", "", "", "", "", "")
     assert opts.playlist_mode == "yes"
-    assert opts.playlist_items == "2"
+    assert opts.playlist_items == "2,3"
 
 
 def test_carousel_default_keeps_the_playlist_items_flag(walk: Any) -> None:
@@ -369,7 +369,73 @@ def test_carousel_default_keeps_the_playlist_items_flag(walk: Any) -> None:
 def test_carousel_default_ignores_an_empty_playlist_items_flag(walk: Any) -> None:
     preset = DownloadOptions(urls=[URL], playlist_items="")
     opts = walk(carousel(), "", "", "", "", "", "", "", opts=preset)
-    assert opts.playlist_items == "2"
+    assert opts.playlist_items == "2,3"
+
+
+IG_POST = [
+    ProbeItem(1, ContentKind.SINGLE_IMAGE, True, "Video by user"),
+    ProbeItem(2, ContentKind.SINGLE_VIDEO, True, "Video by user"),
+    ProbeItem(3, ContentKind.SINGLE_IMAGE, False, "(image #3)"),
+    ProbeItem(4, ContentKind.SINGLE_IMAGE, True, "Video by user"),
+]
+
+
+def test_enter_selects_the_images_that_can_be_saved(walk: Any) -> None:
+    # URL, picker, type, quality, container, folder, cookies.
+    opts = walk(carousel(IG_POST), "", "", "", "", "", "", "")
+    assert opts.playlist_items == "1,2,4"
+
+
+def test_enter_on_images_only_asks_no_type_or_quality(walk: Any) -> None:
+    items = [ProbeItem(i, ContentKind.SINGLE_IMAGE, True, "Video by user") for i in (1, 2)]
+    # URL, picker, folder, cookies: nothing else is read.
+    opts = walk(carousel(items), "", "", "", "")
+    assert opts.playlist_items == "1,2"
+    assert opts.audio_only is False
+
+
+@pytest.mark.parametrize("audio_only", [False, True])
+def test_a_selection_of_only_images_skips_every_media_step(
+    monkeypatch: pytest.MonkeyPatch, answers: Any, audio_only: bool
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    monkeypatch.setattr(wizard, "probe", lambda url, cookies: carousel(IG_POST))
+    ran: list[str] = []
+    real = wizard._run_step
+
+    def spy(name: str, *args: Any) -> None:
+        ran.append(name)
+        real(name, *args)
+
+    monkeypatch.setattr(wizard, "_run_step", spy)
+    answers("", "1,4", "", "")
+    opts = wizard.run(DownloadOptions(urls=[URL], audio_only=audio_only))
+    assert opts is not None
+    assert ran == ["select", "output", "cookies"]
+    # Audio mode would skip every image: they are saved as images.
+    assert opts.audio_only is False
+
+
+def test_back_from_the_folder_after_only_images_returns_to_the_picker(
+    monkeypatch: pytest.MonkeyPatch, answers: Any
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    monkeypatch.setattr(wizard, "probe", lambda url, cookies: carousel(IG_POST))
+    ran: list[str] = []
+    real = wizard._run_step
+
+    def spy(name: str, *args: Any) -> None:
+        ran.append(name)
+        real(name, *args)
+
+    monkeypatch.setattr(wizard, "_run_step", spy)
+    # Images only, back from the folder, then a mixed pick under -a: the audio steps return.
+    answers("", "1,4", "b", "1,2", "", "", "", "")
+    opts = wizard.run(DownloadOptions(urls=[URL], audio_only=True))
+    assert opts is not None
+    assert ran == ["select", "output", "select", "type", "aformat", "output", "cookies"]
+    assert opts.playlist_items == "1,2"
+    assert opts.audio_only is True
 
 
 def test_carousel_without_videos_defaults_to_supported_items(walk: Any) -> None:

@@ -18,7 +18,7 @@ from typing import Any
 from yt_dlp.utils import MEDIA_EXTENSIONS, float_or_none, remove_terminal_sequences
 
 from .cookies import CookieFailure, cookie_failure, ydl_cookies
-from .downloader import _Ydl
+from .downloader import _Ydl, is_saveable_image
 
 
 class ContentKind(str, Enum):
@@ -257,14 +257,17 @@ def _classify_entry(entry: dict[str, Any] | None, idx: int) -> ProbeItem:
             supported=False,
             title=f"(item #{idx})",
         )
-    kind = _media_kind(entry) or ContentKind.SINGLE_IMAGE
+    kind = _media_kind(entry)
+    # Images come with no formats; the ones with a thumbnail are saved through it.
+    supported = is_saveable_image(entry) if kind is None else kind != ContentKind.SINGLE_IMAGE
+    kind = kind or ContentKind.SINGLE_IMAGE
 
     title = str(entry.get("title") or entry.get("id") or f"Item {idx}")
     title = title.replace("\n", " ").replace("|", "/")[:80]
     return ProbeItem(
         index=idx,
         kind=kind,
-        supported=kind != ContentKind.SINGLE_IMAGE,
+        supported=supported,
         title=title,
         duration=_seconds(entry),
     )

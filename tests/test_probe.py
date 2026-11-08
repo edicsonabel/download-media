@@ -452,9 +452,11 @@ def test_a_url_only_result_with_a_thumbnail_is_not_an_image() -> None:
     ],
 )
 def test_probe_and_match_filter_agree_on_nothing_to_fetch(extra: dict[str, Any]) -> None:
+    # In -a and -l, where images aren't saved.
     entry = {"id": "i", "title": "t", **extra}
     skipped: list[str] = []
-    verdict = _skip_items_without_media(skipped)({**entry, "playlist_index": 1}, incomplete=True)
+    match_filter = _skip_items_without_media(skipped, keep_images=False)
+    verdict = match_filter({**entry, "playlist_index": 1}, incomplete=True)
     assert (verdict is not None) is (_media_kind(entry) is None)
     assert bool(skipped) is (_media_kind(entry) is None)
 
@@ -465,9 +467,8 @@ def test_probe_and_match_filter_differ_on_an_empty_formats_list_with_a_url() -> 
     # would change what -y -p counts.
     entry = {"id": "i", "title": "t", "url": "http://x/f.mp4", "formats": []}
     skipped: list[str] = []
-    assert (
-        _skip_items_without_media(skipped)({**entry, "playlist_index": 1}, incomplete=True) is None
-    )
+    match_filter = _skip_items_without_media(skipped, keep_images=True)
+    assert match_filter({**entry, "playlist_index": 1}, incomplete=True) is None
     assert skipped == []
     assert _media_kind(entry) is None
     assert _classify_single(entry) != VIDEO
@@ -487,13 +488,30 @@ def test_a_duration_does_not_make_audio_a_video() -> None:
 
 @pytest.mark.parametrize(
     "extra",
-    [{}, {"thumbnails": [{"url": "http://x/img.jpg"}]}, {"duration": 3}],
-    ids=["plain", "thumbnails", "duration"],
+    [{}, {"duration": 3}, {"url": "http://x/f.mp4"}],
+    ids=["plain", "duration", "url"],
 )
 def test_entry_with_nothing_to_fetch_is_an_unsupported_image(extra: dict[str, Any]) -> None:
     item = _classify_entry({"id": "i", "title": "t", "formats": [], **extra}, 1)
     assert item.kind == IMAGE
     assert item.supported is False
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"formats": [], "thumbnails": [{"url": "http://x/img.jpg"}]},
+        {"thumbnails": [{"url": "http://x/img.jpg"}]},
+        {"formats": [], "thumbnail": "http://x/img.jpg"},
+    ],
+    ids=["thumbnails", "no-formats-key", "thumbnail"],
+)
+def test_entry_with_no_formats_and_a_thumbnail_is_a_supported_image(
+    extra: dict[str, Any],
+) -> None:
+    item = _classify_entry({"id": "i", "title": "t", **extra}, 1)
+    assert item.kind == IMAGE
+    assert item.supported is True
 
 
 def test_probe_never_raises(monkeypatch) -> None:
@@ -885,19 +903,22 @@ def test_probe_drops_the_bug_report_request(fake_site: Any) -> None:
 
 
 @pytest.mark.parametrize(
-    "page,kinds",
+    "page,kinds,supported",
     [
-        ("carousel", [IMAGE, VIDEO, IMAGE, VIDEO]),
-        ("ig-carousel", [IMAGE, VIDEO, VIDEO, IMAGE]),
-        ("only-images", [IMAGE, IMAGE]),
-        ("url-only-carousel", [VIDEO, VIDEO]),
+        ("carousel", [IMAGE, VIDEO, IMAGE, VIDEO], [False, True, False, True]),
+        ("ig-carousel", [IMAGE, VIDEO, VIDEO, IMAGE], [True, True, True, True]),
+        ("only-images", [IMAGE, IMAGE], [False, False]),
+        ("url-only-carousel", [VIDEO, VIDEO], [True, True]),
     ],
 )
-def test_a_healthy_carousel_keeps_its_items(fake_site: Any, page: str, kinds: list[Any]) -> None:
+def test_a_healthy_carousel_keeps_its_items(
+    fake_site: Any, page: str, kinds: list[Any], supported: list[bool]
+) -> None:
+    # Images with a thumbnail are saved through it; the carousel page's have none.
     result = probe(f"https://fake.test/{page}")
     assert result.content_kind == ContentKind.PLAYLIST
     assert [item.kind for item in result.items] == kinds
-    assert [item.supported for item in result.items] == [kind != IMAGE for kind in kinds]
+    assert [item.supported for item in result.items] == supported
     assert not result.failed
     assert not result.error_message
     assert result.needs_cookies is False

@@ -340,6 +340,9 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     )
     source = ["ffmpeg", "-v", "error", "-i", str(root / "tiny.mp4")]
     subprocess.run([*source, "-frames:v", "1", str(root / "tiny.jpg")], check=True)
+    # A smaller JPEG than tiny.jpg, like the square crops Instagram lists before the original.
+    small = ["-frames:v", "1", "-vf", "scale=16:16", str(root / "small.jpg")]
+    subprocess.run([*source, *small], check=True)
     subprocess.run([*source, "-frames:v", "1", str(root / "tiny.png")], check=True)
     subprocess.run([*source, "-frames:v", "1", str(root / "tiny.gif")], check=True)
     subprocess.run([*source, "-vn", "-c:a", "copy", str(root / "tiny.m4a")], check=True)
@@ -517,6 +520,15 @@ class FakeSiteIE(InfoExtractor):
                 self._instagram_image("i2"),
             ]
             return self.playlist_result(entries, "post", "Post")
+        if page == "ig-broken-image":
+            broken = {"url": f"{self.media_url}/status/404/i1.jpg", "width": 64, "height": 64}
+            image = {**self._instagram_image("i1"), "thumbnails": [broken]}
+            return self.playlist_result([image, self._video("v1")], "post", "Post")
+        if page == "ig-two-thumbs":
+            # Without login, Instagram's candidates carry no size: yt-dlp sorts them by URL.
+            candidates = [{"url": f"{self.media_url}/{name}"} for name in ("small.jpg", "tiny.jpg")]
+            image = {**self._instagram_image("i1"), "thumbnails": candidates}
+            return self.playlist_result([image], "post", "Post")
         if page == "storyboard-video":
             return self._with_formats("v1", self._storyboard(), plain_video)
         if page == "storyboard-audio":

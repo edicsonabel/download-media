@@ -58,6 +58,12 @@ def assert_every_saved_item_is_a_file(result: subprocess.CompletedProcess[str], 
         assert len(files) == int(count.group(1))
 
 
+def assert_the_whole_post_was_saved(result: subprocess.CompletedProcess[str], out: Path) -> None:
+    """The post mixes images and videos: both are saved, and nothing is reported missing."""
+    assert any(p.suffix == ".jpg" for p in out.iterdir()), output_of(result)
+    assert not re.search(r"\d+ of \d+ items downloaded", result.stdout), output_of(result)
+
+
 def test_public_video(out: Path) -> None:
     result = run("-y", "-o", str(out), VIDEO)
     assert result.returncode == 0, output_of(result)
@@ -83,6 +89,7 @@ def test_instagram_carousel_without_cookies(out: Path, flags: tuple[str, ...]) -
     result = run("-y", *flags, "-o", str(out), str(CAROUSEL))
     assert result.returncode == 0, output_of(result)
     assert_every_saved_item_is_a_file(result, out)
+    assert_the_whole_post_was_saved(result, out)
 
 
 @needs_carousel
@@ -95,6 +102,7 @@ def test_instagram_carousel_with_browser_cookies(out: Path, flags: tuple[str, ..
     assert "could not be decrypted" not in output
     assert "Retrying without cookies" not in output
     assert_every_saved_item_is_a_file(result, out)
+    assert_the_whole_post_was_saved(result, out)
 
 
 @needs_carousel

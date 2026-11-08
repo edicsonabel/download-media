@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import urllib.request
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -1783,42 +1784,26 @@ def test_wizard_tags_audio_items_without_codec_info(generic: Any, home: Path) ->
     assert output.count(tag("kind_audio")) == 2
 
 
-@pytest.mark.parametrize(
-    ("reply", "saved"),
-    [
-        ("", ["01 - video-audio (1) [video-audio-1].mp4"]),
-        (
-            "all",
-            [
-                "01 - video-audio (1) [video-audio-1].mp4",
-                "02 - video-audio (2) [video-audio-2].m4a",
-            ],
-        ),
-    ],
-)
-def test_wizard_enter_on_video_and_audio_keeps_the_video(
-    generic: Any, home: Path, reply: str, saved: list[str]
-) -> None:
+@pytest.mark.parametrize("reply", ["", "all"])
+def test_wizard_enter_on_video_and_audio_keeps_both(generic: Any, home: Path, reply: str) -> None:
     code, output = generic("video-audio.html", "", reply, "", "", "", "", "")
     assert code == 0
-    assert names(home / "Videos") == saved
+    assert names(home / "Videos") == [
+        "01 - video-audio (1) [video-audio-1].mp4",
+        "02 - video-audio (2) [video-audio-2].m4a",
+    ]
     assert tag("kind_video") in output
     assert tag("kind_audio") in output
 
 
-@pytest.mark.parametrize(
-    ("reply", "saved"),
-    [
-        ("", ["02 - jpg-video (2) [jpg-video-2].mp4"]),
-        ("all", ["01 - jpg-video (1) [jpg-video-1].jpg", "02 - jpg-video (2) [jpg-video-2].mp4"]),
-    ],
-)
-def test_wizard_leaves_a_jpg_out_of_the_videos_but_offers_it(
-    generic: Any, home: Path, reply: str, saved: list[str]
-) -> None:
+@pytest.mark.parametrize("reply", ["", "all"])
+def test_wizard_saves_a_jpg_next_to_the_video(generic: Any, home: Path, reply: str) -> None:
     code, output = generic("jpg-video.html", "", reply, "", "", "", "", "")
     assert code == 0
-    assert names(home / "Videos") == saved
+    assert names(home / "Videos") == [
+        "01 - jpg-video (1) [jpg-video-1].jpg",
+        "02 - jpg-video (2) [jpg-video-2].mp4",
+    ]
     assert "[?]" in output
     assert tag("kind_video") in output
 
@@ -2930,7 +2915,8 @@ def test_wizard_tells_ogg_video_from_ogg_audio_on_one_page_and_repeats_it(
     generic: Any, pasted: Any, media_url: str, home: Path, tmp_path: Path, monkeypatch: Any
 ) -> None:
     # Same extension on both items: only the vcodec yt-dlp sets for <audio> separates them.
-    code, output = generic("ogg-video-and-audio.html", *PICKER_WALK)
+    # URL, the video at the picker, type, quality, container, folder, cookies.
+    code, output = generic("ogg-video-and-audio.html", "", "1", "", "", "", "", "")
     assert code == 0
     assert tag("kind_video") in output
     assert tag("kind_audio") in output
@@ -3379,10 +3365,15 @@ def test_wizard_on_a_generic_page_with_every_kind(
     assert tag("kind_video") in output
     assert tag("kind_audio") in output
     assert "[?]" in output
-    assert names(home / "Videos") == ["01 - everything (1) [everything-1].mp4"]
+    # Enter takes everything downloadable.
+    assert names(home / "Videos") == [
+        "01 - everything (1) [everything-1].mp4",
+        "02 - everything (2) [everything-2].jpg",
+        "03 - everything (3) [everything-3].m4a",
+    ]
 
     [line] = commands(output)
-    assert line == f"download-media -y --playlist-items 1 {media_url}/everything.html"
+    assert line == f"download-media -y --playlist-items 1,2,3 {media_url}/everything.html"
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.setenv("HOME", str(elsewhere))
@@ -3495,20 +3486,191 @@ def test_wizard_on_a_lone_format_without_streams_is_refused_as_an_image(
     assert names(out) == []
 
 
-def test_wizard_on_an_instagram_shaped_carousel(
-    run: Any, out: Path, again: Path, answers: Any
+IG_CAROUSEL = "https://fake.test/ig-carousel"
+IG_NUMBERED = [
+    "01 - Clip [i1].jpg",
+    "02 - Clip [v1].mp4",
+    "03 - Clip [v2].mp4",
+    "04 - Clip [i2].jpg",
+]
+IG_SINGLE = ["Clip [i1].jpg", "Clip [i2].jpg", "Clip [v1].mp4", "Clip [v2].mp4"]
+WITH_AND_WITHOUT_COOKIES = pytest.mark.parametrize(
+    "cookies", [(), ("--cookies", "firefox")], ids=["without", "with"]
+)
+
+
+def jpgs(folder: Path) -> list[str]:
+    return [name for name in names(folder) if name.endswith(".jpg")]
+
+
+@pytest.fixture
+def tiny_jpg(media_url: str) -> bytes:
+    with urllib.request.urlopen(f"{media_url}/tiny.jpg") as response:
+        return bytes(response.read())
+
+
+@WITH_AND_WITHOUT_COOKIES
+def test_playlist_mode_saves_the_images_of_a_carousel(
+    run: Any, out: Path, tiny_jpg: bytes, cookies: tuple[str, ...]
 ) -> None:
-    url = "https://fake.test/ig-carousel"
+    code, output = run("-y", "-p", *cookies, IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == IG_NUMBERED
+    assert all((out / name).read_bytes() == tiny_jpg for name in jpgs(out))
+    assert t("done") in output
+    assert not said_partial_result(output)
+    assert len(history_rows()) == 1
+    assert history_rows()[0].split("\t")[1] == "video"
+
+
+@WITH_AND_WITHOUT_COOKIES
+@pytest.mark.parametrize("flag", ["-y", "-P"])
+def test_single_mode_saves_the_images_of_a_carousel_and_no_thumbnail_next_to_a_video(
+    run: Any, out: Path, flag: str, cookies: tuple[str, ...]
+) -> None:
+    flags = (flag,) if flag == "-y" else ("-y", flag)
+    code, output = run(*flags, *cookies, IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == IG_SINGLE
+    assert jpgs(out) == ["Clip [i1].jpg", "Clip [i2].jpg"]
+    assert t("done") in output
+    assert not said_partial_result(output)
+
+
+def test_direct_mode_with_a_preview_saves_the_images_after_the_confirmation(
+    run: Any, out: Path, answers: Any
+) -> None:
+    prompts = answers("")
+    code, output = run(IG_CAROUSEL)
+    assert code == 0
+    assert prompts == [t("ask_confirm")]
+    assert names(out) == IG_SINGLE
+    assert t("done") in output
+
+
+@pytest.mark.parametrize("flags", [("-p",), ()], ids=["playlist", "single"])
+def test_repeating_a_carousel_with_images_adds_nothing_and_rewrites_no_image(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, _ = run("-y", *flags, IG_CAROUSEL)
+    assert code == 0
+    before = {name: (out / name).stat().st_mtime_ns for name in names(out)}
+    code, output = run("-y", *flags, IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == sorted(before)
+    assert {name: (out / name).stat().st_mtime_ns for name in jpgs(out)} == {
+        name: mtime for name, mtime in before.items() if name.endswith(".jpg")
+    }
+    assert "thumbnail is already present" in output
+    assert t("done") in output
+    assert not said_partial_result(output)
+
+
+def test_playlist_items_picks_an_image_and_a_video(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "1,3", IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].jpg", "03 - Clip [v2].mp4"]
+    assert not said_partial_result(output)
+
+
+@pytest.mark.parametrize("flags", [("-a", "-p"), ("-a",)], ids=["playlist", "single"])
+def test_audio_mode_skips_the_images_as_images(run: Any, out: Path, flags: tuple[str, ...]) -> None:
+    code, output = run("-y", *flags, IG_CAROUSEL)
+    assert code == 0
+    assert len(names(out)) == 2
+    assert all(name.endswith(".mp3") for name in names(out))
+    assert t("item_image_skipped", "i1") in output
+    assert t("item_image_skipped", "i2") in output
+    assert t("partial_result", 2, 4, 2, 0) in output
+
+
+def test_list_formats_skips_the_images_as_images(run: Any, out: Path) -> None:
+    code, output = run("-y", "-l", IG_CAROUSEL)
+    assert code == 0
+    assert "Available formats for v1" in output
+    assert "Available formats for v2" in output
+    assert t("item_image_skipped", "i1") in output
+    assert names(out) == []
+
+
+def test_an_image_that_cannot_be_fetched_is_a_failed_item(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", "https://fake.test/ig-broken-image")
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    assert t("image_not_saved", "i1") in output
+    assert t("partial_result", 1, 2, 0, 1) in output
+
+
+def test_single_mode_stops_at_an_image_that_cannot_be_fetched(run: Any, out: Path) -> None:
+    code, output = run("-y", "https://fake.test/ig-broken-image")
+    assert code == 1
+    assert t("image_not_saved", "i1") in output
+    assert t("done") not in output
+    assert jpgs(out) == []
+
+
+def test_the_image_saved_is_the_candidate_yt_dlp_sorts_last(
+    run: Any, out: Path, tiny_jpg: bytes
+) -> None:
+    code, _ = run("-y", "-p", "https://fake.test/ig-two-thumbs")
+    assert code == 0
+    [image] = names(out)
+    assert image.endswith(".jpg")
+    assert (out / image).read_bytes() == tiny_jpg
+
+
+def test_subtitles_asked_for_still_save_the_images(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", "-s", IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == IG_NUMBERED
+    assert "ERROR" not in output
+
+
+def test_wizard_on_an_instagram_shaped_carousel(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any
+) -> None:
     answers(*PICKER_WALK)
-    code, output = run("-i", url)
+    code, output = run("-i", IG_CAROUSEL)
     assert code == 0
     assert output.count(tag("kind_image")) == 2
     assert output.count(tag("kind_video")) == 2
-    assert names(out) == ["02 - Clip [v1].mp4", "03 - Clip [v2].mp4"]
+    assert "[no soportado]" not in output
+    assert names(out) == IG_NUMBERED
+    assert t("done") in output
 
-    code, _ = run("-y", "-p", "-o", str(again), url)
+    [line] = commands(output)
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == IG_NUMBERED
+
+
+@pytest.mark.parametrize("flags", [(), ("-a",)], ids=["video", "audio"])
+def test_wizard_on_only_images_asks_no_type_quality_or_container(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any, flags: tuple[str, ...]
+) -> None:
+    # URL, picker, folder, cookies: a type, quality or container step would fail the test.
+    answers("", "1,4", "", "")
+    code, output = run("-i", *flags, IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].jpg", "04 - Clip [i2].jpg"]
+
+    [line] = commands(output)
+    assert " -a " not in line
+    code, _ = replay(line, again)
     assert code == 0
     assert names(again) == names(out)
+
+
+def test_wizard_in_audio_mode_on_a_mixed_pick_skips_the_image(
+    run: Any, out: Path, answers: Any
+) -> None:
+    # URL, picker, type (audio, from -a), audio format, folder, cookies.
+    answers("", "1,2", "", "", "", "")
+    code, output = run("-i", "-a", IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp3"]
+    assert t("item_image_skipped", "i1") in output
+    assert t("partial_result", 1, 2, 1, 0) in output
 
 
 def test_wizard_reads_the_extension_of_a_url_with_a_query_string(
@@ -3552,24 +3714,33 @@ def test_wizard_on_a_mixed_carousel_enter_and_replay(
     assert "[?]" in output
     assert tag("kind_video") in output
     assert tag("kind_audio") in output
-    assert names(out) == ["03 - Clip [v1].mp4"]
+    assert names(out) == MIXED_SAVED
+    assert not said_partial_result(output)
 
     [line] = commands(output)
-    assert "--playlist-items 3" in line
+    assert "--playlist-items 1,2,3,4" in line
     code, _ = replay(line, again)
     assert code == 0
     assert names(again) == names(out)
 
 
-def test_wizard_all_on_a_mixed_carousel_skips_the_image_and_says_so(
+MIXED_SAVED = [
+    "01 - Clip [i1].jpg",
+    "02 - Clip [p1].jpg",
+    "03 - Clip [v1].mp4",
+    "04 - Clip [a1].m4a",
+]
+
+
+def test_wizard_all_on_a_mixed_carousel_saves_the_image_too(
     run: Any, replay: Any, out: Path, again: Path, answers: Any
 ) -> None:
     answers("", "all", "", "", "", "", "")
     code, output = run("-i", "https://fake.test/mixed-carousel")
     assert code == 0
-    saved = ["02 - Clip [p1].jpg", "03 - Clip [v1].mp4", "04 - Clip [a1].m4a"]
+    saved = MIXED_SAVED
     assert names(out) == saved
-    assert t("partial_result", 3, 4, 1, 0) in output
+    assert not said_partial_result(output)
 
     [line] = commands(output)
     code, _ = replay(line, again)
@@ -3583,10 +3754,10 @@ def test_wizard_enter_on_a_carousel_without_videos_keeps_what_is_offered(
     answers(*PICKER_WALK)
     code, output = run("-i", "https://fake.test/no-video-carousel")
     assert code == 0
-    assert names(out) == ["02 - Clip [p1].jpg", "03 - Clip [a1].m4a"]
+    assert names(out) == ["01 - Clip [i1].jpg", "02 - Clip [p1].jpg", "03 - Clip [a1].m4a"]
 
     [line] = commands(output)
-    assert "--playlist-items 2,3" in line
+    assert "--playlist-items 1,2,3" in line
     code, _ = replay(line, again)
     assert code == 0
     assert names(again) == names(out)
@@ -4179,7 +4350,6 @@ def test_an_empty_entry_is_not_called_an_image(wizard_on: Any, out: Path) -> Non
     assert code == 0
     assert "[?]" in output
     assert partly_inspected() not in output
-    assert t("ig_image_warning") not in output
     assert tag("kind_image") not in output
     assert names(out) == ["01 - Clip [v2].mp4"]
 
@@ -4529,7 +4699,7 @@ def test_an_error_with_no_words_still_reads_unknown(wizard_on: Any) -> None:
 def test_a_text_duration_on_an_image_entry_keeps_the_picker(wizard_on: Any, out: Path) -> None:
     code, output = wizard_on("https://fake.test/text-duration-carousel", *PICKER_WALK)
     assert code == 0
-    assert names(out) == ["02 - Clip [v2].mp4"]
+    assert names(out) == ["01 - Clip [i1].jpg", "02 - Clip [v2].mp4"]
     assert tag("kind_image") in output
 
 
