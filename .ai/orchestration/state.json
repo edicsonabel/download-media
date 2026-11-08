@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T23:04:26-04:00",
+  "updated": "2026-11-07T23:04:37-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1381,8 +1381,10 @@
         "a414259"
       ],
       "review": {
-        "approved": false,
-        "findings": []
+        "approved": true,
+        "findings": [
+          "minor release-manager.md:31 a failed git fetch reads as 'not a fast-forward'; fails safe"
+        ]
       },
       "history": [
         {
@@ -1461,6 +1463,13 @@
           "result": "blocked",
           "at": "2026-11-07T23:04:26-04:00",
           "note": "QA re-check stopped by the orchestrator at the human's request, to write a handoff and clear the context. No report; QA edits nothing. Relaunch the narrow QA re-check on HEAD a414259."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T23:04:37-04:00",
+          "note": "The QA re-check had already reported before the stop: approved, one minor. Gate exit 0, 1740 passed. Round-2 findings closed. Pipeline paused here for the handoff; next: tech-lead merge, push, architect validation."
         }
       ]
     }
