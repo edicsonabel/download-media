@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T13:57:44-04:00",
+  "updated": "2026-11-08T13:59:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1694,9 +1694,9 @@
     "release/0.3.0": {
       "type": "release",
       "title": "Release 0.3.0",
-      "stage": "preparation",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "publishing",
+      "status": "in_progress",
+      "next_agent": "release-manager",
       "doc": ".ai/releases/0.3.0.md",
       "branch": null,
       "worktree": null,
@@ -1732,6 +1732,13 @@
           "result": "done",
           "at": "2026-11-08T13:57:44-04:00",
           "note": "Human ran spec 18 live steps (corrected replies, es). All hold. 1: IG public carousel, no up-front cookies line, picker 20 items/4 video, 4 files = -y -p 4 files (same names and sizes); orchestrator rerun exit 0. 2: YouTube HtVdAasjOgU \"Este contenido requiere iniciar sesión: Sign in to confirm your age...\", no --cookies-from-browser in that line, exit 1, no files. 3: anonymous \"There is no video in this post\", no files; logged in \"El contenido es una imagen y no es soportado por yt-dlp\", exit 0. 4: gated IG \"only available for registered users who follow this account\", one cookies prompt after the probe, brave, carousel 6 items/2 video, 2 files, summary lists Cookies: brave. None waived. Planner: cli.py:384 cookies hint English in es (row 02); anonymous lone image walks the manual flow (probe-fail-fast)."
+        },
+        {
+          "stage": "publishing",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-08T13:59:48-04:00",
+          "note": "Human approved publishing 0.3.0 (bump, tag v0.3.0, push main and tag, GitHub release, Pages). Delegated decisions reviewed; no live step waived; actionlint run (runner-label false positive only)."
         }
       ]
     }
