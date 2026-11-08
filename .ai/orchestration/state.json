@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:37:55-04:00",
+  "updated": "2026-11-07T22:43:59-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1377,7 +1377,12 @@
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "important release-manager.md:45,54-58 step 1 needs $last from an earlier block; a fresh shell gives 0 new keys, the 0.2.0 bug again",
+          "minor :57 new-flags grep over-counts reworded flags",
+          "minor :132-137 Pages step doesn't say what an empty run list or missing label means",
+          "minor :127,130 timeout 540 and gh run watch exceed the Bash tool's default call timeout"
+        ]
       },
       "history": [
         {
@@ -1428,6 +1433,13 @@
           "result": "done",
           "at": "2026-11-07T22:37:55-04:00",
           "note": "Round 1 closed. zsh and bash identical. Mutation 2/2."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "changes_requested",
+          "at": "2026-11-07T22:43:59-04:00",
+          "note": "Round 2. One important, three minor. Gate exit 0, 1736 passed. Checklist complete; nothing publishes before approval."
         }
       ]
     }
