@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T13:22:47-04:00",
+  "updated": "2026-11-08T13:36:57-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1688,6 +1688,27 @@
           "result": "done",
           "at": "2026-11-08T13:22:47-04:00",
           "note": "Worktree and branch removed."
+        }
+      ]
+    },
+    "release/0.3.0": {
+      "type": "release",
+      "title": "Release 0.3.0",
+      "stage": "preparation",
+      "status": "in_progress",
+      "next_agent": "release-manager",
+      "doc": ".ai/releases/0.3.0.md",
+      "branch": null,
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "preparation",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-08T13:36:57-04:00",
+          "note": "Human reviewed and approved all delegated decisions shown in the review table: spec 19 D1-D7, 20 D2, 21 D1-D3, 27 D5, 29 D6-D7, 28 D1 and D5, 26 D1, 42 D1-D5, 06 D1-D2 (specs 10 and 15 CI/runbook only). Live steps of spec 18: the human runs them by hand (none waived yet). actionlint: install and run (not waived). Publishing still needs the human OK after preparation."
         }
       ]
     }
