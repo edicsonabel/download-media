@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T23:21:30-04:00",
+  "updated": "2026-11-08T10:58:42-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1499,6 +1499,27 @@
           "result": "done",
           "at": "2026-11-07T23:21:30-04:00",
           "note": "Worktree and branch removed."
+        }
+      ]
+    },
+    "fix/unexpected-errors": {
+      "type": "fix",
+      "title": "Stop errors other than DownloadError ending _download_one in a traceback",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/42-unexpected-errors.md",
+      "branch": "fix/unexpected-errors",
+      "worktree": ".worktrees/fix-unexpected-errors",
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-08T10:58:42-04:00",
+          "note": "Human chose option b: continue with unexpected-errors (row 42) and release 0.3.0 later. The delegated decisions and the release still wait on the human."
         }
       ]
     }
