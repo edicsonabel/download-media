@@ -28,7 +28,7 @@ from .config import (
     DownloadOptions,
     xdg_dir,
 )
-from .cookies import browser_of
+from .cookies import browser_of, report_failure
 from .i18n import LANG, is_yes, t
 from .probe import (
     ContentKind,
@@ -519,6 +519,15 @@ def run_all(opts: DownloadOptions) -> list[tuple[str, DownloadOptions | None]] |
     return walked
 
 
+def _drop_unreadable_browser(probe_result: Probe, opts: DownloadOptions) -> bool:
+    """Say why the browser's cookies couldn't be read, and stop using them. True if so."""
+    if probe_result.cookie_failure is None or opts.cookies_browser is None:
+        return False
+    report_failure(opts.cookies_browser, probe_result.cookie_failure)
+    opts.cookies_browser = None
+    return True
+
+
 def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
     """Everything after the URL prompt, for ``opts.urls[0]``.
 
@@ -548,6 +557,10 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
     # ---- Phase 2: probe with auth retry ----
     info(t("probing"))
     probe_result = probe(opts.urls[0], opts.cookies_browser)
+    if _drop_unreadable_browser(probe_result, opts):
+        # Nothing was inspected: look again without cookies. A login wall still gets the retry.
+        info(t("probing"))
+        probe_result = probe(opts.urls[0])
     if probe_result.needs_cookies and not opts.cookies_browser:
         warn(t("auth_needed_retry", probe_result.error_message))
         try:
@@ -561,7 +574,10 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
         # this branch can't see that, so we use an unrelated read path.
         if _cookies_set(opts):
             info(t("probing"))
-            probe_result = probe(opts.urls[0], opts.cookies_browser)
+            retried = probe(opts.urls[0], opts.cookies_browser)
+            # A browser that can't be read changes nothing: keep the cookieless result.
+            if not _drop_unreadable_browser(retried, opts):
+                probe_result = retried
 
     # ---- Phase 2.5: handle special outcomes ----
     if not probe_result.failed:

@@ -6,19 +6,29 @@ import argparse
 from pathlib import Path
 
 import pytest
-from yt_dlp.cookies import SUPPORTED_BROWSERS, SUPPORTED_KEYRINGS, _parse_browser_specification
+from yt_dlp.cookies import (
+    SUPPORTED_BROWSERS,
+    SUPPORTED_KEYRINGS,
+    CookieLoadError,
+    _parse_browser_specification,
+)
+from yt_dlp.utils import DownloadError
 
 from download_media.config import BROWSERS
 from download_media.cookies import (
     _FLAG_FILES,
     _PASSWORD_STORES,
     KEYRINGS,
+    CookieFailure,
     browser_of,
+    cookie_failure,
     detect_keyring,
     parse_spec,
+    report_failure,
     uses_keyring,
     ydl_cookies,
 )
+from download_media.i18n import t
 
 
 def write_flags(tmp_path: Path, content: str, name: str = "brave-flags.conf") -> None:
@@ -163,3 +173,104 @@ def test_explicit_keyring_beats_detection(tmp_path: Path) -> None:
 def test_yt_dlp_accepts_the_tuple(keyring: str) -> None:
     parsed = _parse_browser_specification(*ydl_cookies(f"brave+{keyring}"))
     assert parsed == ("brave", None, keyring.upper(), None)
+
+
+def load_error(cause: Exception) -> CookieLoadError:
+    """What yt-dlp's load_cookies raises: the real cause is the context."""
+    try:
+        try:
+            raise cause
+        except Exception:
+            raise CookieLoadError("failed to load cookies")  # noqa: B904
+    except CookieLoadError as error:
+        return error
+
+
+NOT_INSTALLED = 'could not find chrome cookies database in "x"'
+
+
+def test_a_browser_that_is_not_installed_is_missing() -> None:
+    error = load_error(FileNotFoundError(NOT_INSTALLED))
+    assert cookie_failure(error) == CookieFailure(missing=True, reason=NOT_INSTALLED)
+
+
+def test_without_ignoreerrors_the_failure_comes_inside_a_download_error() -> None:
+    error = load_error(FileNotFoundError(NOT_INSTALLED))
+    wrapped = DownloadError("ERROR: " + NOT_INSTALLED, (CookieLoadError, error, None))
+    assert cookie_failure(wrapped) == CookieFailure(missing=True, reason=NOT_INSTALLED)
+
+
+def test_any_other_cause_is_unreadable_with_its_reason() -> None:
+    error = load_error(ValueError("unsupported platform: linux"))
+    assert cookie_failure(error) == CookieFailure(
+        missing=False, reason="unsupported platform: linux"
+    )
+
+
+def test_an_unreachable_keyring_is_unreadable() -> None:
+    error = load_error(FileNotFoundError(2, "No such file or directory"))
+    assert cookie_failure(error) == CookieFailure(
+        missing=False, reason="[Errno 2] No such file or directory"
+    )
+
+
+def test_the_reason_is_one_short_line() -> None:
+    error = load_error(RuntimeError("first line " + "x" * 300 + "\nsecond line"))
+    failure = cookie_failure(error)
+    assert failure is not None
+    assert "\n" not in failure.reason
+    assert "second line" not in failure.reason
+    assert len(failure.reason) <= 160
+
+
+def test_a_short_cause_on_two_lines_keeps_only_the_first() -> None:
+    error = load_error(RuntimeError("cannot open keyring\nsee the man page"))
+    assert cookie_failure(error) == CookieFailure(missing=False, reason="cannot open keyring")
+
+
+def test_a_load_error_without_a_cause_still_counts() -> None:
+    failure = cookie_failure(CookieLoadError("failed to load cookies"))
+    assert failure == CookieFailure(missing=False, reason="failed to load cookies")
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        DownloadError("ERROR: HTTP Error 404: Not Found"),
+        DownloadError("ERROR: boom", (ValueError, ValueError("boom"), None)),
+        FileNotFoundError(NOT_INSTALLED),
+        ValueError("unsupported platform: linux"),
+    ],
+)
+def test_anything_else_is_not_a_cookie_failure(exc: Exception) -> None:
+    assert cookie_failure(exc) is None
+
+
+SECRETSTORAGE_MISSING = "ERROR: secretstorage not available No module named 'secretstorage'"
+
+
+@pytest.mark.parametrize(
+    ("spec", "failure", "lines"),
+    [
+        # Nothing to decrypt: never a keyring hint, even for a browser that uses one.
+        ("chrome", CookieFailure(True, NOT_INSTALLED), ["cookies_no_browser"]),
+        ("chrome", CookieFailure(False, "boom"), ["cookies_unreadable", "cookies_keyring_hint"]),
+        ("chrome+gnomekeyring", CookieFailure(False, "boom"), ["cookies_unreadable"]),
+        ("firefox", CookieFailure(False, "boom"), ["cookies_unreadable"]),
+        ("chrome", CookieFailure(False, SECRETSTORAGE_MISSING), ["cookies_unreadable", "pacman"]),
+    ],
+)
+def test_the_report_adds_the_hint_that_fits_the_cause(
+    capsys: pytest.CaptureFixture[str], spec: str, failure: CookieFailure, lines: list[str]
+) -> None:
+    browser = browser_of(spec)
+    report_failure(spec, failure)
+    said = capsys.readouterr().out
+    expected = {
+        "cookies_no_browser": t("cookies_no_browser", browser),
+        "cookies_unreadable": t("cookies_unreadable", browser, failure.reason),
+        "cookies_keyring_hint": t("cookies_keyring_hint", browser),
+        "pacman": "sudo pacman -S python-secretstorage",
+    }
+    for key, text in expected.items():
+        assert (text in said) == (key in lines), key

@@ -1020,3 +1020,17 @@ def test_a_mistyped_url_with_a_login_word_asks_for_nothing() -> None:
     result = probe("private-video")  # The generic extractor refuses it before any request.
     assert result.failed is True
     assert result.needs_cookies is False
+
+
+def test_a_browser_that_is_not_installed_is_a_cookie_failure(media_url: str) -> None:
+    # isolated_env's home holds no browser at all.
+    result = probe(f"{media_url}/poster.html", "chrome")
+    assert result.failed is True
+    assert result.cookie_failure is not None
+    assert result.cookie_failure.missing is True
+
+
+def test_a_probe_without_a_browser_has_no_cookie_failure(media_url: str) -> None:
+    result = probe(f"{media_url}/poster.html")
+    assert result.failed is False
+    assert result.cookie_failure is None

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from yt_dlp import YoutubeDL
+from yt_dlp.cookies import CookieLoadError
 from yt_dlp.networking.exceptions import RequestError
 from yt_dlp.postprocessor.common import PostProcessor
 from yt_dlp.postprocessor.embedthumbnail import EmbedThumbnailPP
@@ -24,7 +25,7 @@ from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension, 
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
-from .cookies import ydl_cookies
+from .cookies import CookieFailure, cookie_failure, ydl_cookies
 from .i18n import t
 from .selection import missing_items
 
@@ -131,6 +132,32 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
             # the list once it reads to the end, and leaves the count unset otherwise.
             ie_result.pop("playlist_count", None)
         return super().process_ie_result(ie_result, *args, **kwargs)
+
+
+class CookiesUnavailable(Exception):
+    """The browser's cookies couldn't be loaded; nothing was requested yet."""
+
+    def __init__(self, spec: str, failure: CookieFailure) -> None:
+        super().__init__(failure.reason)
+        self.spec = spec
+        self.failure = failure
+
+
+def _load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
+    """Load the browser's cookies before any request, so a failure looks the same in every mode.
+
+    yt-dlp loads them on the first request. Under ignoreerrors (-p, --playlist-items) the
+    failure then escapes as a bare CookieLoadError; without it, as a DownloadError.
+    """
+    if not spec or not ydl.params.get("cookiesfrombrowser"):
+        return
+    try:
+        _ = ydl.cookiejar  # Not cached on failure: every read retries the load.
+    except (CookieLoadError, DownloadError) as exc:
+        failure = cookie_failure(exc)
+        if failure is None:
+            raise
+        raise CookiesUnavailable(spec, failure) from exc
 
 
 def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
@@ -444,7 +471,10 @@ def _skip_items_without_media(skipped: list[str]) -> Callable[..., str | None]:
 
 
 def download(url: str, opts: DownloadOptions) -> DownloadResult:
-    """Download a single URL. Raises ``DownloadError`` if nothing could be saved."""
+    """Download a single URL. Raises ``DownloadError`` if nothing could be saved.
+
+    Raises ``CookiesUnavailable`` before any request if the browser's cookies can't be loaded.
+    """
     output_dir = opts.resolve_output()
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: list[str] = []
@@ -454,6 +484,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     untagged: list[str] = []
     no_cover: list[str] = []
     with _Ydl(ydl_opts) as ydl:
+        _load_browser_cookies(ydl, opts.cookies_browser)
 
         def keep(path: str) -> None:
             if not ydl.item_failed():
@@ -509,4 +540,5 @@ def list_formats(url: str, opts: DownloadOptions) -> int:
     if opts.cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
     with YoutubeDL(ydl_opts) as ydl:
+        _load_browser_cookies(ydl, opts.cookies_browser)
         return int(ydl.download([url]))

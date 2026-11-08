@@ -177,7 +177,7 @@ Three layers, all required before a release:
 
 Every bug fix adds a test that fails without the fix. The autouse `isolated_env`
 fixture keeps tests away from the real history log, browser flag files and, outside
-the live tests, the home folder.
+the live tests, the home folder and the session keyring (a dead D-Bus address).
 
 ## Agent system
 

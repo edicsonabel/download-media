@@ -17,7 +17,7 @@ from typing import Any
 
 from yt_dlp.utils import MEDIA_EXTENSIONS, float_or_none, remove_terminal_sequences
 
-from .cookies import ydl_cookies
+from .cookies import CookieFailure, cookie_failure, ydl_cookies
 from .downloader import _Ydl
 
 
@@ -60,6 +60,8 @@ class Probe:
     failed: bool = False
     may_hold_video: bool = False  # Audio by a label only: the file may hold a video.
     error_message: str | None = None
+    # The browser's cookies couldn't be loaded, so nothing was inspected.
+    cookie_failure: CookieFailure | None = None
 
     @property
     def is_playlist(self) -> bool:
@@ -363,4 +365,6 @@ def probe(url: str, cookies_browser: str | None = None) -> Probe:
         return _read_result(url, site, data, errors)
     except Exception as exc:
         # A missing browser reports its real cause first, then raises a generic error.
-        return _read_result(url, site, None, errors or [str(exc)])
+        result = _read_result(url, site, None, errors or [str(exc)])
+        result.cookie_failure = cookie_failure(exc)
+        return result
