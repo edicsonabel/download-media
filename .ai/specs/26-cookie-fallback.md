@@ -1,6 +1,6 @@
 # 26 — Handle a browser whose cookies can't be read
 
-Status: approved
+Status: done
 Item: `fix/cookie-fallback`
 
 ## Problem
@@ -245,30 +245,30 @@ Rerun doesn't apply: nothing on disk depends on the cookies.
 
 Every `[fix]` must fail on `main`, shown by reverting the fix. Cookie-failure tests run the real yt-dlp: the `generic` and `home` fixtures and the loopback `media_url` pages (`multi.html` has four videos, `poster.html` one, `status/NNN` answers that status), with `-o` under `tmp_path` where the case is direct. A missing browser is the empty `HOME` and `XDG_CONFIG_HOME` that `isolated_env` and `home` give. No test reads a real cookie database or keyring.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `-y -p --cookies chrome` on `multi.html`: exit 0, 4 files, `t("cookies_no_browser", "chrome")` once, `Traceback` and `t("cookies_retry", "chrome")` and `t("cookies_keyring_hint", "chrome")` not in the output, printed command without `--cookies`, one history row
-- [ ] **[fix]** `-y --playlist-items 1,2 --cookies chrome` on `multi.html`: exit 0, 2 files, command keeps `--playlist-items 1,2`
-- [ ] **[fix]** `-y -p --cookies firefox` on `multi.html`: exit 0, `t("cookies_no_browser", "firefox")`
-- [ ] **[fix]** `-y -p --cookies chrome multi.html poster.html`: exit 0, 5 files, the message twice
-- [ ] **[fix]** `-y -p --cookies chrome` on `status/404`: exit 1, `t("failed", url)`, the message, no keyring hint, no `Traceback`, command keeps `--cookies chrome`, no history row
-- [ ] **[fix]** `-y --cookies chrome` on `poster.html`: exit 0, 1 file, the message, `t("cookies_retry", "chrome")` not in the output. Replaces the assertions of `test_a_browser_that_is_not_installed_is_named_and_the_retry_still_saves` for the direct case
-- [ ] **[fix]** `-y --cookies chrome` on `status/404`: exit 1, `t("cookies_keyring_hint", "chrome")` not in the output
-- [ ] **[fix]** `-y --cookies chrome` on `status/401`: exit 1, `try again with --cookies` in the output, no keyring hint
-- [ ] **[fix]** `-l --cookies chrome` on `poster.html`: exit 0, the message, `t("failed", url)` not in the output, the format table printed
-- [ ] **[fix]** Wizard on `multi.html`: Enter at the URL, picker, type, quality, container and folder, then chrome at the late step: exit 0, the 4 files in `home/Videos`, the message, no `Traceback`, command without `--cookies`
-- [ ] **[fix]** Keyring unreachable: a fake Chrome profile under `XDG_CONFIG_HOME/google-chrome/Default/Cookies` (a `meta` table with version 20, a `cookies` table with one `v11` row), the dead bus from `isolated_env`. `-y -p --cookies chrome+gnomekeyring` on `multi.html`: exit 0, 4 files, `t("cookies_unreadable", "chrome", <reason>)`, no keyring hint
-- [ ] **[fix]** Same profile, `XDG_CURRENT_DESKTOP=GNOME`, `-y -p --cookies chrome`: `t("cookies_unreadable", …)` then `t("cookies_keyring_hint", "chrome")`
-- [ ] **[fix]** `-y -p --cookies safari` on `multi.html`: exit 0, `t("cookies_unreadable", "safari", "unsupported platform: linux")`
-- [ ] **[fix]** Wizard `-i --cookies chrome` on `poster.html`: 6 prompts, the message once, `t("probe_failed", …)` not in the output, 1 file, command without `--cookies`. Replaces the 7-prompt walk of `test_a_browser_that_is_not_installed_is_named_and_the_retry_still_saves`
-- [ ] **[fix]** Wizard on `status/401`, chrome at the retry prompt: exit 1, the message once, `t("probe_failed", <login reason>)`, `t("probe_falling_back")`, `t("auth_still_needed", "chrome")` and `could not find chrome cookies database` not in the output, `t("ask_cookies")` printed once. Replaces `test_a_browser_picked_at_the_retry_that_is_not_installed_is_named`
-- [ ] **[fix]** Wizard on a cookie-hungry loopback URL (`poster.html?from=instagram.com`, as spec 18), chrome at the up-front prompt: the message, the page detected as a video, no second cookies prompt, 1 file, exit 0
-- [ ] **[fix]** `probe(<media_url>/poster.html, "chrome")` with the empty home: `cookie_failure.missing` is true. Without a browser: `cookie_failure is None`
-- [ ] **[fix]** Unit: `cookie_failure` on a `CookieLoadError` whose `__context__` is `FileNotFoundError('could not find chrome cookies database in "x"')` → `missing`; on a `DownloadError` whose `exc_info[1]` is that error → the same; on a `CookieLoadError` with `ValueError('unsupported platform: linux')` → not `missing`, that reason; on a plain `DownloadError` → `None`
-- [ ] **[pin]** `fake_site` cookie tests unchanged: `rejects-cookies` and `rejects-cookies-carousel` still print `t("cookies_retry", "brave")` and save; `test_failure_with_cookies_reports_original_error_and_keyring_hint` still passes
-- [ ] **[pin]** `-y -p --cookies brave` on `fake_site` `only-images`: exit 1, `t("no_supported_items")`, no `cookies_retry`, `fake_site == [("brave",)]`
-- [ ] **[pin]** With the dead bus set by `isolated_env`, no test outside `tests/live` can open the session bus: a test asserting `os.environ["DBUS_SESSION_BUS_ADDRESS"]` points under `tmp_path`
-- [ ] Both messages exist in the `es` and `en` blocks of `i18n.py`
-- [ ] `README.md` line 15 gains one sentence: if the browser's cookies can't be read, the download says why and goes on without them
+- [x] `scripts/pre-release.sh --no-live` passes (tech-lead's run on the merge, see Validation)
+- [x] **[fix]** `test_a_missing_browser_does_not_stop_a_playlist` (`tests/test_e2e.py`). `-y -p --cookies chrome` on `multi.html`: exit 0, 4 files, `t("cookies_no_browser", "chrome")` once, `Traceback` and `t("cookies_retry", "chrome")` and `t("cookies_keyring_hint", "chrome")` not in the output, printed command without `--cookies`, one history row
+- [x] **[fix]** `test_a_missing_browser_keeps_the_chosen_items`. `-y --playlist-items 1,2 --cookies chrome` on `multi.html`: exit 0, 2 files, command keeps `--playlist-items 1,2`
+- [x] **[fix]** `test_a_missing_firefox_is_named`. `-y -p --cookies firefox` on `multi.html`: exit 0, `t("cookies_no_browser", "firefox")`
+- [x] **[fix]** `test_a_missing_browser_is_named_for_every_url`. `-y -p --cookies chrome multi.html poster.html`: exit 0, 5 files, the message twice
+- [x] **[fix]** `test_a_dead_page_with_a_missing_browser_fails_without_a_keyring_hint`. `-y -p --cookies chrome` on `status/404`: exit 1, `t("failed", url)`, the message, no keyring hint, no `Traceback`, command keeps `--cookies chrome`, no history row
+- [x] **[fix]** `test_a_single_video_with_a_missing_browser_says_so_instead_of_retrying`. `-y --cookies chrome` on `poster.html`: exit 0, 1 file, the message, `t("cookies_retry", "chrome")` not in the output. Replaces the assertions of `test_a_browser_that_is_not_installed_is_named_and_the_retry_still_saves` for the direct case
+- [x] **[fix]** `test_a_single_dead_page_with_a_missing_browser_gets_no_keyring_hint`. `-y --cookies chrome` on `status/404`: exit 1, `t("cookies_keyring_hint", "chrome")` not in the output
+- [x] **[fix]** `test_a_login_wall_with_a_missing_browser_suggests_another_browser`. `-y --cookies chrome` on `status/401`: exit 1, `try again with --cookies` in the output, no keyring hint
+- [x] **[fix]** `test_formats_are_listed_without_a_missing_browser`. `-l --cookies chrome` on `poster.html`: exit 0, the message, `t("failed", url)` not in the output, the format table printed
+- [x] **[fix]** `test_a_missing_browser_at_the_last_wizard_step_saves_the_picked_items`. Wizard on `multi.html`: Enter at the URL, picker, type, quality, container and folder, then chrome at the late step: exit 0, the 4 files in `home/Videos`, the message, no `Traceback`, command without `--cookies`
+- [x] **[fix]** `test_an_unreachable_keyring_named_by_hand_gets_no_keyring_hint` (fixture `unreadable_chrome`). Keyring unreachable: a fake Chrome profile under `XDG_CONFIG_HOME/google-chrome/Default/Cookies` (a `meta` table with version 20, a `cookies` table with one `v11` row), the dead bus from `isolated_env`. `-y -p --cookies chrome+gnomekeyring` on `multi.html`: exit 0, 4 files, `t("cookies_unreadable", "chrome", <reason>)`, no keyring hint
+- [x] **[fix]** `test_an_unreachable_desktop_keyring_suggests_another_keyring`. Same profile, `XDG_CURRENT_DESKTOP=GNOME`, `-y -p --cookies chrome`: `t("cookies_unreadable", …)` then `t("cookies_keyring_hint", "chrome")`
+- [x] **[fix]** `test_safari_on_linux_is_unreadable`. `-y -p --cookies safari` on `multi.html`: exit 0, `t("cookies_unreadable", "safari", "unsupported platform: linux")`
+- [x] **[fix]** `test_a_browser_that_is_not_installed_is_named_and_the_page_still_detected` (renamed from the spec 18 test). Wizard `-i --cookies chrome` on `poster.html`: 6 prompts, the message once, `t("probe_failed", …)` not in the output, 1 file, command without `--cookies`. Replaces the 7-prompt walk of `test_a_browser_that_is_not_installed_is_named_and_the_retry_still_saves`
+- [x] **[fix]** `test_a_browser_picked_at_the_retry_that_is_not_installed_ends_the_retry` (renamed from `test_a_browser_picked_at_the_retry_that_is_not_installed_is_named`). Wizard on `status/401`, chrome at the retry prompt: exit 1, the message once, `t("probe_failed", <login reason>)`, `t("probe_falling_back")`, `t("auth_still_needed", "chrome")` and `could not find chrome cookies database` not in the output, `t("ask_cookies")` printed once. Replaces `test_a_browser_picked_at_the_retry_that_is_not_installed_is_named`
+- [x] **[fix]** `test_a_browser_that_is_not_installed_picked_up_front_still_detects_the_page`. Wizard on a cookie-hungry loopback URL (`poster.html?from=instagram.com`, as spec 18), chrome at the up-front prompt: the message, the page detected as a video, no second cookies prompt, 1 file, exit 0
+- [x] **[fix]** `test_a_browser_that_is_not_installed_is_a_cookie_failure` and `test_a_probe_without_a_browser_has_no_cookie_failure` (`tests/test_probe.py`). `probe(<media_url>/poster.html, "chrome")` with the empty home: `cookie_failure.missing` is true. Without a browser: `cookie_failure is None`
+- [x] **[fix]** `test_a_browser_that_is_not_installed_is_missing`, `test_without_ignoreerrors_the_failure_comes_inside_a_download_error`, `test_any_other_cause_is_unreadable_with_its_reason`, `test_anything_else_is_not_a_cookie_failure` (`tests/test_cookies.py`). Unit: `cookie_failure` on a `CookieLoadError` whose `__context__` is `FileNotFoundError('could not find chrome cookies database in "x"')` → `missing`; on a `DownloadError` whose `exc_info[1]` is that error → the same; on a `CookieLoadError` with `ValueError('unsupported platform: linux')` → not `missing`, that reason; on a plain `DownloadError` → `None`
+- [x] **[pin]** `test_cookie_fallback_recovers` (direct and `-p`, asserts `cookies_retry`), `test_failure_with_cookies_reports_original_error_and_keyring_hint`, and on `rejects-cookies-carousel` `test_selection_survives_the_cookie_retry` and `test_cookie_drop_applies_to_every_mode` (they assert the save and the dropped `--cookies`, not the `cookies_retry` text). None changed in the merge, and `_download_with_cookie_fallback`'s `DownloadError` branch is unchanged; on a real browser that loads, `test_cookies_that_load_and_get_refused_still_retry` asserts the message. `fake_site` cookie tests unchanged: `rejects-cookies` and `rejects-cookies-carousel` still print `t("cookies_retry", "brave")` and save; `test_failure_with_cookies_reports_original_error_and_keyring_hint` still passes
+- [x] **[pin]** `test_cookies_that_load_and_find_only_images_are_not_retried`. `-y -p --cookies brave` on `fake_site` `only-images`: exit 1, `t("no_supported_items")`, no `cookies_retry`, `fake_site == [("brave",)]`
+- [x] **[pin]** `test_no_test_can_reach_the_real_session_bus` and `test_no_desktop_picks_a_keyring` (`tests/test_isolation.py`); `test_live_tests_keep_the_real_home` checks live tests keep both. With the dead bus set by `isolated_env`, no test outside `tests/live` can open the session bus: a test asserting `os.environ["DBUS_SESSION_BUS_ADDRESS"]` points under `tmp_path`
+- [x] `test_es_and_en_have_same_keys` (`tests/test_i18n.py`); `test_unreadable_cookies_in_both_languages`. Both messages exist in the `es` and `en` blocks of `i18n.py`
+- [x] Checked in the merge diff: `README.md` line 15 gains one sentence: if the browser's cookies can't be read, the download says why and goes on without them
 
 **Commits**, so D5 can be reverted on its own:
 
@@ -285,7 +285,36 @@ Not needed. A missing browser is fully simulated by an empty `HOME`, with the re
 
 **Release note (for the planner):** "When the browser passed to `--cookies`, or picked in the wizard, isn't installed or its cookies can't be read, the tool now says so and goes on without cookies. `-p`, `--playlist-items` and the wizard's item picker used to end in a traceback, and the URLs after it never ran. Single downloads no longer say `Failed with <browser> cookies` or suggest another keyring when the browser simply isn't there. `-l` lists the formats without cookies instead of failing."
 
+## Validation
+
+On `main` at `c4421e3` (merge `a6f31bf`), yt-dlp 2026.10.26, ffmpeg n9.0.2, Python 3.14.9. GitHub CI run 42432662032 was in progress at validation time; the orchestrator checks its result.
+
+- **Gate:** not re-run here, to keep the load down. The tech-lead ran `scripts/pre-release.sh --no-live` on the merge commit: exit 0, ruff and mypy clean, 1715 passed, 9 deselected, 2 xfailed in each locale run. `c4421e3` only changes `.ai/orchestration/state.json`.
+- **Criteria:** each one is mapped to its test above, all in the gate's run.
+- **Reverting the fix:** not repeated here; the testing and review stages showed it.
+- **Reproduction:** the Problem's command with the real console script (`.venv/bin/download-media`, this checkout's `src/`) against a scratch `python -m http.server` on `127.0.0.1` serving `two.html` (two `<video>` tags, 0.2 s mp4s made with ffmpeg). Under `env -i` with `PATH=/usr/bin:/bin`, `HOME` and `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME` in an empty temp folder (so no chrome), `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR` unset, `LANG=en_US.UTF-8`, `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/bus`, an absolute `-o`. No real cookie database or keyring was read.
+  - `download-media -y -p --cookies chrome -o "$OUT" http://127.0.0.1:<port>/two.html`: yt-dlp's `ERROR: could not find chrome cookies database in "<tmp home>/config/google-chrome"`, then `No chrome cookies found: is chrome installed, and has it been opened at least once? Going on without cookies.` once, both items downloaded, `Done.`, the command `download-media -y -o <out> -p <url>` without `--cookies`, exit 0. No `Traceback`, no `Failed with chrome cookies`, no keyring hint.
+  - On disk: 2 files, `01 - two (1) [two-1].mp4` and `02 - two (2) [two-2].mp4`, no `.part`. One history row. Before the fix: traceback, exit 1, no files.
+  - On a pseudo-TTY (`script`), the lines come in the order of "What the user sees". With stdout redirected to a file, yt-dlp's `Extracting cookies from chrome` lands above `Downloading...` and the tool's message below `[generic] Extracting URL`. That's the tool's buffered `print` and yt-dlp's direct writes sharing one stream, true of every run, not of this item.
+- **Scope:** outside `.ai/`, `5d20d8e..a6f31bf` touches the twelve files in the Files table plus `AGENTS.md` (one line, below). No change to `pyproject.toml`, `PKGBUILD`, `equivalent.py` or the version.
+
+### What changed after approval
+
+- **`isolated_env`'s desktop variables.** The design asked for them to be dropped; the implementation does it outside live tests only, and two tests nobody listed pin it: `test_no_desktop_picks_a_keyring`, and `test_live_tests_keep_the_real_home`, which now also checks that live tests keep the real bus and `XDG_CURRENT_DESKTOP`. A test that wants a desktop sets it (`test_an_unreachable_desktop_keyring_suggests_another_keyring` sets `GNOME`).
+- **The `secretstorage` hint moved** out of `cli._hint_for_download_error` into `cookies.secretstorage_hint()`, so `report_failure` and the download error hint print the same two lines. Same text, still hardcoded English, as before (row 02).
+- **`AGENTS.md`**, Testing: `isolated_env` keeps tests away from "the session keyring (a dead D-Bus address)". One line, not in the Files table.
+- **`tests/conftest.py`** also gained, from the test-engineer, the `/cookie/<token>/` and `/seen/<token>/` loopback routes and `GATE_REQUESTS`, to pin that a browser whose cookies load still sends them and costs no extra request (`test_a_browser_that_loads_sends_its_cookies_to_every_item`, `test_a_browser_that_loads_costs_no_extra_request`).
+- `cli.py` carries the "failed without cookies" flag as `_FailedWithoutCookies(DownloadError)`, and `-l` goes through a new `_list_formats` helper. Both are within what Design left to the developer.
+
+### Remaining risks (QA, minor, for the planner)
+
+1. QA flagged the Spanish wording `Se sigue sin cookies.` in both messages. `Se continúa sin cookies.` is one option; a one-line change per message in the `es` block.
+2. The going-on-without-cookies line prints only before the download. In a long `-p` run it scrolls away, and nothing at the end (`Done.` or the summary) says the run used no cookies.
+3. `AGENTS.md` was touched but isn't in the Files table, so two items touching it at once wouldn't show up as a collision.
+
 ## Open decisions
+
+**Changes shipped behaviour, for the human's review: D1.** It was decided by the roles under delegation and is merged. After a browser's cookies can't be loaded, every mode now goes on without cookies. `-p`, `--playlist-items` and the picker used to end in a traceback with exit 1, and now save what a cookieless run can, exit 0. `-l` lists the formats without cookies, exit 0, where it failed with exit 1. Single mode saved before too, but now prints `cookies_no_browser` or `cookies_unreadable` instead of `Failed with <browser> cookies` and the keyring hint. Moving to D1's option B means changing only the `CookiesUnavailable` branches in `_download_with_cookie_fallback` and `_list_formats`, to stop the URL instead of downloading again.
 
 Resolved by the roles under the human's delegation, each on the recommended option: D1 A, D2 A, D3 A, D4 A, D5 B, D6 A, D7 A, D8 A. D1 (go on without cookies after a cookie-load failure) changes shipped behaviour; the human reviews.
 
