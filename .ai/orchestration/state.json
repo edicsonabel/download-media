@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T11:54:30-04:00",
+  "updated": "2026-11-08T11:59:55-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1593,6 +1593,27 @@
           "result": "done",
           "at": "2026-11-08T11:54:30-04:00",
           "note": "Worktree and branch removed."
+        }
+      ]
+    },
+    "fix/wizard-ig-cookies": {
+      "type": "fix",
+      "title": "Fix the up-front cookies prompt: Instagram, b-Enter-b _Back traceback, summary",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/06-wizard-ig-cookies.md",
+      "branch": "fix/wizard-ig-cookies",
+      "worktree": ".worktrees/fix-wizard-ig-cookies",
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-08T11:59:55-04:00",
+          "note": "Human answered 'dale, sigue' to the release question; read as option b: continue with wizard-ig-cookies (row 06), release 0.3.0 later. Not a release approval. Merging to main before the v0.3.0 tag puts it in 0.3.0."
         }
       ]
     }
