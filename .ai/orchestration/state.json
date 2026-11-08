@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T20:58:52-04:00",
+  "updated": "2026-11-07T21:04:41-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1175,9 +1175,9 @@
     "fix/cookie-fallback": {
       "type": "fix",
       "title": "Cookie fallback handles a missing browser and empty --cookies runs",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/26-cookie-fallback.md",
       "branch": "fix/cookie-fallback",
       "worktree": ".worktrees/fix-cookie-fallback",
@@ -1186,7 +1186,8 @@
         "f107b29",
         "0b8ffa6",
         "443cd23",
-        "d62b358"
+        "d62b358",
+        "a6f31bf"
       ],
       "review": {
         "approved": true,
@@ -1245,6 +1246,13 @@
           "result": "approved",
           "at": "2026-11-07T20:58:52-04:00",
           "note": "Merge and push under the human's standing delegation. The Spanish wording and a closing line after Done go to the planner."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-07T21:04:41-04:00",
+          "note": "Merged as a6f31bf, no conflicts. Gate exit 0, 1715 passed, 2 xfailed. Pushed by the orchestrator under delegation."
         }
       ]
     }
