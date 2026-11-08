@@ -201,7 +201,7 @@ Wizard, direct, `-y`, `-p`, `-P`, `-l`, cookies, single, carousel, playlist, rer
 - [x] `git diff main --stat` lists only the four files in Files
 - [x] After the push (D6), `gh run list --workflow ci.yml --commit <full sha> --json conclusion,databaseId` shows `success`. That job's log has `Image: ubuntu-26.04`, and `gh api .../jobs --jq '.jobs[].labels'` shows `ubuntu-26.04`
 - [x] After the same push, `gh run list --workflow deploy-pages.yml --commit <full sha>` shows `success`, and its job's annotations have no `Node.js 20` warning. `curl -s https://edicsonabel.github.io/download-media/` still shows the same `vX.Y.Z` label as `docs/index.html`
-- [ ] At the next release, the `release-manager` checks that the `Deploy to AUR` tag run succeeded with no `Node.js 20` warning on either job. This one can't be checked at validation, so record it as a release step, not a validation failure
+- [x] At the next release, the `release-manager` checks that the `Deploy to AUR` tag run succeeded with no `Node.js 20` warning on either job. This one can't be checked at validation, so record it as a release step, not a validation failure
 
 ## Live check
 
