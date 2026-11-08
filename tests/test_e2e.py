@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import sqlite3
 import subprocess
 import sys
 from collections.abc import Callable
@@ -5389,3 +5390,195 @@ def test_subtitle_warnings_in_both_languages(
     code, output = run("-y", "-s", "https://fake.test/subs-fr")
     assert code == 0
     assert none in output
+
+
+# A browser whose cookies can't be read (spec 26). The isolated home holds no browser at all,
+# and isolated_env's dead session bus stands for a keyring that can't be reached.
+CHROME = str(BROWSERS.index("chrome") + 2)
+KEYRING_ERROR = "[Errno 2] No such file or directory"
+
+
+def no_browser(browser: str = "chrome") -> str:
+    return t("cookies_no_browser", browser)
+
+
+def keyring_hint(browser: str = "chrome") -> str:
+    return t("cookies_keyring_hint", browser)
+
+
+@pytest.fixture
+def direct(
+    media_url: str, home: Path, out: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> Callable[..., tuple[int, str]]:
+    """Run loopback pages through the real generic extractor in direct mode. No prompts."""
+
+    def _direct(*argv: str, pages: tuple[str, ...]) -> tuple[int, str]:
+        answers()
+        code = cli.main(["-o", str(out), *argv, *(f"{media_url}/{page}" for page in pages)])
+        captured = capfd.readouterr()
+        return code, captured.out + captured.err
+
+    return _direct
+
+
+@pytest.fixture
+def unreadable_chrome() -> None:
+    """A Chrome profile with one v11 cookie: decrypting it asks the keyring for its key."""
+    profile = Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "Cookies")
+    con.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('version', '20')")
+    con.execute(
+        "CREATE TABLE cookies (host_key BLOB, name BLOB, value BLOB, encrypted_value BLOB,"
+        " path BLOB, expires_utc INTEGER, is_secure INTEGER)"
+    )
+    con.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
+        (b"127.0.0.1", b"s", b"", b"v11" + b"\0" * 16, b"/"),
+    )
+    con.commit()
+    con.close()
+
+
+def test_a_missing_browser_does_not_stop_a_playlist(direct: Any, out: Path) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("multi.html",))
+    assert code == 0
+    assert names(out) == MULTI
+    assert output.count(no_browser()) == 1
+    assert "Traceback" not in output
+    assert t("cookies_retry", "chrome") not in output
+    assert keyring_hint() not in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(history_rows()) == 1
+
+
+def test_a_missing_browser_keeps_the_chosen_items(direct: Any, out: Path) -> None:
+    flags = ("-y", "--playlist-items", "1,2", "--cookies", "chrome")
+    code, output = direct(*flags, pages=("multi.html",))
+    assert code == 0
+    assert len(names(out)) == 2
+    assert no_browser() in output
+    [line] = commands(output)
+    assert "--playlist-items 1,2" in line
+    assert "--cookies" not in shlex.split(line)
+
+
+def test_a_missing_firefox_is_named(direct: Any, out: Path) -> None:
+    code, output = direct("-y", "-p", "--cookies", "firefox", pages=("multi.html",))
+    assert code == 0
+    assert no_browser("firefox") in output
+    assert names(out) == MULTI
+
+
+def test_a_missing_browser_is_named_for_every_url(direct: Any, out: Path) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("multi.html", "poster.html"))
+    assert code == 0
+    assert len(names(out)) == 5
+    assert output.count(no_browser()) == 2
+    assert "Traceback" not in output
+
+
+def test_a_dead_page_with_a_missing_browser_fails_without_a_keyring_hint(
+    direct: Any, media_url: str, out: Path
+) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("status/404",))
+    assert code == 1
+    assert t("failed", f"{media_url}/status/404") in output
+    assert no_browser() in output
+    assert keyring_hint() not in output
+    assert GIVE_UP not in output
+    assert "Traceback" not in output
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+    assert history_rows() == []
+    assert names(out) == []
+
+
+def test_a_single_video_with_a_missing_browser_says_so_instead_of_retrying(
+    direct: Any, out: Path
+) -> None:
+    code, output = direct("-y", "--cookies", "chrome", pages=("poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert no_browser() in output
+    assert t("cookies_retry", "chrome") not in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+def test_a_single_dead_page_with_a_missing_browser_gets_no_keyring_hint(direct: Any) -> None:
+    code, output = direct("-y", "--cookies", "chrome", pages=("status/404",))
+    assert code == 1
+    assert no_browser() in output
+    assert keyring_hint() not in output
+    assert "--cookies chrome" in commands(output)[0]
+
+
+def test_a_login_wall_with_a_missing_browser_suggests_another_browser(direct: Any) -> None:
+    code, output = direct("-y", "--cookies", "chrome", pages=("status/401",))
+    assert code == 1
+    assert no_browser() in output
+    assert GIVE_UP in output
+    assert keyring_hint() not in output
+
+
+def test_formats_are_listed_without_a_missing_browser(direct: Any, media_url: str) -> None:
+    code, output = direct("-l", "--cookies", "chrome", pages=("poster.html",))
+    assert code == 0
+    assert no_browser() in output
+    assert t("failed", f"{media_url}/poster.html") not in output
+    assert "Available formats" in output
+
+
+def test_a_missing_browser_at_the_last_wizard_step_saves_the_picked_items(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("multi.html", *PICKER_WALK[:-1], CHROME)
+    assert code == 0
+    assert names(home / "Videos") == MULTI
+    assert no_browser() in output
+    assert "Traceback" not in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_an_unreachable_keyring_named_by_hand_gets_no_keyring_hint(direct: Any, out: Path) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome+gnomekeyring", pages=("multi.html",))
+    assert code == 0
+    assert names(out) == MULTI
+    assert t("cookies_unreadable", "chrome", KEYRING_ERROR) in output
+    assert no_browser() not in output
+    assert keyring_hint() not in output
+    assert "Traceback" not in output
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_an_unreachable_desktop_keyring_suggests_another_keyring(
+    direct: Any, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("multi.html",))
+    assert code == 0
+    assert names(out) == MULTI
+    unreadable = t("cookies_unreadable", "chrome", KEYRING_ERROR)
+    assert output.index(unreadable) < output.index(keyring_hint())
+
+
+def test_safari_on_linux_is_unreadable(direct: Any, out: Path) -> None:
+    code, output = direct("-y", "-p", "--cookies", "safari", pages=("multi.html",))
+    assert code == 0
+    assert t("cookies_unreadable", "safari", "unsupported platform: linux") in output
+    assert names(out) == MULTI
+
+
+def test_cookies_that_load_and_find_only_images_are_not_retried(
+    run: Any, fake_site: list[Any]
+) -> None:
+    code, output = run("-y", "-p", "--cookies", "brave", ONLY_IMAGES)
+    assert code == 1
+    assert t("no_supported_items") in output
+    assert t("cookies_retry", "brave") not in output
+    assert fake_site == [("brave",)]

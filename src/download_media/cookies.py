@@ -11,10 +11,16 @@ from __future__ import annotations
 import argparse
 import os
 import shlex
+import textwrap
+from dataclasses import dataclass
 from pathlib import Path
+
+from yt_dlp.cookies import CookieLoadError
+from yt_dlp.utils import DownloadError
 
 from .config import BROWSERS
 from .i18n import t
+from .ui import warn
 
 KEYRINGS: tuple[str, ...] = ("basictext", "gnomekeyring", "kwallet", "kwallet5", "kwallet6")
 
@@ -91,3 +97,53 @@ def ydl_cookies(spec: str) -> tuple[str | None, ...]:
     browser, _, keyring = spec.partition("+")
     keyring = keyring or detect_keyring(browser) or ""
     return (browser, None, keyring.upper(), None) if keyring else (browser,)
+
+
+@dataclass(frozen=True)
+class CookieFailure:
+    """Why yt-dlp couldn't load a browser's cookies."""
+
+    missing: bool  # No cookie database: the browser isn't installed, or was never opened.
+    reason: str  # yt-dlp's cause, first line.
+
+
+_REASON_LENGTH = 160
+
+
+def cookie_failure(exc: BaseException) -> CookieFailure | None:
+    """The cookie-load failure behind ``exc``, if that's what it is."""
+    # Without ignoreerrors, yt-dlp reports the CookieLoadError, which raises a DownloadError.
+    if isinstance(exc, DownloadError) and exc.exc_info:
+        exc = exc.exc_info[1]
+    if not isinstance(exc, CookieLoadError):
+        return None
+    # load_cookies turns any exception into CookieLoadError, raised inside the except block.
+    cause = exc.__context__ or exc
+    text = str(cause)
+    lines = text.strip().splitlines()
+    reason = textwrap.shorten(lines[0] if lines else text, _REASON_LENGTH, placeholder="...")
+    missing = (
+        isinstance(cause, FileNotFoundError)
+        and text.startswith("could not find ")
+        and " cookies database" in text
+    )
+    return CookieFailure(missing=missing, reason=reason)
+
+
+def secretstorage_hint() -> None:
+    warn("  → install python-secretstorage so cookies from Brave/Chrome can be decrypted:")
+    warn("      sudo pacman -S python-secretstorage")
+
+
+def report_failure(spec: str, failure: CookieFailure) -> None:
+    """Say why the cookies of ``spec`` couldn't be read; the run goes on without them."""
+    browser = browser_of(spec)
+    if failure.missing:
+        # Not a keyring problem: there's nothing to decrypt.
+        warn(t("cookies_no_browser", browser))
+        return
+    warn(t("cookies_unreadable", browser, failure.reason))
+    if "secretstorage" in failure.reason.lower():
+        secretstorage_hint()
+    elif uses_keyring(spec):
+        warn(t("cookies_keyring_hint", browser))

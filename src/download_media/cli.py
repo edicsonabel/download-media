@@ -13,6 +13,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
+from yt_dlp.utils import DownloadError
+
 from . import __version__, equivalent, history, selection, wizard
 from .clipboard import read_clipboard
 from .config import (
@@ -26,8 +28,21 @@ from .config import (
     DownloadOptions,
     PlaylistMode,
 )
-from .cookies import browser_of, parse_spec, uses_keyring, ydl_cookies
-from .downloader import DownloadResult, build_ydl_opts, download, list_formats
+from .cookies import (
+    browser_of,
+    parse_spec,
+    report_failure,
+    secretstorage_hint,
+    uses_keyring,
+    ydl_cookies,
+)
+from .downloader import (
+    CookiesUnavailable,
+    DownloadResult,
+    build_ydl_opts,
+    download,
+    list_formats,
+)
 from .i18n import is_yes, t
 from .probe import is_auth_error
 from .ui import C, die, fmt_bytes, fmt_duration, info, ok, warn
@@ -235,6 +250,10 @@ def _resolve_playlist_for_direct_mode(
     return "no", None
 
 
+class _FailedWithoutCookies(DownloadError):  # type: ignore[misc]
+    """The browser's cookies couldn't be read, and the run without them failed too."""
+
+
 class _Outcome(NamedTuple):
     ok: bool
     cookies_dropped: bool  # It took retrying without the requested browser cookies.
@@ -271,8 +290,6 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     print(f"{C.DIM}  URL: {url}{C.RESET}")
     print(f"{C.DIM}  → {effective.resolve_output()}{C.RESET}\n")
 
-    from yt_dlp.utils import DownloadError
-
     try:
         result, cookies_dropped = _download_with_cookie_fallback(url, effective)
     except DownloadError as exc:
@@ -280,6 +297,9 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         # friendly summary so the user knows the program is exiting cleanly, not
         # crashing.
         warn(t("failed", url))
+        if isinstance(exc, _FailedWithoutCookies):
+            # The hint is for the run that failed, and that one had no cookies.
+            opts = replace(opts, cookies_browser=None)
         _hint_for_download_error(str(exc), opts)
         return _Outcome(False, False, pmode)
     except KeyboardInterrupt:
@@ -321,11 +341,18 @@ def _download_with_cookie_fallback(
     extractors that work fine anonymously — Instagram answers with an empty API
     response instead of a login error. If the retry also fails, the original
     error is re-raised since it's the one tied to what the user asked for.
-    """
-    from yt_dlp.utils import DownloadError
 
+    Cookies that can't be loaded at all are reported as such, and the run goes on without
+    them: no request was made with them, so there's no first error to keep.
+    """
     try:
         return download(url, opts), False
+    except CookiesUnavailable as exc:
+        report_failure(exc.spec, exc.failure)
+        try:
+            return download(url, replace(opts, cookies_browser=None)), True
+        except DownloadError as error:
+            raise _FailedWithoutCookies(str(error), error.exc_info) from None
     except DownloadError as exc:
         if not opts.cookies_browser:
             raise
@@ -342,14 +369,25 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
     """Print a one-line actionable hint based on common yt-dlp error patterns."""
     msg = message.lower()
     if "secretstorage" in msg:
-        warn(
-            "  → install python-secretstorage so cookies from Brave/Chrome can be decrypted:"
-        )
-        warn("      sudo pacman -S python-secretstorage")
+        secretstorage_hint()
     elif is_auth_error(message) and not opts.cookies_browser:
         warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
     if opts.cookies_browser and uses_keyring(opts.cookies_browser):
         warn(t("cookies_keyring_hint", browser_of(opts.cookies_browser)))
+
+
+def _list_formats(url: str, opts: DownloadOptions) -> int:
+    try:
+        try:
+            return list_formats(url, opts)
+        except CookiesUnavailable as exc:
+            report_failure(exc.spec, exc.failure)
+            opts = replace(opts, cookies_browser=None)
+            return list_formats(url, opts)
+    except DownloadError as exc:
+        warn(t("failed", url))
+        _hint_for_download_error(str(exc), opts)
+        return 1
 
 
 def _print_equivalent(runs: list[tuple[str, DownloadOptions]], outcomes: list[_Outcome]) -> None:
@@ -432,14 +470,7 @@ def main(argv: list[str] | None = None) -> int:
             die(t("url_required"))
 
         if opts.list_formats:
-            from yt_dlp.utils import DownloadError
-
-            try:
-                return list_formats(opts.urls[0], opts)
-            except DownloadError as exc:
-                warn(t("failed", opts.urls[0]))
-                _hint_for_download_error(str(exc), opts)
-                return 1
+            return _list_formats(opts.urls[0], opts)
 
         runs = [(url, opts) for url in opts.urls]
 

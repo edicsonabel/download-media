@@ -6,14 +6,22 @@ import argparse
 from pathlib import Path
 
 import pytest
-from yt_dlp.cookies import SUPPORTED_BROWSERS, SUPPORTED_KEYRINGS, _parse_browser_specification
+from yt_dlp.cookies import (
+    SUPPORTED_BROWSERS,
+    SUPPORTED_KEYRINGS,
+    CookieLoadError,
+    _parse_browser_specification,
+)
+from yt_dlp.utils import DownloadError
 
 from download_media.config import BROWSERS
 from download_media.cookies import (
     _FLAG_FILES,
     _PASSWORD_STORES,
     KEYRINGS,
+    CookieFailure,
     browser_of,
+    cookie_failure,
     detect_keyring,
     parse_spec,
     uses_keyring,
@@ -163,3 +171,69 @@ def test_explicit_keyring_beats_detection(tmp_path: Path) -> None:
 def test_yt_dlp_accepts_the_tuple(keyring: str) -> None:
     parsed = _parse_browser_specification(*ydl_cookies(f"brave+{keyring}"))
     assert parsed == ("brave", None, keyring.upper(), None)
+
+
+def load_error(cause: Exception) -> CookieLoadError:
+    """What yt-dlp's load_cookies raises: the real cause is the context."""
+    try:
+        try:
+            raise cause
+        except Exception:
+            raise CookieLoadError("failed to load cookies")  # noqa: B904
+    except CookieLoadError as error:
+        return error
+
+
+NOT_INSTALLED = 'could not find chrome cookies database in "x"'
+
+
+def test_a_browser_that_is_not_installed_is_missing() -> None:
+    error = load_error(FileNotFoundError(NOT_INSTALLED))
+    assert cookie_failure(error) == CookieFailure(missing=True, reason=NOT_INSTALLED)
+
+
+def test_without_ignoreerrors_the_failure_comes_inside_a_download_error() -> None:
+    error = load_error(FileNotFoundError(NOT_INSTALLED))
+    wrapped = DownloadError("ERROR: " + NOT_INSTALLED, (CookieLoadError, error, None))
+    assert cookie_failure(wrapped) == CookieFailure(missing=True, reason=NOT_INSTALLED)
+
+
+def test_any_other_cause_is_unreadable_with_its_reason() -> None:
+    error = load_error(ValueError("unsupported platform: linux"))
+    assert cookie_failure(error) == CookieFailure(
+        missing=False, reason="unsupported platform: linux"
+    )
+
+
+def test_an_unreachable_keyring_is_unreadable() -> None:
+    error = load_error(FileNotFoundError(2, "No such file or directory"))
+    assert cookie_failure(error) == CookieFailure(
+        missing=False, reason="[Errno 2] No such file or directory"
+    )
+
+
+def test_the_reason_is_one_short_line() -> None:
+    error = load_error(RuntimeError("first line " + "x" * 300 + "\nsecond line"))
+    failure = cookie_failure(error)
+    assert failure is not None
+    assert "\n" not in failure.reason
+    assert "second line" not in failure.reason
+    assert len(failure.reason) <= 160
+
+
+def test_a_load_error_without_a_cause_still_counts() -> None:
+    failure = cookie_failure(CookieLoadError("failed to load cookies"))
+    assert failure == CookieFailure(missing=False, reason="failed to load cookies")
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        DownloadError("ERROR: HTTP Error 404: Not Found"),
+        DownloadError("ERROR: boom", (ValueError, ValueError("boom"), None)),
+        FileNotFoundError(NOT_INSTALLED),
+        ValueError("unsupported platform: linux"),
+    ],
+)
+def test_anything_else_is_not_a_cookie_failure(exc: Exception) -> None:
+    assert cookie_failure(exc) is None
