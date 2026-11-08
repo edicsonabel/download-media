@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T21:10:01-04:00",
+  "updated": "2026-11-07T21:10:14-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1261,6 +1261,30 @@
           "result": "validated",
           "at": "2026-11-07T21:10:01-04:00",
           "note": "Criteria mapped, reproduction fixed. D1 awaits the human. Planner: Spanish wording, closing line, cookies_retry text on rejects-cookies-carousel, interleaved output when redirected."
+        }
+      ]
+    },
+    "fix/workflow-pins": {
+      "type": "fix",
+      "title": "Pin workflow actions and runner, add job timeouts, harden the ffmpeg step",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/10-workflow-pins.md",
+      "branch": "fix/workflow-pins",
+      "worktree": null,
+      "commits": [],
+      "review": {
+        "approved": false,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T21:10:14-04:00",
+          "note": "Next in the planner's order; container-choice waits on a human decision (remux or recode), so it is skipped for now. Under the human's standing delegation."
         }
       ]
     }
