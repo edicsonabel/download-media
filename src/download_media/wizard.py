@@ -430,9 +430,16 @@ def _run_step(
 
 
 def _walk_plan(
-    plan: list[str], opts: DownloadOptions, items: list[ProbeItem], preset: str | None = None
+    plan: list[str],
+    opts: DownloadOptions,
+    items: list[ProbeItem],
+    preset: str | None = None,
+    asked: tuple[str, ...] = (),
 ) -> bool:
-    """Walk the post-probe plan with back/cancel. Returns False if cancelled."""
+    """Walk the post-probe plan with back/cancel. Returns False if cancelled.
+
+    ``asked`` holds steps answered before the walk: listed in the summary, never gone back to.
+    """
     history: list[str] = []
     i = 0
     while i < len(plan):
@@ -441,7 +448,7 @@ def _walk_plan(
             # Silent skip; don't push to history (so back navigates correctly)
             i += 1
             continue
-        _print_summary(history, opts)
+        _print_summary([*asked, *history], opts)
         try:
             _run_step(name, opts, items, preset)
         except _Back:
@@ -610,6 +617,7 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
 
     # ---- Phase 3: post-probe state machine ----
     plan = _build_post_probe_plan(probe_result, cookies_asked)
-    if not _walk_plan(plan, opts, probe_result.items, preset):
+    asked = ("cookies",) if cookies_asked else ()
+    if not _walk_plan(plan, opts, probe_result.items, preset, asked):
         return None
     return opts

@@ -3844,6 +3844,60 @@ def test_a_url_typed_after_back_that_needs_no_cookies_is_not_asked_up_front(
     assert len(names(out)) == 2
 
 
+def cookies_line(value: str) -> str:
+    """The running summary's cookies line."""
+    return f"✓ {wizard._summary_label('cookies')}: {value}"
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_the_summary_lists_a_browser_given_up_front(
+    wizard_on: Any, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    code, output = wizard_on(COOKIE_HUNGRY, "", FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    line = cookies_line(BROWSERS[0])
+    assert line in output
+    assert output.index(line) < output.index(t("ask_type"))
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_the_summary_lists_a_decline_up_front(
+    wizard_on: Any, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    code, output = wizard_on(X_CAROUSEL, "", NO_COOKIES, "", *VIDEO_STEPS)
+    assert code == 0
+    assert output.count(t("ask_cookies")) == 1
+    assert cookies_line(t("no_cookies")) in output
+
+
+def test_the_summary_lists_a_browser_given_after_a_login_wall(wizard_on: Any) -> None:
+    code, output = wizard_on(GATED, "", FIRST_BROWSER, *VIDEO_STEPS)
+    assert code == 0
+    assert asked_for_login(LOGIN_REQUIRED) in output
+    assert cookies_line(BROWSERS[0]) in output
+
+
+def test_the_summary_of_the_manual_flow_lists_a_decline_up_front(wizard_on: Any) -> None:
+    # The probe fails without a login wall: no retry, no late step.
+    url = "https://fake.test/rate-limited?from=x.com"
+    code, output = wizard_on(url, "", NO_COOKIES, *VIDEO_STEPS, "")
+    assert code == 1
+    assert t("probe_falling_back") in output
+    assert output.count(t("ask_cookies")) == 1
+    assert cookies_line(t("no_cookies")) in output
+
+
+def test_the_summary_has_no_cookies_line_before_the_late_step(wizard_on: Any) -> None:
+    code, output = wizard_on(CAROUSEL, *PICKER_WALK)
+    assert code == 0
+    assert output.count(t("ask_cookies")) == 1
+    assert cookies_line("") not in output[: output.index(t("ask_cookies"))]
+
+
 def test_cookies_that_do_not_help_end_the_retry_without_a_loop(wizard_on: Any, out: Path) -> None:
     code, output = wizard_on(PRIVATE, "", FIRST_BROWSER, *VIDEO_STEPS, "")
     assert code == 1
