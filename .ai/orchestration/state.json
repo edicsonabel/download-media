@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T14:55:47-04:00",
+  "updated": "2026-11-08T17:17:38-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1762,14 +1762,36 @@
     "feature/instagram-images": {
       "type": "feature",
       "title": "Save Instagram carousel images alongside videos",
-      "stage": "development",
-      "status": "in_progress",
-      "next_agent": "developer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/01-instagram-images.md",
       "branch": "feature/instagram-images",
       "worktree": ".worktrees/feature-instagram-images",
-      "commits": [],
-      "review": null,
+      "commits": [
+        "e3072d2",
+        "9a7ee1b",
+        "d0d05e6",
+        "fd39f23",
+        "a989643",
+        "f1a2b61",
+        "b3d9d04"
+      ],
+      "review": {
+        "approved": true,
+        "findings": [
+          {
+            "severity": "minor",
+            "file": "src/download_media/wizard.py:296-299",
+            "description": "ruff format would join the renamed ternary; pre-existing ruff format drift (row 05), gate runs only ruff check."
+          },
+          {
+            "severity": "minor",
+            "file": "src/download_media/downloader.py:193-194",
+            "description": "else: guard keeping a failed item's images out of self.images survives mutation; defensive, fake_site can't produce it."
+          }
+        ]
+      },
       "history": [
         {
           "stage": "planning",
@@ -1791,6 +1813,62 @@
           "result": "approved",
           "at": "2026-11-08T14:55:47-04:00",
           "note": "D1-D8 recommended options under the human delegation. Images saved in every mode, D2 (Enter = everything downloadable) and D3 (image-only selection skips type/quality/container) change published behaviour: human reviews before 0.4.0."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-08T15:21:07-04:00",
+          "note": "e3072d2 feat. Gate --no-live exit 0; 1876 passed + 2 xfailed (row 25) in es and en; 38 new/updated tests fail on main's downloader/probe/wizard. is_saveable_image shared; params scoped per image in process_video_result, restored in finally; image_not_saved counts as failed item; -a/-l skip images (item_image_skipped). Spec deviations: --playlist-items 1,3 without -p (argparse refuses both); one commit (pieces coupled); test_i18n.py added. Planner: Enter-all prints --playlist-items 1,2,3,4 not -p; AGENTS wizard step 3 doesn't mention image-only skip; direct preview empty for IG carousel (pre-existing). Live tests updated, not run."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-08T15:51:30-04:00",
+          "note": "9a7ee1b tests. Gate --no-live exit 0; 1900 passed + 5 xfailed (3 new strict) es/en; coverage 98.75%. Mutation 26/28 (M11 equivalent; M14 caught only by xfail XPASS). Findings: medium truncated image reported as saved; low linked image under -a/-l not skipped as image. Planner: --video-format mkv leaves single-format mp4 as .mp4 (pre-existing)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-08T16:06:34-04:00",
+          "note": "Round 2. d0d05e6: _Ydl.urlopen wraps yt-dlp's response while fetching an image; body short of Content-Length (identity encoding) raises yt-dlp IncompleteRead; partial candidate files created by this call and not returned by yt-dlp are deleted; pre-existing files untouched. fd39f23: save_images=True in every mode, list_formats through _Ydl; no_warnings scoped to image entries (-l printed 'No video formats found!'). xfails removed, assertions unchanged; each fails on revert. Gate exit 0; 1903 passed + 2 xfailed (row 25) es/en. Notes: ruff format 6 unrelated files (row 05); no test for fallback to a second candidate after a truncated first."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-08T16:24:44-04:00",
+          "note": "Round 2. a989643 tests. Round-1 findings 1 and 2 confirmed fixed. New medium: cut-off candidate + same-extension fallback reports partial as saved. Gate exit 0; 1927 passed + 3 xfailed. Mutation 13/14 (M9 fetching_image reset unobservable, hygiene). Wrapper rule: fits; weak point _image_paths copies yt-dlp thumbnail naming. Planner: tests/test_config.py unformatted at HEAD (row 05)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-08T16:33:49-04:00",
+          "note": "Round 3. f1a2b61: _Ydl.existing_file override while fetching_image; path free on first check goes to image_new; if it exists on a later check (earlier cut-off candidate left it) it's deleted so yt-dlp fetches the next candidate. Cleanup = image_new - kept; _image_paths and determine_ext copy removed. Pre-existing files (lexists) never enter image_new. xfail removed; new test all-candidates-cut-off (fake_site ig-short-then-short). Both fail on revert. Gate exit 0; 1929 passed + 2 xfailed (row 25). Notes: ruff format vs gate (row 05); OSError mid-write still leaves a partial (out of finding)."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-08T16:49:30-04:00",
+          "note": "Round 3. b3d9d04 tests (video listed twice next to an image; rerun after fallback keeps whole image). Round-2 finding confirmed fixed. Gate exit 0; 1931 passed + 2 xfailed (pre-existing). Mutation on f1a2b61 7/9 (lexists survivors only matter for dangling symlinks). Notes: dangling symlink at image path + cut-off + same-ext fallback reports 64 B image saved (very unlikely); OSError mid-write leaves partial (also covers); tests/test_config.py unformatted (row 05)."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-08T17:17:38-04:00",
+          "note": "Gate exit 0; 1931 passed + 2 xfailed es/en; coverage 98.78%. Real runs on fake_site matched disk in every mode (-y -p, -y, --playlist-items, -a, -l, broken image, -s, cut-off fallbacks, wizard Enter/1,4/b/-i -a). Mutation 21/23. Deviations 1-5 accepted; _WholeBody + existing_file hook fit the wrapper rule (yt-dlp 2026.10.26 _write_thumbnails gap; worth an upstream issue). Release review: D2 also changes Enter for generic lists (direct .jpg / audio next to video now selected). Planner: -a partial_result counts images as 'without downloadable media' (row 31); upstream yt-dlp issue for short thumbnail body."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T17:17:38-04:00",
+          "note": "Merge and push under the human's standing delegation. Live check runs in validation. Human reviews before 0.4.0: images saved in every mode, D2 (incl. generic lists), D3, and the _WholeBody/existing_file additions beyond the spec."
         }
       ]
     }
