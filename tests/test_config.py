@@ -41,8 +41,9 @@ def test_xdg_dir_falls_back_to_home(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 
 def test_options_resolve_output_defaults_per_type(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("download_media.config.xdg_dir",
-                        lambda kind, fallback: Path(f"/fake/{kind.lower()}"))
+    monkeypatch.setattr(
+        "download_media.config.xdg_dir", lambda kind, fallback: Path(f"/fake/{kind.lower()}")
+    )
     video_opts = DownloadOptions(urls=["x"], audio_only=False)
     audio_opts = DownloadOptions(urls=["x"], audio_only=True)
     assert video_opts.resolve_output() == Path("/fake/videos")

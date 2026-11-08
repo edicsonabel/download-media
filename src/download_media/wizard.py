@@ -112,12 +112,22 @@ def _cancel_opt() -> None:
 # Summary
 # ---------------------------------------------------------------------------
 _SUMMARY_LABELS_ES = {
-    "select": "Items", "type": "Tipo", "quality": "Calidad", "container": "Contenedor",
-    "aformat": "Formato", "output": "Carpeta", "cookies": "Cookies",
+    "select": "Items",
+    "type": "Tipo",
+    "quality": "Calidad",
+    "container": "Contenedor",
+    "aformat": "Formato",
+    "output": "Carpeta",
+    "cookies": "Cookies",
 }
 _SUMMARY_LABELS_EN = {
-    "select": "Items", "type": "Type", "quality": "Quality", "container": "Container",
-    "aformat": "Format", "output": "Folder", "cookies": "Cookies",
+    "select": "Items",
+    "type": "Type",
+    "quality": "Quality",
+    "container": "Container",
+    "aformat": "Format",
+    "output": "Folder",
+    "cookies": "Cookies",
 }
 
 
@@ -178,6 +188,7 @@ def step_url(opts: DownloadOptions) -> None:
     new_url = _read_text(prompt, default=current, allow_back=False)
     if not new_url:
         from .ui import die
+
         die(t("empty_url"))
     # A URL can't hold unencoded whitespace, so spaces separate several.
     opts.urls = new_url.split()
@@ -214,9 +225,7 @@ def step_type(opts: DownloadOptions) -> None:
 
 def step_quality(opts: DownloadOptions) -> None:
     print(f"{t('ask_quality')}:")
-    for i, label in enumerate(
-        ["480p", "720p", "1080p", "1440p (2K)", "2160p (4K)", "best"], 1
-    ):
+    for i, label in enumerate(["480p", "720p", "1080p", "1440p (2K)", "2160p (4K)", "best"], 1):
         _opt(str(i), label)
     _back_opt()
     _cancel_opt()
@@ -235,7 +244,8 @@ def step_container(opts: DownloadOptions) -> None:
     _cancel_opt()
     default = (
         str(VIDEO_FORMATS.index(opts.video_format) + 1)
-        if opts.video_format in VIDEO_FORMATS else "1"
+        if opts.video_format in VIDEO_FORMATS
+        else "1"
     )
     choice = _read_choice(default, [str(i) for i in range(1, len(VIDEO_FORMATS) + 1)])
     opts.video_format = VIDEO_FORMATS[int(choice) - 1]
@@ -249,7 +259,8 @@ def step_aformat(opts: DownloadOptions) -> None:
     _cancel_opt()
     default = (
         str(AUDIO_FORMATS.index(opts.audio_format) + 1)
-        if opts.audio_format in AUDIO_FORMATS else "1"
+        if opts.audio_format in AUDIO_FORMATS
+        else "1"
     )
     choice = _read_choice(default, [str(i) for i in range(1, len(AUDIO_FORMATS) + 1)])
     opts.audio_format = AUDIO_FORMATS[int(choice) - 1]
@@ -259,9 +270,7 @@ def step_output(opts: DownloadOptions) -> None:
     if opts.output:
         default_path = opts.output
     else:
-        default_path = (
-            xdg_dir("MUSIC", "Music") if opts.audio_only else xdg_dir("VIDEOS", "Videos")
-        )
+        default_path = xdg_dir("MUSIC", "Music") if opts.audio_only else xdg_dir("VIDEOS", "Videos")
     prompt = t("ask_output", default_path).rstrip(": ")
     answer = _read_text(prompt, default=str(default_path))
     opts.output = Path(answer)
@@ -293,9 +302,7 @@ def step_select(opts: DownloadOptions, items: list[ProbeItem], preset: str | Non
         print()
         try:
             reply = input(
-                t("ask_selection_default_preset", preset)
-                if preset
-                else t("ask_selection_default")
+                t("ask_selection_default_preset", preset) if preset else t("ask_selection_default")
             )
         except EOFError as e:
             raise _Cancel from e
@@ -340,8 +347,8 @@ _KIND_LABEL = {
     ContentKind.SINGLE_VIDEO: "kind_video",
     ContentKind.SINGLE_AUDIO: "kind_audio",
     ContentKind.SINGLE_IMAGE: "kind_image",
-    ContentKind.PLAYLIST:     "kind_playlist",
-    ContentKind.UNKNOWN:      "kind_unknown",
+    ContentKind.PLAYLIST: "kind_playlist",
+    ContentKind.UNKNOWN: "kind_unknown",
 }
 
 
@@ -376,9 +383,7 @@ def _print_detection(p: Probe) -> None:
 # ---------------------------------------------------------------------------
 # Plan builder + state machine
 # ---------------------------------------------------------------------------
-def _build_post_probe_plan(
-    probe_result: Probe, cookies_asked: bool
-) -> list[str]:
+def _build_post_probe_plan(probe_result: Probe, cookies_asked: bool) -> list[str]:
     """Return ordered list of step names for the post-probe phase."""
     steps: list[str] = []
     if probe_result.is_playlist:
@@ -421,14 +426,14 @@ def _run_step(
     name: str, opts: DownloadOptions, items: list[ProbeItem], preset: str | None = None
 ) -> None:
     dispatch: dict[str, Callable[[], None]] = {
-        "url":       lambda: step_url(opts),
-        "cookies":   lambda: step_cookies(opts),
-        "type":      lambda: step_type(opts),
-        "quality":   lambda: step_quality(opts),
+        "url": lambda: step_url(opts),
+        "cookies": lambda: step_cookies(opts),
+        "type": lambda: step_type(opts),
+        "quality": lambda: step_quality(opts),
         "container": lambda: step_container(opts),
-        "aformat":   lambda: step_aformat(opts),
-        "output":    lambda: step_output(opts),
-        "select":    lambda: step_select(opts, items, preset),
+        "aformat": lambda: step_aformat(opts),
+        "output": lambda: step_output(opts),
+        "select": lambda: step_select(opts, items, preset),
     }
     fn = dispatch.get(name)
     if fn is None:
@@ -626,7 +631,9 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
     if probe_result.is_playlist:
         opts.playlist_mode = "yes"
     elif probe_result.content_kind in (
-        ContentKind.SINGLE_VIDEO, ContentKind.SINGLE_AUDIO, ContentKind.SINGLE_IMAGE,
+        ContentKind.SINGLE_VIDEO,
+        ContentKind.SINGLE_AUDIO,
+        ContentKind.SINGLE_IMAGE,
     ):
         opts.playlist_mode = "no"
 

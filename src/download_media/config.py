@@ -24,7 +24,14 @@ QUALITIES: tuple[str, ...] = ("360", "480", "720", "1080", "1440", "2160", "best
 AUDIO_FORMATS: tuple[str, ...] = ("mp3", "m4a", "opus", "wav")
 VIDEO_FORMATS: tuple[str, ...] = ("mp4", "mkv", "webm")
 BROWSERS: tuple[str, ...] = (
-    "firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi", "safari",
+    "firefox",
+    "chrome",
+    "chromium",
+    "brave",
+    "edge",
+    "opera",
+    "vivaldi",
+    "safari",
 )
 
 

@@ -50,19 +50,28 @@ from .probe import is_auth_error
 from .ui import C, die, err, fmt_bytes, fmt_duration, info, ok, warn
 
 # Flags that signal "I know what I want; skip the wizard".
-_INTENT_FLAGS: frozenset[str] = frozenset({
-    "-a", "--audio",
-    "-q", "--quality",
-    "-f", "--format",
-    "--video-format",
-    "-o", "--output",
-    "-s", "--subs",
-    "--sub-langs",
-    "-p", "--playlist",
-    "-P", "--no-playlist",
-    "--playlist-items",
-    "--cookies",
-})
+_INTENT_FLAGS: frozenset[str] = frozenset(
+    {
+        "-a",
+        "--audio",
+        "-q",
+        "--quality",
+        "-f",
+        "--format",
+        "--video-format",
+        "-o",
+        "--output",
+        "-s",
+        "--subs",
+        "--sub-langs",
+        "-p",
+        "--playlist",
+        "-P",
+        "--no-playlist",
+        "--playlist-items",
+        "--cookies",
+    }
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,54 +88,88 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("-a", "--audio", action="store_true", help="Audio only (mp3 by default).")
     p.add_argument(
-        "-q", "--quality", choices=QUALITIES, default=DEFAULT_QUALITY,
+        "-q",
+        "--quality",
+        choices=QUALITIES,
+        default=DEFAULT_QUALITY,
         help=f"Max video quality (default: {DEFAULT_QUALITY}).",
     )
     p.add_argument(
-        "-f", "--format", choices=AUDIO_FORMATS, default=DEFAULT_AUDIO_FORMAT,
-        dest="audio_format", help=f"Audio format (default: {DEFAULT_AUDIO_FORMAT}).",
+        "-f",
+        "--format",
+        choices=AUDIO_FORMATS,
+        default=DEFAULT_AUDIO_FORMAT,
+        dest="audio_format",
+        help=f"Audio format (default: {DEFAULT_AUDIO_FORMAT}).",
     )
     p.add_argument(
-        "--video-format", choices=VIDEO_FORMATS, default=DEFAULT_VIDEO_FORMAT,
+        "--video-format",
+        choices=VIDEO_FORMATS,
+        default=DEFAULT_VIDEO_FORMAT,
         dest="video_format",
         help=f"Video container (default: {DEFAULT_VIDEO_FORMAT}). "
         "mp4 prefers H.264/AAC so it plays on WhatsApp, iPhone and TVs.",
     )
 
-    p.add_argument("-o", "--output", type=Path, help="Output folder (default: ~/Videos or ~/Music).")
     p.add_argument(
-        "-l", "--list", action="store_true", dest="list_formats",
+        "-o", "--output", type=Path, help="Output folder (default: ~/Videos or ~/Music)."
+    )
+    p.add_argument(
+        "-l",
+        "--list",
+        action="store_true",
+        dest="list_formats",
         help="List available formats and exit.",
     )
 
     pl = p.add_mutually_exclusive_group()
     pl.add_argument("-p", "--playlist", action="store_true", help="Force full playlist download.")
-    pl.add_argument("-P", "--no-playlist", action="store_true", dest="no_playlist",
-                    help="Force single-video download.")
-    pl.add_argument("--playlist-items", dest="playlist_items", metavar="ITEMS",
-                    help="Download only these playlist items, e.g. 1-3,5.")
+    pl.add_argument(
+        "-P",
+        "--no-playlist",
+        action="store_true",
+        dest="no_playlist",
+        help="Force single-video download.",
+    )
+    pl.add_argument(
+        "--playlist-items",
+        dest="playlist_items",
+        metavar="ITEMS",
+        help="Download only these playlist items, e.g. 1-3,5.",
+    )
 
     p.add_argument(
-        "-s", "--subs", action="store_true",
+        "-s",
+        "--subs",
+        action="store_true",
         help="Download subtitles, embed them in videos and keep them as files.",
     )
     p.add_argument(
-        "--sub-langs", dest="sub_langs",
+        "--sub-langs",
+        dest="sub_langs",
         help=f"Subtitle languages, comma-separated; implies -s (default: {DEFAULT_SUB_LANGS}).",
     )
 
     p.add_argument(
-        "--cookies", type=parse_spec, dest="cookies_browser", metavar="BROWSER[+KEYRING]",
+        "--cookies",
+        type=parse_spec,
+        dest="cookies_browser",
+        metavar="BROWSER[+KEYRING]",
         help="Use cookies from this browser (firefox, brave, chrome, ...). The keyring is "
         "detected from the browser's flags file; force one with e.g. brave+gnomekeyring.",
     )
 
     p.add_argument(
-        "-i", "--interactive", action="store_true",
+        "-i",
+        "--interactive",
+        action="store_true",
         help="Force wizard mode even when intent flags are present.",
     )
     p.add_argument(
-        "-y", "--yes", action="store_true", dest="no_confirm",
+        "-y",
+        "--yes",
+        action="store_true",
+        dest="no_confirm",
         help="Skip wizard and all confirmation prompts.",
     )
     return p
@@ -276,9 +319,7 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         items = opts.playlist_items
 
     # Direct-mode single: still preview before downloading
-    direct_single = (
-        opts.playlist_mode == "auto" and pmode == "no" and not opts.no_confirm
-    )
+    direct_single = opts.playlist_mode == "auto" and pmode == "no" and not opts.no_confirm
     if direct_single and not _show_preview(url, opts):
         warn(t("cancelled"))
         return _Outcome(False, False, None)
@@ -340,9 +381,7 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     return _Outcome(True, cookies_dropped, pmode)
 
 
-def _download_with_cookie_fallback(
-    url: str, opts: DownloadOptions
-) -> tuple[DownloadResult, bool]:
+def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> tuple[DownloadResult, bool]:
     """Download ``url``; if browser cookies were used and it fails, retry once without them.
 
     Returns the download result and whether the cookies were dropped.
