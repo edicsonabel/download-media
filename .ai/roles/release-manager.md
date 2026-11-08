@@ -44,6 +44,7 @@ Changes nothing that leaves the machine.
 git status                                  # must be clean
 last="$(git describe --tags --abbrev=0)"
 git log --oneline "$last"..HEAD
+test -f .ai/live.env                        # fails: result blocked (step 3), stop here
 set -a; . .ai/live.env; set +a
 scripts/pre-release.sh                      # the full gate, with live tests
 ```
@@ -59,7 +60,7 @@ scripts/pre-release.sh                      # the full gate, with live tests
 
    plus the `SemVer` section of each spec in Read first, where it has one.
 2. Write `.ai/releases/<version>.md`: what changed for users, in plain words, and anything they must do. Commit: `docs(release): add <version> notes`.
-3. If `.ai/live.env` is missing, result `blocked`. Skipping the live tests is not an option here.
+3. If `.ai/live.env` is missing, the `test -f` line above fails before anything sources it: result `blocked`. Skipping the live tests is not an option here.
 4. Run the Preflight.
 5. Build the **pre-publish checklist** and put it in the report, one line per entry, each marked done, not run or pending:
    - **Gate:** the full gate's result, every `xfail`, every skipped test. A skipped live test is a live step not run.

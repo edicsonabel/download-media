@@ -160,3 +160,12 @@ def test_version_evidence_sees_every_message_key() -> None:
     expected = set(i18n._MESSAGES["en"]) | set(i18n._MESSAGES["es"])
     missing = sorted(expected - seen)
     assert not missing, f"keys() misses message keys {missing}"
+
+
+def test_preparation_checks_live_env_before_sourcing_it() -> None:
+    # Sourcing a missing file fails the shell before the intended `blocked` result.
+    lines = _section(PREPARATION).splitlines()
+    source = next((i for i, ln in enumerate(lines) if ". .ai/live.env" in ln), None)
+    assert source is not None, f"{PREPARATION} never sources .ai/live.env"
+    checks = [ln for ln in lines[:source] if "-f .ai/live.env" in ln]
+    assert checks, f"{PREPARATION} sources .ai/live.env before checking that it exists"
