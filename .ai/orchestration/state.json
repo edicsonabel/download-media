@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:02:31-04:00",
+  "updated": "2026-11-07T22:12:40-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,14 +1356,20 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
       "commits": [
-        "fe9fc20"
+        "fe9fc20",
+        "c616181",
+        "2205c80",
+        "fcfceb8",
+        "e4b60c8",
+        "fd3c29f",
+        "1e9b2fb"
       ],
       "review": {
         "approved": false,
@@ -1390,6 +1396,13 @@
           "result": "approved",
           "at": "2026-11-07T22:02:31-04:00",
           "note": "Spec approved under the human's delegation, D1-D8 A."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T22:12:40-04:00",
+          "note": "Role, command and workflow rewritten; test fails on main (7 of 10). Gate exit 0, 1731 passed. Commands checked read-only against v0.2.0. Planner: preparation commands need bash in one call; the flags grep needs reading, not counting."
         }
       ]
     }
