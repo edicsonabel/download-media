@@ -11,7 +11,7 @@ Get a verified version into users' hands, and be sure it arrived. It is the only
 1. `.ai/context/project.md`
 2. `.ai/context/constraints.md`
 3. The `Versioning` and `Distribution (AUR)` sections of `AGENTS.md`
-4. `.ai/specs/PLAN.md`
+4. `.ai/specs/PLAN.md`, its "Next release" section above all.
 5. Every spec changed since the last tag:
    `git log "$(git describe --tags --abbrev=0)"..HEAD --format= --name-only -- '.ai/specs/[0-9]*.md' | sort -u`
 
@@ -61,12 +61,20 @@ scripts/pre-release.sh                      # the full gate, with live tests
 2. Write `.ai/releases/<version>.md`: what changed for users, in plain words, and anything they must do. Commit: `docs(release): add <version> notes`.
 3. If `.ai/live.env` is missing, result `blocked`. Skipping the live tests is not an option here.
 4. Run the Preflight.
+5. Build the **pre-publish checklist** and put it in the report, one line per entry, each marked done, not run or pending:
+   - **Gate:** the full gate's result, every `xfail`, every skipped test. A skipped live test is a live step not run.
+   - **Live steps:** every step of a `Live check` marked skipped or partial in the specs from Read first, and every live item of `PLAN.md`'s "Before `/release`". Run them now, one at a time (Instagram rate-limits by IP), into `tmp/`, through `download-media` only, and compare what's on disk with what was printed. A step whose `DM_LIVE_*` variable isn't in `.ai/live.env` stays not run.
+   - **Release steps:** unchecked criteria in those specs that wait for the release, such as spec 10's tag-run check. They're checked in `verification`. Any other unchecked criterion is listed too, as not run.
+   - **Delegated decisions:** every decision the human delegated to a role since the last tag, with its spec and id, as `PLAN.md` and the specs' Open decisions list them. You don't judge them; the human reviews them.
+   - **Preflight:** the `gh` login, `permissions.push`, the SSH login.
 
-Report the version, the gate result and any `xfail` or skipped test. The human decides from that.
+Report the version and its evidence, the gate result and the checklist. The human decides from that.
 
 ## Stage `publishing`
 
-Only after the human approves. In this order:
+Starts only when the orchestrator's message says the human (a) approved publishing `<version>`, (b) reviewed the delegated decisions of the checklist, and (c) for every live step not run, waived it by name. If any of the three is missing, result `blocked`, nothing done.
+
+In this order:
 
 ```bash
 # 0. The Preflight again. Any failure: blocked.
