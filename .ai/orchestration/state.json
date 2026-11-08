@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T20:34:18-04:00",
+  "updated": "2026-11-07T20:52:16-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1175,9 +1175,9 @@
     "fix/cookie-fallback": {
       "type": "fix",
       "title": "Cookie fallback handles a missing browser and empty --cookies runs",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/26-cookie-fallback.md",
       "branch": "fix/cookie-fallback",
       "worktree": ".worktrees/fix-cookie-fallback",
@@ -1185,7 +1185,8 @@
         "be7ea9d",
         "f107b29",
         "0b8ffa6",
-        "443cd23"
+        "443cd23",
+        "d62b358"
       ],
       "review": {
         "approved": false,
@@ -1219,6 +1220,13 @@
           "result": "done",
           "at": "2026-11-07T20:34:18-04:00",
           "note": "Gate exit 0, 1690 passed, 2 xfailed. Tests point at a dead D-Bus and drop desktop variables. Floor passes every new test. Planner: secretstorage hint hardcoded English."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T20:52:16-04:00",
+          "note": "No bugs. 30 tests, 1715 passed, 2 xfailed. Mutation 21/21. Planner: under -p a keyring that decrypts nothing miscounts '4 of 5 items' (on main too); yt-dlp's ERROR: prefix inside the reason."
         }
       ]
     }
