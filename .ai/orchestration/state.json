@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T14:43:45-04:00",
+  "updated": "2026-11-08T14:55:47-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1762,9 +1762,9 @@
     "feature/instagram-images": {
       "type": "feature",
       "title": "Save Instagram carousel images alongside videos",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/01-instagram-images.md",
       "branch": "feature/instagram-images",
       "worktree": ".worktrees/feature-instagram-images",
@@ -1777,6 +1777,20 @@
           "result": "approved",
           "at": "2026-11-08T14:43:45-04:00",
           "note": "Human asked to make Instagram carousel images downloadable when a carousel mixes videos and images (example: https://www.instagram.com/p/DfYDfesmtyV/, 4 videos + 16 images). Reuses PLAN row 01 instagram-images. Opens 0.4.0."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-08T14:55:47-04:00",
+          "note": "Spec 25e0927. No own HTTP fetch: yt-dlp writethumbnail + ignore_no_formats_error + skip_download scoped per image entry in a _Ydl.process_video_result override. Real post: 16 images formats [] with 14 thumbnails, best pick 3024x4032 uncropped. Prototype: 01 jpg, 02 mp4, 03 jpg, rerun adds nothing. D1-D8 recommended. Images saved in every mode, D2 and D3 change published behaviour. Planner: lone image posts row (D4, cookies only); overlaps rows 31 and 02. Risk: full-size pick depends on Instagram URL order; live check guards it."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T14:55:47-04:00",
+          "note": "D1-D8 recommended options under the human delegation. Images saved in every mode, D2 (Enter = everything downloadable) and D3 (image-only selection skips type/quality/container) change published behaviour: human reviews before 0.4.0."
         }
       ]
     }
