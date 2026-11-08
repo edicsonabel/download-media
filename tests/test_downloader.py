@@ -336,3 +336,24 @@ def test_a_failed_cover_removes_its_thumbnail_and_nothing_it_did_not_write(
     assert not thumb.exists()
     assert audio.exists()
     assert [path.read_text(encoding="utf-8") for path in own] == ["mine", "mine"]
+
+
+def test_a_folder_that_cannot_be_created_raises_before_yt_dlp_starts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from download_media import downloader
+
+    def no_ydl(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("yt-dlp started")
+
+    monkeypatch.setattr(downloader, "_Ydl", no_ydl)
+    afile = tmp_path / "afile"
+    afile.write_text("keep", encoding="utf-8")
+    bad = afile / "sub"
+    with pytest.raises(downloader.OutputUnusable) as caught:
+        downloader.download("http://x", DownloadOptions(urls=["http://x"], output=bad))
+    assert caught.value.path == bad
+    # The OS text only: the message prints the path itself.
+    assert caught.value.reason == "Not a directory"
+    assert isinstance(caught.value.__cause__, NotADirectoryError)
+    assert afile.read_text(encoding="utf-8") == "keep"

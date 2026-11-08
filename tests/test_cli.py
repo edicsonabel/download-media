@@ -412,6 +412,132 @@ def test_interrupt_propagates_after_cancel_message(monkeypatch, tmp_path) -> Non
         cli._download_one("http://x", parse(["-y", "-o", str(tmp_path), "http://x"]))
 
 
+@pytest.mark.parametrize("flags", [[], ["--cookies", "firefox"]])
+def test_system_error_fails_only_the_url(monkeypatch, tmp_path, capsys, flags) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    calls: list[str | None] = []
+    error = OSError(28, "No space left on device", "/x/f")
+
+    def full_disk(url, opts):
+        calls.append(opts.cookies_browser)
+        raise error
+
+    monkeypatch.setattr(cli, "download", full_disk)
+    opts = parse(["-y", *flags, "-o", str(tmp_path), "http://x"])
+    assert cli._download_one("http://x", opts) == cli._Outcome(False, False, "no")
+    captured = capsys.readouterr()
+    assert t("unexpected_error", error) in captured.err
+    assert "Traceback" not in captured.err
+    assert t("failed", "http://x") in captured.out
+    # Not about cookies: no retry without them.
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("error", [SystemExit(3), GeneratorExit()])
+def test_base_exceptions_are_not_swallowed(monkeypatch, tmp_path, capsys, error) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    def stopped(url, opts):
+        raise error
+
+    monkeypatch.setattr(cli, "download", stopped)
+    with pytest.raises(type(error)):
+        cli._download_one("http://x", parse(["-y", "-o", str(tmp_path), "http://x"]))
+    assert t("failed", "http://x") not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(3)])
+def test_listing_formats_lets_base_exceptions_through(monkeypatch, capsys, error) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    def stopped(url, opts):
+        raise error
+
+    monkeypatch.setattr(cli, "list_formats", stopped)
+    with pytest.raises(type(error)):
+        cli._list_formats("http://x", parse(["-l", "http://x"]))
+    assert t("failed", "http://x") not in capsys.readouterr().out
+
+
+def test_listing_formats_reports_a_system_error_in_one_line(monkeypatch, capsys) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    error = PermissionError(13, "Permission denied", "/x/cache")
+
+    def denied(url, opts):
+        raise error
+
+    monkeypatch.setattr(cli, "list_formats", denied)
+    assert cli._list_formats("http://x", parse(["-l", "http://x"])) == 1
+    captured = capsys.readouterr()
+    assert t("unexpected_error", error) in captured.err
+    assert "Traceback" not in captured.err
+    assert t("unexpected_bug", f"PermissionError: {error}") not in captured.err
+    assert t("failed", "http://x") in captured.out
+
+
+def test_a_bug_on_the_retry_without_cookies_is_the_one_shown(monkeypatch, tmp_path, capsys) -> None:
+    from yt_dlp.utils import DownloadError
+
+    from download_media import cli
+    from download_media.i18n import t
+
+    calls: list[str | None] = []
+
+    def first_cookies_then_bug(url, opts):
+        calls.append(opts.cookies_browser)
+        if opts.cookies_browser:
+            raise DownloadError("ERROR: empty response")
+        raise TypeError("boom")
+
+    monkeypatch.setattr(cli, "download", first_cookies_then_bug)
+    opts = parse(["-y", "--cookies", "firefox", "-o", str(tmp_path), "http://x"])
+    assert cli._download_one("http://x", opts) == cli._Outcome(False, False, "no")
+    captured = capsys.readouterr()
+    assert calls == ["firefox", None]
+    assert t("cookies_retry", "firefox") in captured.out
+    assert "Traceback" in captured.err
+    assert t("unexpected_bug", "TypeError: boom") in captured.err
+    assert t("failed", "http://x") in captured.out
+
+
+def test_an_unnamed_system_error_still_says_something(monkeypatch, tmp_path, capsys) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    def odd(url, opts):
+        raise OSError("device went away")
+
+    monkeypatch.setattr(cli, "download", odd)
+    opts = parse(["-y", "-o", str(tmp_path), "http://x"])
+    assert cli._download_one("http://x", opts) == cli._Outcome(False, False, "no")
+    assert t("unexpected_error", "device went away") in capsys.readouterr().err
+
+
+def test_main_exits_1_and_prints_the_command_after_a_bug(monkeypatch, tmp_path, capsys) -> None:
+    from download_media import cli
+    from download_media.downloader import DownloadResult
+    from download_media.i18n import t
+
+    def bug_on_first(url, opts):
+        if url == "http://a":
+            raise AttributeError("'NoneType' object has no attribute 'get'")
+        return DownloadResult(saved=1)
+
+    monkeypatch.setattr(cli, "download", bug_on_first)
+    assert cli.main(["-y", "-o", str(tmp_path), "http://a", "http://b"]) == 1
+    captured = capsys.readouterr()
+    assert t("failed", "http://a") in captured.out
+    assert t("failed", "http://b") not in captured.out
+    assert t("done") in captured.out
+    assert "http://a http://b" in captured.out
+
+
 def _hint(capsys, message: str, argv: list[str]) -> str:
     from download_media import cli
 

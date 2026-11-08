@@ -644,6 +644,9 @@ class FakeSiteIE(InfoExtractor):
             return {**metadata, "formats": [drm_format]}
         if page == "extractor-bug":
             raise ExtractorError("Unable to extract video data")
+        if page == "crash":
+            # A bug in extractor code, the kind a site change causes: yt-dlp doesn't wrap it.
+            raise TypeError("'NoneType' object is not subscriptable")
         return None
 
     def _partial_shape(self, page: str) -> dict[str, Any] | None:
