@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T23:04:37-04:00",
+  "updated": "2026-11-07T23:08:25-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1357,7 +1357,7 @@
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
       "stage": "integration",
-      "status": "approved",
+      "status": "in_progress",
       "next_agent": "tech-lead",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
@@ -1470,6 +1470,13 @@
           "result": "approved",
           "at": "2026-11-07T23:04:37-04:00",
           "note": "The QA re-check had already reported before the stop: approved, one minor. Gate exit 0, 1740 passed. Round-2 findings closed. Pipeline paused here for the handoff; next: tech-lead merge, push, architect validation."
+        },
+        {
+          "stage": "integration",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T23:08:25-04:00",
+          "note": "Merge approved under the human delegation (roles decide). Launching tech-lead."
         }
       ]
     }
