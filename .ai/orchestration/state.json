@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T17:35:32-04:00",
+  "updated": "2026-11-08T19:11:29-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1893,6 +1893,41 @@
           "result": "done",
           "at": "2026-11-08T17:35:32-04:00",
           "note": "Worktree and branch removed. Before 0.4.0 the human reviews: images saved in every mode; D2 (Enter = everything downloadable, also generic lists: direct .jpg / audio next to video); D3; additions beyond spec (_WholeBody IncompleteRead guard in _Ydl.urlopen, existing_file hook + partial cleanup)."
+        }
+      ]
+    },
+    "fix/format-baseline": {
+      "type": "fix",
+      "title": "Format the 6 files ruff format flags and enforce it in the gate",
+      "stage": "development",
+      "status": "in_progress",
+      "next_agent": "developer",
+      "doc": ".ai/specs/05-format-baseline.md",
+      "branch": "fix/format-baseline",
+      "worktree": ".worktrees/fix-format-baseline",
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-08T19:07:41-04:00",
+          "note": "Human picked format-baseline (PLAN row 05) next, on the planner's recommendation (nothing in flight, so reformatting cli/probe/wizard can't conflict). cookie-report follows."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-08T19:11:29-04:00",
+          "note": "Spec 1365500. Drift is hand layout never formatted, not ruff version (0.17.4 everywhere). 3 commits: style (6 files), ci (format --check step in pre-release.sh between lint and types + 2 tests in test_workflows.py + AGENTS comment), chore (.git-blame-ignore-revs). AST comparison proves no logic change. CI/deploy-aur already run pre-release.sh."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T19:11:29-04:00",
+          "note": "Under the human's delegation, recommended options: D1 add .git-blame-ignore-revs; D2 keep `ruff format` in AGENTS.md + '(the gate runs it with --check)'; D3 tests in tests/test_workflows.py. No breaking change, no release matter."
         }
       ]
     }
