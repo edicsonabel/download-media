@@ -146,6 +146,8 @@ gh run list --workflow deploy-pages.yml --commit "$(git rev-parse "v<version>^{c
 curl -s https://edicsonabel.github.io/download-media/ | grep -F "v<version> ·"
 ```
 
+If the list is empty, the run hasn't appeared yet: list again, as in publishing's step 1, and watch it if it's still running. A red Pages run, or a page without the `v<version> ·` label once the run is green, doesn't block: the package is already out. Report it in `notes` for the planner, and finish with `published`.
+
 Update `.ai/specs/PLAN.md` for what shipped. Commit: `docs(plan): mark <version> as shipped`.
 
 ## Rules
