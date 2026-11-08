@@ -26,6 +26,9 @@ step() { printf '\n==> %s\n' "$1"; }
 step "lint"
 .venv/bin/ruff check src tests
 
+step "format"
+.venv/bin/ruff format --check src tests
+
 step "types"
 .venv/bin/mypy
 

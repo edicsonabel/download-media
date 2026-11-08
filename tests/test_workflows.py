@@ -1,4 +1,4 @@
-"""CI invariants: pinned runners, time limits everywhere, Node 24 action majors.
+"""CI invariants: pinned runners, time limits everywhere, Node 24 action majors, one gate.
 
 Read as text on purpose: PyYAML isn't a dev dependency, and these files only use
 plain block-style keys.
@@ -10,7 +10,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+ROOT = Path(__file__).resolve().parent.parent
+WORKFLOWS = ROOT / ".github" / "workflows"
+GATE = ROOT / "scripts" / "pre-release.sh"
 
 RUNNER = "ubuntu-26.04"
 # Lowest major of each action that runs on Node 24. A new actions/* action must be added here.
@@ -201,3 +203,16 @@ def test_the_parser_sees_every_workflow_and_job() -> None:
     assert [(job.workflow, job.name) for job in jobs] == EXPECTED_JOBS
     assert sum(len(_apt_steps(job)) for job in jobs) == 2
     assert all(job.steps for job in jobs)
+
+
+def test_the_gate_checks_formatting() -> None:
+    lines = [line.strip() for line in GATE.read_text(encoding="utf-8").splitlines()]
+    assert ".venv/bin/ruff format --check src tests" in lines
+
+
+def test_ci_and_release_run_the_same_gate() -> None:
+    # The checks live in pre-release.sh only; a workflow that inlines them drifts from it.
+    jobs = {(job.workflow, job.name): job for job in _all_jobs()}
+    for key in [("ci.yml", "gate"), ("deploy-aur.yml", "test")]:
+        runs = [step.run for step in jobs[key].steps]
+        assert "scripts/pre-release.sh --no-live\n" in runs, key

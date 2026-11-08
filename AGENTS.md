@@ -146,7 +146,7 @@ python -m venv .venv
 # Verification — all must pass before committing
 .venv/bin/pytest -q              # tests (no network, loopback only; needs ffmpeg)
 .venv/bin/ruff check src tests   # lint
-.venv/bin/ruff format src tests  # format
+.venv/bin/ruff format src tests  # format (the gate runs it with --check)
 .venv/bin/mypy                   # strict type check
 
 # Release gate (see Testing)
