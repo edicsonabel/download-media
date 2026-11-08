@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T17:23:54-04:00",
+  "updated": "2026-11-08T17:35:32-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1762,9 +1762,9 @@
     "feature/instagram-images": {
       "type": "feature",
       "title": "Save Instagram carousel images alongside videos",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/01-instagram-images.md",
       "branch": "feature/instagram-images",
       "worktree": ".worktrees/feature-instagram-images",
@@ -1776,7 +1776,9 @@
         "a989643",
         "f1a2b61",
         "b3d9d04",
-        "c835421"
+        "c835421",
+        "5900b06",
+        "62afa0c"
       ],
       "review": {
         "approved": true,
@@ -1877,6 +1879,20 @@
           "result": "merged",
           "at": "2026-11-08T17:23:54-04:00",
           "note": "c835421 --no-ff merge, no conflicts, 13 files +1130/-118. Gate on merged main exit 0; 1931 passed + 2 xfailed (row 25)."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-08T17:35:32-04:00",
+          "note": "19/19 criteria. Live -y -p: exit 0, Listo., no items line, 20 files (16 jpg, 4 mp4); 15 images 3024x4032, 1 at 1653x2204 (its uncropped original, crop token c0.275.1653.1653); rerun 20 files, mtimes unchanged, 16 already present + 4 already downloaded; -y single 20 files. Full gate with live exit 0: 1931 passed + 2 xfailed es/en, live 9 passed. CI 42525016608 green on 87f9033. 5900b06 ticks criteria; 62afa0c spec done, PLAN row 01 done, Findings corrected."
+        },
+        {
+          "stage": "complete",
+          "agent": "orchestrator",
+          "result": "done",
+          "at": "2026-11-08T17:35:32-04:00",
+          "note": "Worktree and branch removed. Before 0.4.0 the human reviews: images saved in every mode; D2 (Enter = everything downloadable, also generic lists: direct .jpg / audio next to video); D3; additions beyond spec (_WholeBody IncompleteRead guard in _Ydl.urlopen, existing_file hook + partial cleanup)."
         }
       ]
     }
