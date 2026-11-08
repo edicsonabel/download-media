@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:58:40-04:00",
+  "updated": "2026-11-07T23:04:26-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1454,6 +1454,13 @@
           "result": "done",
           "at": "2026-11-07T22:58:40-04:00",
           "note": "Round 2 confirmed in zsh and bash: 12 keys, only --playlist-items, no breaking marker. Mutation 3/3 after one added test."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "blocked",
+          "at": "2026-11-07T23:04:26-04:00",
+          "note": "QA re-check stopped by the orchestrator at the human's request, to write a handoff and clear the context. No report; QA edits nothing. Relaunch the narrow QA re-check on HEAD a414259."
         }
       ]
     }
