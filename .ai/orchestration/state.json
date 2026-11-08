@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T11:59:55-04:00",
+  "updated": "2026-11-08T12:18:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1599,9 +1599,9 @@
     "fix/wizard-ig-cookies": {
       "type": "fix",
       "title": "Fix the up-front cookies prompt: Instagram, b-Enter-b _Back traceback, summary",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/06-wizard-ig-cookies.md",
       "branch": "fix/wizard-ig-cookies",
       "worktree": ".worktrees/fix-wizard-ig-cookies",
@@ -1614,6 +1614,20 @@
           "result": "approved",
           "at": "2026-11-08T11:59:55-04:00",
           "note": "Human answered 'dale, sigue' to the release question; read as option b: continue with wizard-ig-cookies (row 06), release 0.3.0 later. Not a release approval. Merging to main before the v0.3.0 tag puts it in 0.3.0."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-08T12:18:48-04:00",
+          "note": "Spec 2f71b6a. Reproduced in es and en: b, Enter, b → _Back traceback (wizard.py:548-554, also -l); Instagram early prompt on a public carousel; summary never lists cookies. Gated IG posts still get the late prompt via spec 18 login hint. D1-D4 recommended. Planner: drop X and Facebook from the list once live runs back it; auth_needed_pre wording; b after probe cannot reach the cookies answer; b at the URL prompt read as URL. Spec 18 gated live step loses its decline-up-front reply."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T12:18:48-04:00",
+          "note": "D1-D4 recommended options under the human delegation. D1 (Instagram leaves the early list) and D2 (x.com lookalike fix) change published behaviour: human reviews before 0.3.0."
         }
       ]
     }
