@@ -1,6 +1,6 @@
 # 05 — Format baseline
 
-Status: draft
+Status: done
 Item: `fix/format-baseline`
 
 ## Problem
@@ -148,16 +148,16 @@ Wizard, direct, `-y`, `-p`, `-P`, `-l`, cookies, single, carousel, playlist, rer
 
 ## Acceptance criteria
 
-- [ ] `scripts/pre-release.sh --no-live` passes on the branch and, after the merge, on `main`.
-- [ ] `.venv/bin/ruff format --check src tests` exits 0 on the branch. `.venv/bin/ruff --version` prints `ruff 0.17.4`.
-- [ ] Commit 1 is `style:`, and `git diff --stat <c1>^ <c1>` lists exactly the six files.
-- [ ] The AST comparison in Design prints nothing for commit 1.
-- [ ] `scripts/pre-release.sh` has a `format` step, `.venv/bin/ruff format --check src tests`, between `lint` and `types`.
-- [ ] `test_the_gate_checks_formatting` fails with the step removed from `pre-release.sh`, and passes with it. Prove it by reverting the step.
-- [ ] `test_ci_and_release_run_the_same_gate` passes, and fails if the `run:` of either gate job is changed.
-- [ ] The throwaway-worktree probe in Design ends with `gate=1` at `==> format`, and afterwards `git worktree list` and `git status --porcelain` show nothing left behind.
-- [ ] `ci.yml` and `deploy-aur.yml` are unchanged (`git diff main -- .github/` is empty).
-- [ ] If decision 1 is taken: on `main`, the SHA in `.git-blame-ignore-revs` resolves (`git cat-file -t <sha>` → `commit`), its subject starts with `style:`, and `git blame --ignore-revs-file .git-blame-ignore-revs src/download_media/probe.py` attributes the `_SITE_PATTERNS` lines to commits before it.
+- [x] `scripts/pre-release.sh --no-live` passes on the branch and, after the merge, on `main`.
+- [x] `.venv/bin/ruff format --check src tests` exits 0 on the branch. `.venv/bin/ruff --version` prints `ruff 0.17.4`.
+- [x] Commit 1 is `style:`, and `git diff --stat <c1>^ <c1>` lists exactly the six files.
+- [x] The AST comparison in Design prints nothing for commit 1.
+- [x] `scripts/pre-release.sh` has a `format` step, `.venv/bin/ruff format --check src tests`, between `lint` and `types`.
+- [x] `test_the_gate_checks_formatting` fails with the step removed from `pre-release.sh`, and passes with it. Prove it by reverting the step.
+- [x] `test_ci_and_release_run_the_same_gate` passes, and fails if the `run:` of either gate job is changed.
+- [x] The throwaway-worktree probe in Design ends with `gate=1` at `==> format`, and afterwards `git worktree list` and `git status --porcelain` show nothing left behind.
+- [x] `ci.yml` and `deploy-aur.yml` are unchanged (`git diff main -- .github/` is empty).
+- [x] If decision 1 is taken: on `main`, the SHA in `.git-blame-ignore-revs` resolves (`git cat-file -t <sha>` → `commit`), its subject starts with `style:`, and `git blame --ignore-revs-file .git-blame-ignore-revs src/download_media/probe.py` attributes the `_SITE_PATTERNS` lines to commits before it.
 
 ## Live check
 
