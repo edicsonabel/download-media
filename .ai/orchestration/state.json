@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:12:40-04:00",
+  "updated": "2026-11-07T22:21:53-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1369,11 +1369,14 @@
         "fcfceb8",
         "e4b60c8",
         "fd3c29f",
-        "1e9b2fb"
+        "1e9b2fb",
+        "5f237ec"
       ],
       "review": {
         "approved": false,
-        "findings": []
+        "findings": [
+          "keys() in release-manager.md preparation uses [a-z_]+, missing message keys with digits"
+        ]
       },
       "history": [
         {
@@ -1403,6 +1406,13 @@
           "result": "done",
           "at": "2026-11-07T22:12:40-04:00",
           "note": "Role, command and workflow rewritten; test fails on main (7 of 10). Gate exit 0, 1731 passed. Commands checked read-only against v0.2.0. Planner: preparation commands need bash in one call; the flags grep needs reading, not counting."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-07T22:21:53-04:00",
+          "note": "Round 1. One finding, one-line fix. Mutation 14/18 then 18/18 with added tests. Read-only commands all work. Orchestrator adds the small live.env ordering fix to the round."
         }
       ]
     }
