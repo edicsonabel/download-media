@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T21:27:13-04:00",
+  "updated": "2026-11-07T21:34:54-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1267,9 +1267,9 @@
     "fix/workflow-pins": {
       "type": "fix",
       "title": "Pin workflow actions and runner, add job timeouts, harden the ffmpeg step",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/10-workflow-pins.md",
       "branch": "fix/workflow-pins",
       "worktree": ".worktrees/fix-workflow-pins",
@@ -1278,7 +1278,8 @@
         "69f5c14",
         "3d325fc",
         "0c89cbb",
-        "c336031"
+        "c336031",
+        "bc1f5d9"
       ],
       "review": {
         "approved": false,
@@ -1312,6 +1313,13 @@
           "result": "done",
           "at": "2026-11-07T21:27:13-04:00",
           "note": "Gate exit 0, 1720 passed. test_workflows.py fails on main with the 16 problems. Only runs-on, timeout-minutes and uses lines changed. actionlint not available."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T21:34:54-04:00",
+          "note": "Diff matches spec line for line. Test hardened for quoted values. Mutation 27/28, survivor by design (non-actions owners). Gate exit 0, 1721 passed."
         }
       ]
     }
