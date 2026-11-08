@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T21:34:54-04:00",
+  "updated": "2026-11-07T21:40:45-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1267,9 +1267,9 @@
     "fix/workflow-pins": {
       "type": "fix",
       "title": "Pin workflow actions and runner, add job timeouts, harden the ffmpeg step",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/10-workflow-pins.md",
       "branch": "fix/workflow-pins",
       "worktree": ".worktrees/fix-workflow-pins",
@@ -1282,7 +1282,7 @@
         "bc1f5d9"
       ],
       "review": {
-        "approved": false,
+        "approved": true,
         "findings": []
       },
       "history": [
@@ -1320,6 +1320,20 @@
           "result": "done",
           "at": "2026-11-07T21:34:54-04:00",
           "note": "Diff matches spec line for line. Test hardened for quoted values. Mutation 27/28, survivor by design (non-actions owners). Gate exit 0, 1721 passed."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-07T21:40:45-04:00",
+          "note": "No findings. Gate exit 0, 1721 passed. Action tags, Node 24 and inputs checked in each action repo. ubuntu-26.04 has every encoder per run 42432662032."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T21:40:45-04:00",
+          "note": "Merge and push under the human's standing delegation (spec D6)."
         }
       ]
     }
