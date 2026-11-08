@@ -12,6 +12,8 @@ Get a verified version into users' hands, and be sure it arrived. It is the only
 2. `.ai/context/constraints.md`
 3. The `Versioning` and `Distribution (AUR)` sections of `AGENTS.md`
 4. `.ai/specs/PLAN.md`
+5. Every spec changed since the last tag:
+   `git log "$(git describe --tags --abbrev=0)"..HEAD --format= --name-only -- '.ai/specs/[0-9]*.md' | sort -u`
 
 All stages run in the main worktree, on `main`.
 
@@ -21,12 +23,22 @@ Changes nothing that leaves the machine.
 
 ```bash
 git status                                  # must be clean
-git log --oneline "$(git describe --tags --abbrev=0)"..HEAD
+last="$(git describe --tags --abbrev=0)"
+git log --oneline "$last"..HEAD
 set -a; . .ai/live.env; set +a
 scripts/pre-release.sh                      # the full gate, with live tests
 ```
 
-1. Work out the version from the commits, following SemVer in `AGENTS.md`: `fix` → patch, `feat` → minor, breaking → major.
+1. **Version.** Follow the `Versioning` section of `AGENTS.md`. It goes by what changed for users, so commit types alone don't decide it: a `fix` commit that adds a message counts as what `AGENTS.md` says new messages are. If the human named a version, use it, and report it if yours differs. Report this evidence:
+
+   ```bash
+   keys() { git show "$1:src/download_media/i18n.py" | grep -oE '^\s+"[a-z_]+":' | tr -d ' ":' | sort -u; }
+   comm -13 <(keys "$last") <(keys HEAD)                                            # new messages
+   git diff "$last"..HEAD -- src/download_media/cli.py | grep -E '^\+.*"--[a-z-]+"'   # new flags
+   git log "$last"..HEAD --format=%B | grep -E '^BREAKING CHANGE|^[a-z]+(\(.+\))?!:'  # breaking
+   ```
+
+   plus the `SemVer` section of each spec in Read first, where it has one.
 2. Write `.ai/releases/<version>.md`: what changed for users, in plain words, and anything they must do. Commit: `docs(release): add <version> notes`.
 3. If `.ai/live.env` is missing, result `blocked`. Skipping the live tests is not an option here.
 
