@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T19:11:29-04:00",
+  "updated": "2026-11-08T19:43:45-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1899,14 +1899,22 @@
     "fix/format-baseline": {
       "type": "fix",
       "title": "Format the 6 files ruff format flags and enforce it in the gate",
-      "stage": "development",
-      "status": "in_progress",
-      "next_agent": "developer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/05-format-baseline.md",
       "branch": "fix/format-baseline",
       "worktree": ".worktrees/fix-format-baseline",
-      "commits": [],
-      "review": null,
+      "commits": [
+        "72398ad",
+        "7f11724",
+        "6d3821e",
+        "bf578da"
+      ],
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -1928,6 +1936,34 @@
           "result": "approved",
           "at": "2026-11-08T19:11:29-04:00",
           "note": "Under the human's delegation, recommended options: D1 add .git-blame-ignore-revs; D2 keep `ruff format` in AGENTS.md + '(the gate runs it with --check)'; D3 tests in tests/test_workflows.py. No breaking change, no release matter."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-08T19:26:01-04:00",
+          "note": "72398ad style (6 files, AST identical), 7f11724 ci (format step between lint and types, 2 tests in test_workflows.py, AGENTS comment), 6d3821e chore (.git-blame-ignore-revs with 72398ad full SHA). Gate HEAD exit 0, 1933 passed + 2 xfailed; gate on 72398ad alone exit 0. Tests fail without the step / with a workflow job changed. Probe: misformatted file stops gate at ==> format exit 1. Recheck blame-ignore SHA if rebased; --no-ff keeps it."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-08T19:35:22-04:00",
+          "note": "bf578da: 3 tests (stubbed gate order lint→format→types; failing format stops gate exit 1 before types; no if/continue-on-error on gate jobs, deploy needs test). Mutation 18/18 (developer's tests alone 9/18). AST check rerun clean; comment tokens identical. Probe: gate=1 at ==> format. Gate exit 0, 1936 passed + 2 xfailed."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-08T19:43:45-04:00",
+          "note": "No findings. Gate HEAD exit 0, 1936 passed + 2 xfailed. ruff format on 72398ad^ reproduces 72398ad byte for byte; AST clean. Every commit green. Step between lint and types, fatal; probe gate=1 at format. .github unchanged. blame-ignore SHA correct; recheck on main after --no-ff merge."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T19:43:45-04:00",
+          "note": "Merge and push under the human's standing delegation. Tech-lead: --no-ff merge (no rebase) to keep the .git-blame-ignore-revs SHA."
         }
       ]
     }
