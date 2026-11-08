@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:56:34-04:00",
+  "updated": "2026-11-07T22:58:40-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1377,16 +1377,12 @@
         "70cddd9",
         "fe6ac1f",
         "e227151",
-        "888bbb8"
+        "888bbb8",
+        "a414259"
       ],
       "review": {
         "approved": false,
-        "findings": [
-          "important release-manager.md:45,54-58 step 1 needs $last from an earlier block; a fresh shell gives 0 new keys, the 0.2.0 bug again",
-          "minor :57 new-flags grep over-counts reworded flags",
-          "minor :132-137 Pages step doesn't say what an empty run list or missing label means",
-          "minor :127,130 timeout 540 and gh run watch exceed the Bash tool's default call timeout"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -1451,6 +1447,13 @@
           "result": "done",
           "at": "2026-11-07T22:56:34-04:00",
           "note": "Round 2 fixed: self-contained blocks, flag sets diffed, Pages outcomes, call timeouts. Gate exit 0, 1739 passed. Planner: AUR block runs the poll after a failed cgit check; removed flags or messages (comm -23) not listed as breaking evidence."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-07T22:58:40-04:00",
+          "note": "Round 2 confirmed in zsh and bash: 12 keys, only --playlist-items, no breaking marker. Mutation 3/3 after one added test."
         }
       ]
     }
