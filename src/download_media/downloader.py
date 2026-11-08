@@ -24,7 +24,6 @@ from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP, FFmpegMetadataPP
 from yt_dlp.utils import (
     DownloadError,
     PostProcessingError,
-    determine_ext,
     int_or_none,
     prepend_extension,
     replace_extension,
@@ -122,18 +121,6 @@ class _WholeBody:
         return getattr(self._response, name)
 
 
-def _image_paths(info: Any, filename: str) -> set[str]:
-    """Where yt-dlp's thumbnail writer would write each candidate (``_write_thumbnails``)."""
-    paths = set()
-    for thumb in info.get("thumbnails") or []:
-        ext = thumb.get("ext") or determine_ext(thumb.get("url"), "jpg")
-        try:
-            paths.add(replace_extension(filename, ext, info.get("ext")))
-        except _UnsafeExtensionError:  # yt-dlp refuses to write it, too.
-            continue
-    return paths
-
-
 class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
@@ -155,7 +142,20 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_images: list[str] = []
         self.saving_image = False
         self.fetching_image = False
+        # Candidate paths that were free when yt-dlp checked them, while fetching one image.
+        self.image_new: set[str] = set()
         super().__init__(*args, **kwargs)
+
+    def existing_file(self, filepaths: Any, *, default_overwrite: bool = True) -> Any:
+        if self.fetching_image:
+            for path in dict.fromkeys(filepaths):
+                if path in self.image_new:
+                    # Left by a candidate cut off mid-body (one fetched whole ends the search):
+                    # with overwrites=False, yt-dlp would take it for an image already saved.
+                    Path(path).unlink(missing_ok=True)
+                elif not os.path.lexists(path):
+                    self.image_new.add(path)
+        return super().existing_file(filepaths, default_overwrite=default_overwrite)
 
     def urlopen(self, req: Any) -> Any:
         response = super().urlopen(req)
@@ -200,8 +200,7 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         if self.saving_image:
             # yt-dlp's own writer, without the .cover name. Never in item_thumbs: an image
             # found already saved isn't this run's to delete.
-            paths = _image_paths(info_dict, filename) if filename else set()
-            there = {path for path in paths if os.path.lexists(path)}
+            self.image_new = set()
             self.fetching_image = True
             try:
                 images = super()._write_thumbnails(label, info_dict, filename, thumb_filename_base)
@@ -211,7 +210,7 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
                 self.fetching_image = False
             # yt-dlp moves on from a candidate that failed mid-body, and leaves what it wrote.
             kept = {path for path, _ in images or []}
-            for path in paths - there - kept:
+            for path in self.image_new - kept:
                 Path(path).unlink(missing_ok=True)
             if not images:
                 # Raises without ignoreerrors: single mode stops, as it does for a broken video.

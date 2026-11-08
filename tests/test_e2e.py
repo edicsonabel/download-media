@@ -3750,16 +3750,7 @@ def png_bytes(media_url: str) -> bytes:
 @pytest.mark.parametrize(
     ("page", "image", "ext"),
     [
-        pytest.param(
-            "ig-short-then-jpg",
-            "01 - Clip [i1].jpg",
-            "jpg",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="the next .jpg candidate takes the cut-off file for one already "
-                "present, and the partial image is reported as saved",
-            ),
-        ),
+        ("ig-short-then-jpg", "01 - Clip [i1].jpg", "jpg"),
         ("ig-short-then-png", "01 - Clip [i1].png", "png"),
         ("ig-short-png-then-jpg", "01 - Clip [i1].jpg", "jpg"),
     ],
@@ -3776,6 +3767,17 @@ def test_a_cut_off_candidate_falls_back_to_the_next_one(
     assert t("image_not_saved", "i1") not in output
     assert not said_partial_result(output)
     assert t("done") in output
+
+
+def test_an_image_whose_every_candidate_is_cut_off_is_a_failed_item(run: Any, out: Path) -> None:
+    # Both write to the same .jpg: the second must not take the first one's leftover.
+    url = "https://fake.test/ig-short-then-short"
+    for _ in range(2):
+        code, output = run("-y", "-p", url)
+        assert code == 0
+        assert t("image_not_saved", "i1") in output
+        assert t("partial_result", 1, 2, 0, 1) in output
+        assert names(out) == ["02 - Clip [v1].mp4"]
 
 
 def test_a_file_at_a_candidate_path_never_reached_is_left_alone(

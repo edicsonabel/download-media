@@ -554,12 +554,14 @@ class FakeSiteIE(InfoExtractor):
             image = {**self._instagram_image("i1"), "thumbnails": candidates}
             return self.playlist_result([image], "post", "Post")
         # Two candidates, the cut-off one tried first (preference), then a whole one; the
-        # last pair has a whole first try and a second one that is never reached.
+        # next pair has a whole first try and a second one that is never reached, the last
+        # one two cut-off tries.
         fallbacks = {
             "ig-short-then-jpg": ("short/i1.jpg", "tiny.jpg"),
             "ig-short-then-png": ("short/i1.jpg", "tiny.png"),
             "ig-short-png-then-jpg": ("short/i1.png", "tiny.jpg"),
             "ig-jpg-then-png": ("tiny.jpg", "tiny.png"),
+            "ig-short-then-short": ("short/i1.jpg", "short/i2.jpg"),
         }
         if page in fallbacks:
             first, second = fallbacks[page]
