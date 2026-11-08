@@ -79,7 +79,7 @@ _SITE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("instagram", re.compile(r"instagram\.com", re.IGNORECASE)),
     ("youtube",   re.compile(r"(youtube\.com|youtu\.be)", re.IGNORECASE)),
     ("tiktok",    re.compile(r"tiktok\.com", re.IGNORECASE)),
-    ("x",         re.compile(r"(twitter\.com|x\.com)", re.IGNORECASE)),
+    ("x",         re.compile(r"\b(twitter|x)\.com\b", re.IGNORECASE)),
     ("facebook",  re.compile(r"facebook\.com|fb\.watch", re.IGNORECASE)),
     ("vimeo",     re.compile(r"vimeo\.com", re.IGNORECASE)),
     ("twitch",    re.compile(r"twitch\.tv", re.IGNORECASE)),
@@ -87,10 +87,10 @@ _SITE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("reddit",    re.compile(r"reddit\.com", re.IGNORECASE)),
 ]
 
-# Sites where authenticated cookies are usually required even to inspect
-# public content. We pre-emptively ask the user for cookies before probing
-# these to avoid the round-trip "probe → fail → ask cookies → probe again".
-_COOKIE_HUNGRY_SITES: frozenset[str] = frozenset({"instagram", "x", "facebook"})
+# Sites where the wizard asks for cookies before probing, because nobody has
+# yet seen their anonymous probe work. On every site, a login wall still gets
+# a cookies prompt after the probe, then a second probe.
+_COOKIE_HUNGRY_SITES: frozenset[str] = frozenset({"x", "facebook"})
 
 
 def detect_site(url: str) -> str:

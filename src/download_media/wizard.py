@@ -430,9 +430,16 @@ def _run_step(
 
 
 def _walk_plan(
-    plan: list[str], opts: DownloadOptions, items: list[ProbeItem], preset: str | None = None
+    plan: list[str],
+    opts: DownloadOptions,
+    items: list[ProbeItem],
+    preset: str | None = None,
+    asked: tuple[str, ...] = (),
 ) -> bool:
-    """Walk the post-probe plan with back/cancel. Returns False if cancelled."""
+    """Walk the post-probe plan with back/cancel. Returns False if cancelled.
+
+    ``asked`` holds steps answered before the walk: listed in the summary, never gone back to.
+    """
     history: list[str] = []
     i = 0
     while i < len(plan):
@@ -441,7 +448,7 @@ def _walk_plan(
             # Silent skip; don't push to history (so back navigates correctly)
             i += 1
             continue
-        _print_summary(history, opts)
+        _print_summary([*asked, *history], opts)
         try:
             _run_step(name, opts, items, preset)
         except _Back:
@@ -537,22 +544,22 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
     # The command line's value: run_all starts every walk from it.
     preset = opts.playlist_items
     # ---- Phase 1.5: pre-emptive cookies for sites that always need them ----
-    site = detect_site(opts.urls[0])
     cookies_asked = False
-    if site_likely_needs_cookies(site) and not opts.cookies_browser:
+    while site_likely_needs_cookies(detect_site(opts.urls[0])) and not opts.cookies_browser:
         info(f"  {t('auth_needed_pre')}")
         try:
             step_cookies(opts)
         except _Cancel:
             return None
         except _Back:
-            # Back from first cookies → restart URL step
+            # Back to the URL prompt; the URL typed there decides whether to ask again.
             try:
                 step_url(opts)
-                step_cookies(opts)
             except _Cancel:
                 return None
+            continue
         cookies_asked = True
+        break  # "No cookies" leaves cookies_browser unset, so the condition alone would ask again.
 
     # ---- Phase 2: probe with auth retry ----
     info(t("probing"))
@@ -610,6 +617,7 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
 
     # ---- Phase 3: post-probe state machine ----
     plan = _build_post_probe_plan(probe_result, cookies_asked)
-    if not _walk_plan(plan, opts, probe_result.items, preset):
+    asked = ("cookies",) if cookies_asked else ()
+    if not _walk_plan(plan, opts, probe_result.items, preset, asked):
         return None
     return opts

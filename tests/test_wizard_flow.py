@@ -15,6 +15,8 @@ from download_media.probe import ContentKind, Probe, ProbeItem
 
 URL = "https://site.test/watch"
 BRAVE = str(BROWSERS.index("brave") + 2)
+# detect_site says "x", so the wizard asks for cookies before the probe.
+X_STATUS = "https://x.com/u/status/1"
 FIREFOX = str(BROWSERS.index("firefox") + 2)
 
 
@@ -169,24 +171,31 @@ def test_clipboard_prompt_eof_cancels(
 
 
 def test_cookie_hungry_site_asks_before_probing(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     opts = walk(video_probe(), "", BRAVE, "", "", "", "", opts=site)
     assert opts.cookies_browser == "brave"
 
 
 def test_back_from_first_cookies_prompt_restarts_url(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     opts = walk(video_probe(), "", "b", "", "1", "", "", "", "", opts=site)
     assert opts is not None
 
 
+def test_back_at_the_first_cookies_prompt_can_be_pressed_again(walk: Any) -> None:
+    site = DownloadOptions(urls=[X_STATUS])
+    opts = walk(video_probe(), "", "b", "", "b", "", BRAVE, "", "", "", "", opts=site)
+    assert opts is not None
+    assert opts.cookies_browser == "brave"
+
+
 def test_cancel_at_first_cookies_prompt(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     assert walk(video_probe(), "", "c", opts=site) is None
 
 
 def test_cancel_after_back_from_first_cookies_prompt(walk: Any) -> None:
-    site = DownloadOptions(urls=["https://www.instagram.com/p/x/"])
+    site = DownloadOptions(urls=[X_STATUS])
     assert walk(video_probe(), "", "b", "c", opts=site) is None
 
 
@@ -507,13 +516,47 @@ def test_run_all_splits_urls_typed_together(walk_all: Any) -> None:
 def test_run_all_splits_urls_typed_after_back_from_the_first_cookies_prompt(
     walk_all: Any,
 ) -> None:
-    hungry = "https://www.instagram.com/p/x/"
+    hungry = X_STATUS
     # URL, back from cookies, URL again, cookies, type, quality, container, folder.
     first = ("", "b", f"{hungry} {OTHER}", "1", "", "", "", "")
     walked, prompts = walk_all([hungry], *first, *[""] * 5)
     assert len(prompts) == 13
     assert [url for url, _ in walked] == [hungry, OTHER]
     assert [opts.urls for _, opts in walked] == [[hungry], [OTHER]]
+
+
+def test_run_all_survives_back_twice_at_the_first_cookies_prompt(walk_all: Any) -> None:
+    # URL, back, URL, back, URL, cookies, type, quality, container, folder.
+    replies = ("", "b", X_STATUS, "b", X_STATUS, "1", "", "", "", "")
+    walked, prompts = walk_all([X_STATUS], *replies)
+    assert len(prompts) == 10
+    assert walked is not None
+    [(url, opts)] = walked
+    assert url == X_STATUS
+    assert opts is not None
+
+
+def test_run_all_keeps_only_the_urls_typed_at_the_last_answer(walk_all: Any) -> None:
+    # URL, back, two URLs, back, the X one alone, cookies, type, quality, container, folder.
+    replies = ("", "b", f"{X_STATUS} {OTHER}", "b", X_STATUS, "1", "", "", "", "")
+    walked, prompts = walk_all([X_STATUS], *replies)
+    assert len(prompts) == 10
+    assert walked is not None
+    assert [url for url, _ in walked] == [X_STATUS]
+
+
+def test_run_all_asks_before_the_probe_only_for_the_url_that_needs_it(walk_all: Any) -> None:
+    # Back, then a URL off the list ahead of an X one. The first is walked with the late step
+    # (URL, back, URLs, type, quality, container, folder, cookies). The second is queued, so no
+    # URL prompt, and asks first (cookies, type, quality, container, folder).
+    replies = ("", "b", f"{OTHER} {X_STATUS}", *[""] * 5, BRAVE, *[""] * 4)
+    walked, prompts = walk_all([X_STATUS], *replies)
+    assert len(prompts) == 13
+    assert walked is not None
+    assert [url for url, _ in walked] == [OTHER, X_STATUS]
+    [first, second] = [opts for _, opts in walked]
+    assert first is not None and second is not None
+    assert (first.cookies_browser, second.cookies_browser) == (None, "brave")
 
 
 @pytest.mark.parametrize(
