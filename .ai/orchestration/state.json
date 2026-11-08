@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:21:53-04:00",
+  "updated": "2026-11-07T22:36:44-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1370,7 +1370,10 @@
         "e4b60c8",
         "fd3c29f",
         "1e9b2fb",
-        "5f237ec"
+        "5f237ec",
+        "8d3e3ff",
+        "a6d5308",
+        "64b7617"
       ],
       "review": {
         "approved": false,
@@ -1413,6 +1416,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T22:21:53-04:00",
           "note": "Round 1. One finding, one-line fix. Mutation 14/18 then 18/18 with added tests. Read-only commands all work. Orchestrator adds the small live.env ordering fix to the round."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T22:36:44-04:00",
+          "note": "Regex counts digits; live.env checked before sourcing; keys() fixed for zsh (old form failed silently with an empty count). 27 commands identical under zsh and bash. Gate exit 0, 1736 passed. Pages lookup for v0.2.0 is empty because that bump didn't touch docs/; expected to work at 0.3.0."
         }
       ]
     }
