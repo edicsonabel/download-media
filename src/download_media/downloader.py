@@ -17,11 +17,18 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 from yt_dlp.cookies import CookieLoadError
-from yt_dlp.networking.exceptions import RequestError
+from yt_dlp.networking.exceptions import IncompleteRead, RequestError
 from yt_dlp.postprocessor.common import PostProcessor
 from yt_dlp.postprocessor.embedthumbnail import EmbedThumbnailPP
 from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP, FFmpegMetadataPP
-from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension, replace_extension
+from yt_dlp.utils import (
+    DownloadError,
+    PostProcessingError,
+    determine_ext,
+    int_or_none,
+    prepend_extension,
+    replace_extension,
+)
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
@@ -85,6 +92,45 @@ _IMAGE_PARAMS: dict[str, Any] = {
 }
 
 
+class _WholeBody:
+    """A response that fails when its body ends short of the length it stated.
+
+    yt-dlp's thumbnail writer copies whatever arrives, so a cut-off image would be kept as
+    saved. Its own downloader makes the same check on media (ContentTooShortError).
+    """
+
+    def __init__(self, response: Any) -> None:
+        self._response = response
+        self._read = 0
+        # A decoded body doesn't match the length of the encoded one.
+        encoding = (response.get_header("Content-Encoding") or "identity").strip().lower()
+        length = int_or_none(response.get_header("Content-Length"))
+        self._expected = length if encoding == "identity" else None
+
+    def read(self, amt: int | None = None) -> bytes:
+        data: bytes = self._response.read(amt)
+        self._read += len(data)
+        ended = not data or amt is None or amt < 0
+        if ended and self._expected is not None and self._read < self._expected:
+            raise IncompleteRead(self._read, self._expected - self._read)
+        return data
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._response, name)
+
+
+def _image_paths(info: Any, filename: str) -> set[str]:
+    """Where yt-dlp's thumbnail writer would write each candidate (``_write_thumbnails``)."""
+    paths = set()
+    for thumb in info.get("thumbnails") or []:
+        ext = thumb.get("ext") or determine_ext(thumb.get("url"), "jpg")
+        try:
+            paths.add(replace_extension(filename, ext, info.get("ext")))
+        except _UnsafeExtensionError:  # yt-dlp refuses to write it, too.
+            continue
+    return paths
+
+
 class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
@@ -103,7 +149,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.images: list[str] = []
         self.item_images: list[str] = []
         self.saving_image = False
+        self.fetching_image = False
         super().__init__(*args, **kwargs)
+
+    def urlopen(self, req: Any) -> Any:
+        response = super().urlopen(req)
+        return _WholeBody(response) if self.fetching_image else response
 
     def process_video_result(self, info_dict: Any, download: bool = True) -> Any:
         image = (
@@ -144,10 +195,19 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         if self.saving_image:
             # yt-dlp's own writer, without the .cover name. Never in item_thumbs: an image
             # found already saved isn't this run's to delete.
+            paths = _image_paths(info_dict, filename) if filename else set()
+            there = {path for path in paths if os.path.lexists(path)}
+            self.fetching_image = True
             try:
                 images = super()._write_thumbnails(label, info_dict, filename, thumb_filename_base)
             except (RequestError, _UnsafeExtensionError):
                 images = None
+            finally:
+                self.fetching_image = False
+            # yt-dlp moves on from a candidate that failed mid-body, and leaves what it wrote.
+            kept = {path for path, _ in images or []}
+            for path in paths - there - kept:
+                Path(path).unlink(missing_ok=True)
             if not images:
                 # Raises without ignoreerrors: single mode stops, as it does for a broken video.
                 self.report_error(t("image_not_saved", info_dict.get("id")))

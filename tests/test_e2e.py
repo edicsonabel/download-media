@@ -3731,10 +3731,6 @@ def test_single_mode_stops_at_an_image_link_yt_dlp_refuses(run: Any, out: Path, 
     assert "Traceback" not in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a cut-off image is kept and counted as saved, and a rerun calls it already present",
-)
 def test_a_cut_off_image_is_not_reported_as_saved(run: Any, out: Path) -> None:
     url = "https://fake.test/ig-short-image"
     for _ in range(2):  # The rerun must not take the leftover for a saved image.
