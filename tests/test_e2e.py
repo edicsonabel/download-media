@@ -3730,6 +3730,16 @@ def test_declining_a_gated_carousel_goes_manual(wizard_on: Any, out: Path) -> No
     assert names(out) == []
 
 
+def test_a_host_that_only_ends_in_x_com_is_not_asked_for_cookies_up_front(
+    wizard_on: Any, out: Path
+) -> None:
+    code, output = wizard_on("https://fake.test/carousel?from=dropbox.com", *PICKER_WALK)
+    assert code == 0
+    assert t("auth_needed_pre") not in output
+    assert f"generic / {t('kind_playlist')}" in output
+    assert len(names(out)) == 2
+
+
 def test_declining_twice_on_a_cookie_hungry_site_asks_no_third_time(
     wizard_on: Any, out: Path
 ) -> None:

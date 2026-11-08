@@ -35,6 +35,12 @@ from .conftest import ANONYMOUS_LIMIT, GEO_BLOCK, SUBSCRIBERS_ONLY
         ("https://www.tiktok.com/@user/video/123", "tiktok"),
         ("https://twitter.com/user/status/123", "x"),
         ("https://x.com/user/status/123", "x"),
+        ("https://mobile.twitter.com/user/status/123", "x"),
+        # Hosts that merely end in "x.com" aren't X.
+        ("https://www.dropbox.com/s/abc/clip.mp4", "generic"),
+        ("https://app.box.com/s/abc", "generic"),
+        ("https://www.fox.com/watch/x", "generic"),
+        ("https://www.netflix.com/title/1", "generic"),
         ("https://www.facebook.com/watch?v=123", "facebook"),
         ("https://fb.watch/abc", "facebook"),
         ("https://vimeo.com/123", "vimeo"),

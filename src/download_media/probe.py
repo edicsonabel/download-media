@@ -79,7 +79,7 @@ _SITE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("instagram", re.compile(r"instagram\.com", re.IGNORECASE)),
     ("youtube",   re.compile(r"(youtube\.com|youtu\.be)", re.IGNORECASE)),
     ("tiktok",    re.compile(r"tiktok\.com", re.IGNORECASE)),
-    ("x",         re.compile(r"(twitter\.com|x\.com)", re.IGNORECASE)),
+    ("x",         re.compile(r"\b(twitter|x)\.com\b", re.IGNORECASE)),
     ("facebook",  re.compile(r"facebook\.com|fb\.watch", re.IGNORECASE)),
     ("vimeo",     re.compile(r"vimeo\.com", re.IGNORECASE)),
     ("twitch",    re.compile(r"twitch\.tv", re.IGNORECASE)),
