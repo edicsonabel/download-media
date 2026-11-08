@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T11:09:27-04:00",
+  "updated": "2026-11-08T11:41:30-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1505,14 +1505,23 @@
     "fix/unexpected-errors": {
       "type": "fix",
       "title": "Stop errors other than DownloadError ending _download_one in a traceback",
-      "stage": "development",
-      "status": "in_progress",
-      "next_agent": "developer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/42-unexpected-errors.md",
       "branch": "fix/unexpected-errors",
       "worktree": ".worktrees/fix-unexpected-errors",
-      "commits": [],
-      "review": null,
+      "commits": [
+        "2ba6ef1",
+        "0a2ae8a"
+      ],
+      "review": {
+        "approved": true,
+        "findings": [
+          "minor downloader.py:492 strerror is English inside the Spanish message (spec choice)",
+          "minor tests/test_downloader.py:341 test file not in the spec Files table"
+        ]
+      },
       "history": [
         {
           "stage": "planning",
@@ -1534,6 +1543,34 @@
           "result": "approved",
           "at": "2026-11-08T11:09:27-04:00",
           "note": "D1-D5 option A under the human delegation. All change published behaviour: human reviews them before the release that ships them (0.4.0)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-08T11:18:58-04:00",
+          "note": "Commit 2ba6ef1. Gate exit 0, 1749 passed, 2 xfailed. 9 new tests fail on main sources. Reproduction clean in es and en. Tightened the spec-28 D9 thumbnail test. cli.py left unformatted (row 05)."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-08T11:34:40-04:00",
+          "note": "No bugs. 31 tests (0a2ae8a), 1775 passed, 2 xfailed. Mutation 24/24; developer tests alone missed 5. Planner: piped output puts stderr lines before buffered stdout (row 52 output-order; ui.err could flush stdout)."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-08T11:41:30-04:00",
+          "note": "Gate exit 0, 1775 passed, 2 xfailed, 98.56%. 30 of 37 new tests fail on main src; the 7 passing are guards. Real runs in es and en, incl. wizard and injected extractor bug. Two minors. Planner: Spanish message carries English strerror; issues URL hardcoded in i18n.py, not synced with pyproject."
+        },
+        {
+          "stage": "integration",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T11:41:30-04:00",
+          "note": "Merge approved under the human delegation (roles decide). Launching tech-lead."
         }
       ]
     }
