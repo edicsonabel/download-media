@@ -59,9 +59,10 @@ fi
    ```bash
    last="$(git describe --tags --abbrev=0)"
    keys() { git show "${1}:src/download_media/i18n.py" | grep -oE '^\s+"[a-z0-9_]+":' | tr -d ' ":' | sort -u; }
+   flags() { git show "${1}:src/download_media/cli.py" | grep -oE '"--[a-z][a-z-]*"' | tr -d '"' | sort -u; }
    echo "since $last"
    comm -13 <(keys "$last") <(keys HEAD)                                            # new messages
-   git diff "$last"..HEAD -- src/download_media/cli.py | grep -E '^\+.*"--[a-z-]+"'   # new flags
+   comm -13 <(flags "$last") <(flags HEAD)                                          # new flags
    git log "$last"..HEAD --format=%B | grep -E '^BREAKING CHANGE|^[a-z]+(\(.+\))?!:' || echo "no breaking marker"
    ```
 

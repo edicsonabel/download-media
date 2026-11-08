@@ -202,3 +202,29 @@ def test_code_blocks_set_what_they_use() -> None:
         calls = {f for f in defined if re.search(rf"(?<![\w-]){f}(?![\w(-])", block)}
         problems += [f"{f}()" for f in sorted(calls - here)]
     assert not problems, f"release-manager.md blocks use what they don't set: {problems}"
+
+
+def test_version_evidence_sees_every_flag() -> None:
+    from download_media import cli
+
+    lines = _section(PREPARATION).splitlines()
+    helper = next((ln for ln in lines if ln.strip().startswith("flags()")), "")
+    assert helper, f"{PREPARATION} has no flags() helper"
+    pattern = helper.split("grep -oE '", 1)[1].split("'", 1)[0]
+    found = subprocess.run(
+        ["grep", "-oE", pattern, cli.__file__], capture_output=True, text=True, check=False
+    ).stdout
+    seen = {f.strip('"') for f in found.splitlines()}
+    expected = {
+        o
+        for action in cli.build_parser()._actions
+        for o in action.option_strings
+        if o.startswith("--") and o != "--help"
+    }
+    assert seen == expected, f"flags() sees {sorted(seen ^ expected)} wrong"
+    # A grep of the diff counts a reworded flag line as new; a set diff doesn't.
+    evidence = [ln for ln in lines if "# new flags" in ln]
+    assert evidence, f"{PREPARATION} has no new-flags evidence"
+    assert all("comm -13" in ln and "flags" in ln for ln in evidence), (
+        f"{PREPARATION}: new flags aren't a set diff: {evidence}"
+    )
