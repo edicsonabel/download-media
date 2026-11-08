@@ -145,11 +145,6 @@ def test_tag_leaves_only_through_the_atomic_push() -> None:
     assert not lone, f"{PUBLISHING} pushes the tag without --atomic: {lone}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="keys() greps '[a-z_]+', which drops keys with digits such as mp4_h264_cap; "
-    "a release whose only new message has a digit would read as a patch",
-)
 def test_version_evidence_sees_every_message_key() -> None:
     from download_media import i18n
 
