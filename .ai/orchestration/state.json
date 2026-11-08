@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T22:43:59-04:00",
+  "updated": "2026-11-07T22:56:34-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,9 +1356,9 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
       "worktree": ".worktrees/fix-release-runbook",
@@ -1373,7 +1373,11 @@
         "5f237ec",
         "8d3e3ff",
         "a6d5308",
-        "64b7617"
+        "64b7617",
+        "70cddd9",
+        "fe6ac1f",
+        "e227151",
+        "888bbb8"
       ],
       "review": {
         "approved": false,
@@ -1440,6 +1444,13 @@
           "result": "changes_requested",
           "at": "2026-11-07T22:43:59-04:00",
           "note": "Round 2. One important, three minor. Gate exit 0, 1736 passed. Checklist complete; nothing publishes before approval."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T22:56:34-04:00",
+          "note": "Round 2 fixed: self-contained blocks, flag sets diffed, Pages outcomes, call timeouts. Gate exit 0, 1739 passed. Planner: AUR block runs the poll after a failed cgit check; removed flags or messages (comm -23) not listed as breaking evidence."
         }
       ]
     }
