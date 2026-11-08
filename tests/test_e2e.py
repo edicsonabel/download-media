@@ -2756,25 +2756,21 @@ def test_a_folder_the_thumbnail_cannot_be_written_to_still_fails(
     media_url: str, out: Path, capfd: pytest.CaptureFixture[str], flags: tuple[str, ...]
 ) -> None:
     # Writing the thumbnail is the first write: an OSError there is the audio's failure too,
-    # never a missing cover. Single mode raises it (spec 28, D9: its own row).
+    # never a missing cover. Single mode reports it itself (spec 42), -p through yt-dlp.
     out.mkdir()
     out.chmod(0o555)
     url = f"{media_url}/audio.html"
     try:
-        code: int | None = cli.main(["-y", "-a", *flags, "-o", str(out), url])
-    except OSError:
-        code = None
+        code = cli.main(["-y", "-a", *flags, "-o", str(out), url])
     finally:
         out.chmod(0o755)
     output = capfd.readouterr().out
-    assert code != 0
+    assert code == 1
     assert names(out) == []
     assert cover_warnings(output) == 0
     assert t("done") not in output
     assert history_rows() == []
-    if flags:
-        assert code == 1
-        assert t("failed", url) in output
+    assert t("failed", url) in output
 
 
 def test_cancelling_after_the_thumbnail_leaves_none(
@@ -5894,3 +5890,126 @@ def test_going_back_after_a_missing_browser_does_not_probe_again(generic: Any, h
     assert len(names(home / "Videos")) == 1
     [line] = commands(output)
     assert "--cookies" not in shlex.split(line)
+
+
+# Errors that aren't a DownloadError (spec 42): each fails only its URL.
+CRASH = "https://fake.test/crash"
+CRASH_BUG = "TypeError: 'NoneType' object is not subscriptable"
+
+
+def blocked_folder(tmp_path: Path) -> tuple[Path, Path]:
+    """A regular file, and a folder below it that can't be created."""
+    afile = tmp_path / "afile"
+    afile.write_text("keep", encoding="utf-8")
+    return afile, afile / "sub"
+
+
+def test_a_folder_that_cannot_be_created_fails_each_url(
+    run: Any, tmp_path: Path, out: Path
+) -> None:
+    afile, bad = blocked_folder(tmp_path)
+    code, output = run("-y", "-o", str(bad), VIDEO, VIDEO_B)
+    assert code == 1
+    assert "Traceback" not in output
+    assert output.count(t("output_unusable", bad, "Not a directory")) == 2
+    assert t("failed", VIDEO) in output
+    assert t("failed", VIDEO_B) in output
+    assert t("done") not in output
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("-o") + 1] == str(bad)
+    assert VIDEO in argv and VIDEO_B in argv
+    assert history_rows() == []
+    assert afile.read_text(encoding="utf-8") == "keep"
+    assert names(out) == []
+
+
+def test_a_folder_that_cannot_be_created_fails_a_list_once(run: Any, tmp_path: Path) -> None:
+    _, bad = blocked_folder(tmp_path)
+    code, output = run("-y", "-p", "-o", str(bad), CAROUSEL)
+    assert code == 1
+    assert "Traceback" not in output
+    assert output.count(t("output_unusable", bad, "Not a directory")) == 1
+    assert t("failed", CAROUSEL) in output
+    assert len(commands(output)) == 1
+
+
+def test_wizard_with_a_folder_that_cannot_be_created_saves_the_next_url(
+    run: Any, tmp_path: Path, out: Path, answers: Any
+) -> None:
+    _, bad = blocked_folder(tmp_path)
+    # URL, type, quality, container, folder, cookies; the second walk keeps -o.
+    answers("", "", "", "", str(bad), "", *SINGLE_WALK)
+    code, output = run("-i", VIDEO, VIDEO_B)
+    assert code == 1
+    assert "Traceback" not in output
+    assert output.count(t("output_unusable", bad, "Not a directory")) == 1
+    assert t("failed", VIDEO) in output
+    assert t("failed", VIDEO_B) not in output
+    assert names(out) == ["Clip.mp4"]
+    assert output.count(t("done")) == 1
+    folders = []
+    for line in commands(output):
+        argv = shlex.split(line)
+        folders.append(argv[argv.index("-o") + 1])
+    assert sorted(folders) == sorted([str(bad), str(out)])
+    assert len(history_rows()) == 1
+
+
+def test_an_extractor_bug_fails_only_its_url(run: Any, out: Path) -> None:
+    code, output = run("-y", CRASH, VIDEO)
+    assert code == 1
+    assert "Traceback" in output
+    assert "TypeError" in output
+    assert t("unexpected_bug", CRASH_BUG) in output
+    assert t("failed", CRASH) in output
+    assert t("failed", VIDEO) not in output
+    assert names(out) == ["Clip.mp4"]
+    assert output.count(t("done")) == 1
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert CRASH in argv and VIDEO in argv
+    assert len(history_rows()) == 1
+
+
+def test_an_extractor_bug_in_a_list_is_still_reported_by_yt_dlp(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", CRASH, VIDEO)
+    assert code == 1
+    assert t("unexpected_bug", CRASH_BUG) not in output
+    assert "Traceback" not in output
+    assert "'NoneType' object is not subscriptable" in output
+    assert t("failed", CRASH) in output
+    assert names(out) == ["Clip.mp4"]
+    assert output.count(t("done")) == 1
+    assert len(commands(output)) == 1
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes to a read-only folder")
+def test_a_thumbnail_that_cannot_be_written_fails_with_the_system_error(
+    run: Any, tmp_path: Path
+) -> None:
+    ro = tmp_path / "ro"
+    ro.mkdir()
+    ro.chmod(0o500)
+    url = "https://fake.test/junk-thumb"
+    try:
+        code, output = run("-y", "-a", "-o", str(ro), url)
+    finally:
+        ro.chmod(0o755)
+    assert code == 1
+    assert "Traceback" not in output
+    prefix = t("unexpected_error", "")
+    [line] = [x for x in output.splitlines() if x.startswith(prefix)]
+    assert "Permission denied" in line
+    assert ".cover.jpg" in line
+    assert t("failed", url) in output
+    assert names(ro) == []
+    assert history_rows() == []
+    assert len(commands(output)) == 1
+
+
+def test_an_extractor_bug_while_listing_formats_is_reported(run: Any) -> None:
+    code, output = run("-y", "-l", CRASH)
+    assert code == 1
+    assert t("unexpected_bug", CRASH_BUG) in output
+    assert t("failed", CRASH) in output

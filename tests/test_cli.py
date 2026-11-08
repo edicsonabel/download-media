@@ -412,6 +412,29 @@ def test_interrupt_propagates_after_cancel_message(monkeypatch, tmp_path) -> Non
         cli._download_one("http://x", parse(["-y", "-o", str(tmp_path), "http://x"]))
 
 
+@pytest.mark.parametrize("flags", [[], ["--cookies", "firefox"]])
+def test_system_error_fails_only_the_url(monkeypatch, tmp_path, capsys, flags) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    calls: list[str | None] = []
+    error = OSError(28, "No space left on device", "/x/f")
+
+    def full_disk(url, opts):
+        calls.append(opts.cookies_browser)
+        raise error
+
+    monkeypatch.setattr(cli, "download", full_disk)
+    opts = parse(["-y", *flags, "-o", str(tmp_path), "http://x"])
+    assert cli._download_one("http://x", opts) == cli._Outcome(False, False, "no")
+    captured = capsys.readouterr()
+    assert t("unexpected_error", error) in captured.err
+    assert "Traceback" not in captured.err
+    assert t("failed", "http://x") in captured.out
+    # Not about cookies: no retry without them.
+    assert len(calls) == 1
+
+
 def _hint(capsys, message: str, argv: list[str]) -> str:
     from download_media import cli
 

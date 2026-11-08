@@ -62,6 +62,13 @@ _MESSAGES: dict[str, dict[str, str]] = {
         ),
         "no_cover": "{}: guardado sin imagen de portada.",
         "failed": "Falló la descarga: {}",
+        "output_unusable": "No se puede guardar en {}: {}. Elige otra carpeta con -o.",
+        "unexpected_error": "Error: {}",
+        "unexpected_bug": (
+            "Error inesperado ({}). Puede ser un fallo: si actualizar yt-dlp no lo arregla, "
+            "repórtalo con la salida de arriba en "
+            "https://github.com/edicsonabel/download-media/issues"
+        ),
         "cookies_retry": "Falló con las cookies de {}. Reintentando sin cookies...",
         "cookies_bad_spec": "valor inválido {!r}: usa NAVEGADOR[+KEYRING] (navegadores: {}; keyrings: {})",
         "cookies_keyring_hint": "  → si {0} guarda sus claves en otro keyring, indícalo: --cookies {0}+gnomekeyring (o +kwallet6, +basictext)",
@@ -153,6 +160,13 @@ _MESSAGES: dict[str, dict[str, str]] = {
         ),
         "no_cover": "{}: saved without a cover image.",
         "failed": "Download failed: {}",
+        "output_unusable": "Can't save to {}: {}. Choose another folder with -o.",
+        "unexpected_error": "Error: {}",
+        "unexpected_bug": (
+            "Unexpected error ({}). It may be a bug: if updating yt-dlp doesn't fix it, "
+            "report it with the output above at "
+            "https://github.com/edicsonabel/download-media/issues"
+        ),
         "cookies_retry": "Failed with {} cookies. Retrying without cookies...",
         "cookies_bad_spec": "invalid value {!r}: use BROWSER[+KEYRING] (browsers: {}; keyrings: {})",
         "cookies_keyring_hint": "  → if {0} stores its keys in another keyring, name it: --cookies {0}+gnomekeyring (or +kwallet6, +basictext)",

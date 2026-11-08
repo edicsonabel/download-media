@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
@@ -39,13 +40,14 @@ from .cookies import (
 from .downloader import (
     CookiesUnavailable,
     DownloadResult,
+    OutputUnusable,
     build_ydl_opts,
     download,
     list_formats,
 )
 from .i18n import is_yes, t
 from .probe import is_auth_error
-from .ui import C, die, fmt_bytes, fmt_duration, info, ok, warn
+from .ui import C, die, err, fmt_bytes, fmt_duration, info, ok, warn
 
 # Flags that signal "I know what I want; skip the wizard".
 _INTENT_FLAGS: frozenset[str] = frozenset({
@@ -305,6 +307,14 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     except KeyboardInterrupt:
         warn(t("cancelled"))
         raise
+    except OutputUnusable as exc:
+        err(t("output_unusable", exc.path, exc.reason))
+        warn(t("failed", url))
+        return _Outcome(False, False, pmode)
+    except Exception as exc:
+        _report_unexpected(exc)
+        warn(t("failed", url))
+        return _Outcome(False, False, pmode)
     if result.missing:
         warn(t("items_not_found", result.playlist_count, ",".join(result.missing)))
     if not result.saved:
@@ -376,6 +386,15 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
         warn(t("cookies_keyring_hint", browser_of(opts.cookies_browser)))
 
 
+def _report_unexpected(exc: Exception) -> None:
+    """An error yt-dlp didn't report; an OSError is the system's, anything else likely a bug."""
+    if isinstance(exc, OSError):
+        err(t("unexpected_error", exc))
+        return
+    traceback.print_exception(exc)  # stderr: what a bug report needs.
+    err(t("unexpected_bug", f"{type(exc).__name__}: {exc}"))
+
+
 def _list_formats(url: str, opts: DownloadOptions) -> int:
     try:
         try:
@@ -387,6 +406,10 @@ def _list_formats(url: str, opts: DownloadOptions) -> int:
     except DownloadError as exc:
         warn(t("failed", url))
         _hint_for_download_error(str(exc), opts)
+        return 1
+    except Exception as exc:
+        _report_unexpected(exc)
+        warn(t("failed", url))
         return 1
 
 

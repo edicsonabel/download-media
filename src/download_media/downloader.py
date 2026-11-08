@@ -143,6 +143,15 @@ class CookiesUnavailable(Exception):
         self.failure = failure
 
 
+class OutputUnusable(Exception):
+    """The output folder can't be created; nothing was requested yet."""
+
+    def __init__(self, path: Path, reason: str) -> None:
+        super().__init__(reason)
+        self.path = path
+        self.reason = reason
+
+
 def _load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
     """Load the browser's cookies before any request, so a failure looks the same in every mode.
 
@@ -474,9 +483,13 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     """Download a single URL. Raises ``DownloadError`` if nothing could be saved.
 
     Raises ``CookiesUnavailable`` before any request if the browser's cookies can't be loaded.
+    Raises ``OutputUnusable`` if the folder can't be created.
     """
     output_dir = opts.resolve_output()
-    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise OutputUnusable(output_dir, exc.strerror or str(exc)) from exc
     saved: list[str] = []
     skipped: list[str] = []
     ydl_opts = build_ydl_opts(opts, output_dir)
