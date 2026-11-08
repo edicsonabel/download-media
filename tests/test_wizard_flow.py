@@ -438,6 +438,51 @@ def test_back_from_the_folder_after_only_images_returns_to_the_picker(
     assert opts.audio_only is True
 
 
+@pytest.mark.parametrize("audio_only", [False, True])
+def test_a_preset_only_yt_dlp_reads_is_not_taken_for_images_only(
+    monkeypatch: pytest.MonkeyPatch, answers: Any, audio_only: bool
+) -> None:
+    # "1:2" is a yt-dlp slice (image 1, video 2): the picker can't tell, so the media
+    # steps stay, and -a stays as given.
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    monkeypatch.setattr(wizard, "probe", lambda url, cookies: carousel(IG_POST))
+    ran: list[str] = []
+    real = wizard._run_step
+
+    def spy(name: str, *args: Any) -> None:
+        ran.append(name)
+        real(name, *args)
+
+    monkeypatch.setattr(wizard, "_run_step", spy)
+    answers(*[""] * 7)
+    preset = DownloadOptions(urls=[URL], playlist_items="1:2", audio_only=audio_only)
+    opts = wizard.run(preset)
+    assert opts is not None
+    media = ["type", "aformat"] if audio_only else ["type", "quality", "container"]
+    assert ran == ["select", *media, "output", "cookies"]
+    assert opts.playlist_items == "1:2"
+    assert opts.audio_only is audio_only
+
+
+def test_a_saveable_image_gets_a_colour_of_its_own_in_the_picker(
+    monkeypatch: pytest.MonkeyPatch, answers: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Colours are empty off a TTY, so give them visible stand-ins.
+    for name, code in (("GREEN", "<g>"), ("YELLOW", "<y>"), ("DIM", "<d>"), ("RESET", "</>")):
+        monkeypatch.setattr(wizard.C, name, code)
+    answers("")
+    opts = DownloadOptions(urls=[URL])
+    wizard.step_select(opts, IG_POST, None)
+    lines = capsys.readouterr().out.splitlines()
+    image = f"[{t('kind_image').lower()}]"
+    [first] = [line for line in lines if line.lstrip().startswith("1.")]
+    [unsupported] = [line for line in lines if line.lstrip().startswith("3.")]
+    assert f"<y>{image}</>" in first
+    assert "[no soportado]" not in first
+    assert f"<d>{image}</> <d>[no soportado]</>" in unsupported
+    assert opts.playlist_items == "1,2,4"
+
+
 def test_carousel_without_videos_defaults_to_supported_items(walk: Any) -> None:
     items = [
         ProbeItem(1, ContentKind.SINGLE_AUDIO, True, "A"),

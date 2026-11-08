@@ -529,6 +529,22 @@ class FakeSiteIE(InfoExtractor):
             candidates = [{"url": f"{self.media_url}/{name}"} for name in ("small.jpg", "tiny.jpg")]
             image = {**self._instagram_image("i1"), "thumbnails": candidates}
             return self.playlist_result([image], "post", "Post")
+        odd_images = {
+            # Cut off long before its stated length: yt-dlp writes part of it, then fails.
+            "ig-short-image": f"{self.media_url}/short/i1.jpg",
+            # No scheme, and an extension yt-dlp refuses to write: both raise before the fetch.
+            "ig-relative-image": "tiny.jpg",
+            "ig-php-image": f"{self.media_url}/{JPEG_AS.format('php')}",
+        }
+        if page in odd_images:
+            image = {**self._instagram_image("i1"), "thumbnails": [{"url": odd_images[page]}]}
+            return self.playlist_result([image, self._video("v1")], "post", "Post")
+        if page == "ig-png-image":
+            image = {
+                **self._instagram_image("i1"),
+                "thumbnails": [{"url": f"{self.media_url}/tiny.png"}],
+            }
+            return self.playlist_result([image, self._video("v1")], "post", "Post")
         if page == "storyboard-video":
             return self._with_formats("v1", self._storyboard(), plain_video)
         if page == "storyboard-audio":
@@ -681,6 +697,9 @@ class FakeSiteIE(InfoExtractor):
             ]
         elif page == "hole":
             entries = [video, None]
+        elif page == "ig-linked-carousel":
+            # Entries that are links, like a profile's posts: the item is only known once followed.
+            entries = [self.url_result(follow(p)) for p in ("ig-image", "ig-video")]
         else:
             return None
         return self.playlist_result(entries, "post", "Post")

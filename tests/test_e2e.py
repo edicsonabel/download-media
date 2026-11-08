@@ -3673,6 +3673,241 @@ def test_wizard_in_audio_mode_on_a_mixed_pick_skips_the_image(
     assert t("partial_result", 1, 2, 1, 0) in output
 
 
+def test_a_pick_of_only_images_is_done_and_logged(run: Any, out: Path) -> None:
+    # Post hooks never see an image: only the tool's own count says something was saved.
+    code, output = run("-y", "--playlist-items", "1,4", IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].jpg", "04 - Clip [i2].jpg"]
+    assert t("done") in output
+    assert t("no_supported_items") not in output
+    assert not said_partial_result(output)
+    [row] = history_rows()
+    assert row.split("\t")[1] == "video"
+
+
+@WITH_AND_WITHOUT_COOKIES
+def test_a_run_whose_only_item_is_a_broken_image_fails(
+    run: Any, out: Path, cookies: tuple[str, ...]
+) -> None:
+    url = "https://fake.test/ig-broken-image"
+    code, output = run("-y", "--playlist-items", "1", *cookies, url)
+    assert code == 1
+    assert t("image_not_saved", "i1") in output
+    assert t("done") not in output
+    assert names(out) == []
+    assert history_rows() == []
+
+
+@WITH_AND_WITHOUT_COOKIES
+def test_a_broken_image_fails_alike_with_and_without_cookies(
+    run: Any, out: Path, cookies: tuple[str, ...]
+) -> None:
+    code, output = run("-y", "-p", *cookies, "https://fake.test/ig-broken-image")
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert t("cookies_retry", "firefox") not in output
+
+
+@pytest.mark.parametrize("page", ["ig-relative-image", "ig-php-image"])
+def test_an_image_link_yt_dlp_refuses_is_a_failed_item(run: Any, out: Path, page: str) -> None:
+    # A link with no scheme, or an extension yt-dlp won't write: both raise before the fetch.
+    code, output = run("-y", "-p", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    assert t("image_not_saved", "i1") in output
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert "Traceback" not in output
+
+
+@pytest.mark.parametrize("page", ["ig-relative-image", "ig-php-image"])
+def test_single_mode_stops_at_an_image_link_yt_dlp_refuses(run: Any, out: Path, page: str) -> None:
+    url = f"https://fake.test/{page}"
+    code, output = run("-y", url)
+    assert code == 1
+    assert t("image_not_saved", "i1") in output
+    assert t("failed", url) in output
+    assert t("done") not in output
+    assert "Traceback" not in output
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="a cut-off image is kept and counted as saved, and a rerun calls it already present",
+)
+def test_a_cut_off_image_is_not_reported_as_saved(run: Any, out: Path) -> None:
+    url = "https://fake.test/ig-short-image"
+    for _ in range(2):  # The rerun must not take the leftover for a saved image.
+        code, output = run("-y", "-p", url)
+        assert code == 0
+        assert t("image_not_saved", "i1") in output
+        assert t("partial_result", 1, 2, 0, 1) in output
+        assert names(out) == ["02 - Clip [v1].mp4"]
+
+
+def test_an_image_keeps_the_extension_and_bytes_of_its_link(
+    run: Any, out: Path, media_url: str
+) -> None:
+    code, output = run("-y", "-p", "https://fake.test/ig-png-image")
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].png", "02 - Clip [v1].mp4"]
+    with urllib.request.urlopen(f"{media_url}/tiny.png") as response:
+        assert (out / "01 - Clip [i1].png").read_bytes() == response.read()
+    assert not said_partial_result(output)
+
+
+def test_quality_and_container_leave_the_images_as_they_are(
+    run: Any, out: Path, tiny_jpg: bytes
+) -> None:
+    code, output = run("-y", "-p", "-q", "480", "--video-format", "mkv", IG_CAROUSEL)
+    assert code == 0
+    assert jpgs(out) == ["01 - Clip [i1].jpg", "04 - Clip [i2].jpg"]
+    assert len(names(out)) == 4
+    assert all((out / name).read_bytes() == tiny_jpg for name in jpgs(out))
+    assert not said_partial_result(output)
+
+
+def test_list_formats_names_every_image_it_skips(run: Any, out: Path) -> None:
+    code, output = run("-y", "-l", IG_CAROUSEL)
+    assert code == 0
+    assert t("item_image_skipped", "i2") in output
+    assert t("item_no_media", "i1") not in output
+
+
+LINKED = "https://fake.test/ig-linked-carousel"
+
+
+@pytest.mark.parametrize(
+    ("flags", "saved"),
+    [
+        (("-p",), ["01 - Clip [i1].jpg", "02 - Clip [v1].mp4"]),
+        ((), ["Clip [i1].jpg", "Clip [v1].mp4"]),
+    ],
+    ids=["playlist", "single"],
+)
+def test_an_image_known_only_once_its_link_is_followed_is_saved(
+    run: Any, out: Path, tiny_jpg: bytes, flags: tuple[str, ...], saved: list[str]
+) -> None:
+    # The match_filter only sees a link here: the image is found inside process_video_result.
+    code, output = run("-y", *flags, LINKED)
+    assert code == 0
+    assert names(out) == saved
+    assert (out / saved[0]).read_bytes() == tiny_jpg
+    assert t("done") in output
+    assert not said_partial_result(output)
+
+
+def test_audio_mode_never_saves_an_image_known_only_once_its_link_is_followed(
+    run: Any, out: Path
+) -> None:
+    code, _ = run("-y", "-a", "-p", LINKED)
+    assert code == 0
+    assert names(out) == ["02 - Clip [v1].mp3"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="behind a link, -a and -l see the image only after the match_filter: yt-dlp's "
+    "'No video formats found!' then fails the item (-a) or the whole URL (-l)",
+)
+@pytest.mark.parametrize(
+    ("flags", "result"),
+    [(("-a", "-p"), ("partial_result", 1, 2, 1, 0)), (("-l",), None)],
+    ids=["audio", "list"],
+)
+def test_audio_and_list_modes_skip_a_linked_image_as_an_image(
+    run: Any, out: Path, flags: tuple[str, ...], result: tuple[Any, ...] | None
+) -> None:
+    code, output = run("-y", *flags, LINKED)
+    assert code == 0
+    assert t("item_image_skipped", "i1") in output
+    assert "No video formats found" not in output
+    if result:
+        assert t(*result) in output
+
+
+def test_wizard_in_audio_mode_saves_a_pick_of_only_images_in_the_video_folder(
+    fake_site: Any, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    # URL, picker, folder, cookies. Images go next to the videos, never to the Music folder.
+    answers("", "1,4", "", "")
+    code = cli.main(["-i", "-a", IG_CAROUSEL])
+    output = capfd.readouterr().out
+    assert code == 0
+    assert names(home / "Videos") == ["01 - Clip [i1].jpg", "04 - Clip [i2].jpg"]
+    assert names(home / "Music") == []
+    assert str(home / "Videos") in output
+
+
+def test_wizard_all_on_an_instagram_shaped_carousel_saves_everything(
+    run: Any, out: Path, answers: Any
+) -> None:
+    answers("", "all", "", "", "", "", "")
+    code, output = run("-i", IG_CAROUSEL)
+    assert code == 0
+    assert names(out) == IG_NUMBERED
+    assert not said_partial_result(output)
+
+
+@pytest.mark.parametrize("flags", [(), ("-a",)], ids=["video", "audio"])
+def test_wizard_with_a_preset_of_only_images_asks_no_media_step(
+    run: Any, replay: Any, out: Path, again: Path, answers: Any, flags: tuple[str, ...]
+) -> None:
+    # URL, picker (Enter keeps the preset), folder, cookies.
+    prompts = answers("", "", "", "")
+    code, output = run("-i", *flags, "--playlist-items", "1,4", IG_CAROUSEL)
+    assert code == 0
+    assert len(prompts) == 4
+    assert names(out) == ["01 - Clip [i1].jpg", "04 - Clip [i2].jpg"]
+
+    [line] = commands(output)
+    assert "--playlist-items 1,4" in line
+    assert " -a " not in line
+    code, _ = replay(line, again)
+    assert code == 0
+    assert names(again) == names(out)
+
+
+@pytest.mark.parametrize(
+    ("lang", "prompt", "image", "skipped"),
+    [
+        (
+            "es",
+            "Selecciona items (Enter = todo lo descargable, 'all' = todo intentable, c = cancelar): ",
+            "[imagen]",
+            "i1: es una imagen, se omite",
+        ),
+        (
+            "en",
+            "Pick items (Enter = everything downloadable, 'all' = try everything, c = cancel): ",
+            "[image]",
+            "i1: an image, skipping",
+        ),
+    ],
+)
+def test_carousel_images_in_both_languages(
+    run: Any,
+    out: Path,
+    answers: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    lang: str,
+    prompt: str,
+    image: str,
+    skipped: str,
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    prompts = answers(*PICKER_WALK)
+    code, output = run("-i", IG_CAROUSEL)
+    assert code == 0
+    assert prompt in prompts
+    assert output.count(image) == 2
+
+    code, output = run("-y", "-a", "-p", IG_CAROUSEL)
+    assert code == 0
+    assert skipped in output
+
+
 def test_wizard_reads_the_extension_of_a_url_with_a_query_string(
     run: Any, out: Path, answers: Any
 ) -> None:
