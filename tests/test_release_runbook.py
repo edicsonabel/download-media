@@ -5,6 +5,7 @@ Each check pins a step of the 0.2.0 release that went wrong or nearly did (spec 
 
 from __future__ import annotations
 
+import subprocess
 from itertools import pairwise
 from pathlib import Path
 
@@ -122,3 +123,45 @@ def test_preparation_builds_the_checklist() -> None:
     _assert_contains(
         _section(PREPARATION), ["Live check", "skipped", "delegated", "Preflight"], PREPARATION
     )
+
+
+def test_verification_runs_the_cgit_check() -> None:
+    # "cgit" also appears in the prose, so pin the command itself.
+    _assert_contains(
+        _section(VERIFICATION),
+        ["aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=download-media", "grep -x 'pkgver="],
+        VERIFICATION,
+    )
+
+
+def test_tag_leaves_only_through_the_atomic_push() -> None:
+    pushes = [
+        line
+        for line in _section(PUBLISHING).splitlines()
+        if "git push" in line and "v<version>" in line
+    ]
+    assert pushes, f"{PUBLISHING} never pushes the tag"
+    lone = [line for line in pushes if "--atomic" not in line]
+    assert not lone, f"{PUBLISHING} pushes the tag without --atomic: {lone}"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="keys() greps '[a-z_]+', which drops keys with digits such as mp4_h264_cap; "
+    "a release whose only new message has a digit would read as a patch",
+)
+def test_version_evidence_sees_every_message_key() -> None:
+    from download_media import i18n
+
+    line = next(
+        (ln for ln in _section(PREPARATION).splitlines() if ln.strip().startswith("keys()")), ""
+    )
+    assert line, f"{PREPARATION} has no keys() helper"
+    pattern = line.split("grep -oE '", 1)[1].split("'", 1)[0]
+    found = subprocess.run(
+        ["grep", "-oE", pattern, i18n.__file__], capture_output=True, text=True, check=False
+    ).stdout
+    seen = {k.strip().strip('":') for k in found.splitlines()}
+    expected = set(i18n._MESSAGES["en"]) | set(i18n._MESSAGES["es"])
+    missing = sorted(expected - seen)
+    assert not missing, f"keys() misses message keys {missing}"
