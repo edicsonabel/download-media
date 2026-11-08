@@ -17,11 +17,17 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 from yt_dlp.cookies import CookieLoadError
-from yt_dlp.networking.exceptions import RequestError
+from yt_dlp.networking.exceptions import IncompleteRead, RequestError
 from yt_dlp.postprocessor.common import PostProcessor
 from yt_dlp.postprocessor.embedthumbnail import EmbedThumbnailPP
 from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP, FFmpegMetadataPP
-from yt_dlp.utils import DownloadError, PostProcessingError, prepend_extension, replace_extension
+from yt_dlp.utils import (
+    DownloadError,
+    PostProcessingError,
+    int_or_none,
+    prepend_extension,
+    replace_extension,
+)
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
@@ -64,10 +70,65 @@ def _cover_name(path: str, ext: str | None) -> str:
     return f"{stem}.cover{real_ext}" if real_ext[1:] == ext else f"{path}.cover"
 
 
+def is_saveable_image(info: Any) -> bool:
+    """An entry yt-dlp finds no formats for, with a thumbnail: an Instagram carousel image."""
+    if info.get("_type", "video") != "video":
+        return False
+    # yt-dlp's _get_formats: a result with no formats list is its own single format.
+    formats = info.get("formats")
+    no_formats = not formats if formats is not None else not info.get("url")
+    return no_formats and bool(info.get("thumbnails") or info.get("thumbnail"))
+
+
+# What ``yt-dlp --ignore-no-formats-error --skip-download --write-thumbnail`` sets, scoped to
+# one image entry: set globally, they would hide a site's own errors, skip the videos and
+# leave a .jpg next to each one. overwrites=False reuses an image already saved. no_warnings
+# hides the "No video formats found!" that ignore_no_formats_error turns into a warning; only
+# -l doesn't set it already, and it names the image as skipped instead.
+_IMAGE_PARAMS: dict[str, Any] = {
+    "ignore_no_formats_error": True,
+    "skip_download": True,
+    "writethumbnail": True,
+    "overwrites": False,
+    "no_warnings": True,
+}
+
+
+class _WholeBody:
+    """A response that fails when its body ends short of the length it stated.
+
+    yt-dlp's thumbnail writer copies whatever arrives, so a cut-off image would be kept as
+    saved. Its own downloader makes the same check on media (ContentTooShortError).
+    """
+
+    def __init__(self, response: Any) -> None:
+        self._response = response
+        self._read = 0
+        # A decoded body doesn't match the length of the encoded one.
+        encoding = (response.get_header("Content-Encoding") or "identity").strip().lower()
+        length = int_or_none(response.get_header("Content-Length"))
+        self._expected = length if encoding == "identity" else None
+
+    def read(self, amt: int | None = None) -> bytes:
+        data: bytes = self._response.read(amt)
+        self._read += len(data)
+        ended = not data or amt is None or amt < 0
+        if ended and self._expected is not None and self._read < self._expected:
+            raise IncompleteRead(self._read, self._expected - self._read)
+        return data
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._response, name)
+
+
 class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
     count_entries = False
+    # Take list items that are images past yt-dlp's "No video formats found!", in every mode:
+    # one behind a link reaches the match_filter only after that check, and the filter
+    # decides whether it's saved (-a and -l skip it).
+    save_images = False
     # len(errors) when the current item started.
     item_errors = 0
 
@@ -76,11 +137,51 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         # Thumbnail files this run wrote for the current item, and whether it lost its cover.
         self.item_thumbs: list[str] = []
         self.item_no_cover = False
+        # Images saved, or found already saved. Post hooks never run for them.
+        self.images: list[str] = []
+        self.item_images: list[str] = []
+        self.saving_image = False
+        self.fetching_image = False
+        # Candidate paths that were free when yt-dlp checked them, while fetching one image.
+        self.image_new: set[str] = set()
         super().__init__(*args, **kwargs)
+
+    def existing_file(self, filepaths: Any, *, default_overwrite: bool = True) -> Any:
+        if self.fetching_image:
+            for path in dict.fromkeys(filepaths):
+                if path in self.image_new:
+                    # Left by a candidate cut off mid-body (one fetched whole ends the search):
+                    # with overwrites=False, yt-dlp would take it for an image already saved.
+                    Path(path).unlink(missing_ok=True)
+                elif not os.path.lexists(path):
+                    self.image_new.add(path)
+        return super().existing_file(filepaths, default_overwrite=default_overwrite)
+
+    def urlopen(self, req: Any) -> Any:
+        response = super().urlopen(req)
+        return _WholeBody(response) if self.fetching_image else response
+
+    def process_video_result(self, info_dict: Any, download: bool = True) -> Any:
+        image = (
+            self.save_images and info_dict.get("playlist_index") and is_saveable_image(info_dict)
+        )
+        if not image:
+            return super().process_video_result(info_dict, download=download)
+        # The entry is already extracted, so no extractor reads ignore_no_formats_error here.
+        previous = {key: self.params[key] for key in _IMAGE_PARAMS if key in self.params}
+        self.params.update(_IMAGE_PARAMS)
+        self.saving_image = True
+        try:
+            return super().process_video_result(info_dict, download=download)
+        finally:
+            self.saving_image = False
+            for key in _IMAGE_PARAMS:
+                self.params.pop(key, None)
+            self.params.update(previous)
 
     def process_info(self, info_dict: Any) -> Any:
         self.item_errors = len(self.errors)
-        self.item_thumbs, self.item_no_cover = [], False
+        self.item_thumbs, self.item_no_cover, self.item_images = [], False, []
         try:
             result = super().process_info(info_dict)
         except BaseException:
@@ -89,11 +190,34 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
             raise
         if self.item_failed():
             self.drop_thumbs()
+        else:
+            self.images += self.item_images
         return result
 
     def _write_thumbnails(
         self, label: Any, info_dict: Any, filename: Any, thumb_filename_base: Any = None
     ) -> Any:
+        if self.saving_image:
+            # yt-dlp's own writer, without the .cover name. Never in item_thumbs: an image
+            # found already saved isn't this run's to delete.
+            self.image_new = set()
+            self.fetching_image = True
+            try:
+                images = super()._write_thumbnails(label, info_dict, filename, thumb_filename_base)
+            except (RequestError, _UnsafeExtensionError):
+                images = None
+            finally:
+                self.fetching_image = False
+            # yt-dlp moves on from a candidate that failed mid-body, and leaves what it wrote.
+            kept = {path for path, _ in images or []}
+            for path in self.image_new - kept:
+                Path(path).unlink(missing_ok=True)
+            if not images:
+                # Raises without ignoreerrors: single mode stops, as it does for a broken video.
+                self.report_error(t("image_not_saved", info_dict.get("id")))
+                return None
+            self.item_images += [final for _, final in images]
+            return images
         # yt-dlp only catches network errors here; a URL with no scheme (a relative og:image),
         # or an extension it won't write (thumb.php?id=), raises before the media is fetched,
         # and would lose the download over its cover.
@@ -457,20 +581,28 @@ class _EmbedCover(EmbedThumbnailPP):  # type: ignore[misc]
             return [], info
 
 
-def _skip_items_without_media(skipped: list[str]) -> Callable[..., str | None]:
-    """``match_filter`` dropping carousel items yt-dlp has no formats for.
+def _skip_items_without_media(
+    skipped: list[str], *, keep_images: bool
+) -> Callable[..., str | None]:
+    """``match_filter`` dropping carousel items with nothing to fetch.
 
-    Instagram images come through as such items, and yt-dlp downloads carousels
-    even with ``noplaylist``. Without this the first image would abort a
-    single-mode run. yt-dlp also calls this with the playlist's own metadata
-    (no ``id``) and for lone URLs (no ``playlist_index``); those must pass, so a
-    lone URL with no formats still fails as an error.
+    yt-dlp downloads carousels even with ``noplaylist``, so without this the
+    first such item would abort a single-mode run. Images (no formats, a
+    thumbnail) pass when ``keep_images``, for ``_Ydl`` to save. yt-dlp also
+    calls this with the playlist's own metadata (no ``id``) and for lone URLs
+    (no ``playlist_index``); those must pass, so a lone URL with no formats
+    still fails as an error.
     """
 
     def match_filter(info: Any, *, incomplete: Any = False) -> str | None:
         item = info.get("id")
         if not (incomplete and item and info.get("playlist_index")):
             return None
+        if is_saveable_image(info):
+            if keep_images:
+                return None
+            skipped.append(str(item))
+            return t("item_image_skipped", item)
         if info.get("_type", "video") != "video" or info.get("formats") or info.get("url"):
             return None
         skipped.append(str(item))
@@ -493,11 +625,12 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     saved: list[str] = []
     skipped: list[str] = []
     ydl_opts = build_ydl_opts(opts, output_dir)
-    ydl_opts["match_filter"] = _skip_items_without_media(skipped)
+    ydl_opts["match_filter"] = _skip_items_without_media(skipped, keep_images=not opts.audio_only)
     untagged: list[str] = []
     no_cover: list[str] = []
     with _Ydl(ydl_opts) as ydl:
         _load_browser_cookies(ydl, opts.cookies_browser)
+        ydl.save_images = True
 
         def keep(path: str) -> None:
             if not ydl.item_failed():
@@ -525,6 +658,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
             if not opts.audio_only:
                 ydl.add_post_processor(_EmbedSubtitles(ydl, not_embedded), when="post_process")
         returncode = int(ydl.download([url]))
+    saved += ydl.images
     # ignoreerrors turns a total failure into a bare return code.
     if returncode != 0 and not saved:
         raise DownloadError("\n".join(ydl.errors) or t("failed", url))
@@ -548,10 +682,11 @@ def list_formats(url: str, opts: DownloadOptions) -> int:
     """Print available formats for a URL (equivalent to ``yt-dlp -F``)."""
     ydl_opts: dict[str, Any] = {
         "listformats": True,
-        "match_filter": _skip_items_without_media([]),
+        "match_filter": _skip_items_without_media([], keep_images=False),
     }
     if opts.cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
-    with YoutubeDL(ydl_opts) as ydl:
+    with _Ydl(ydl_opts) as ydl:
         _load_browser_cookies(ydl, opts.cookies_browser)
+        ydl.save_images = True
         return int(ydl.download([url]))

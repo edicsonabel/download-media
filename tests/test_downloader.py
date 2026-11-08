@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from yt_dlp.networking.exceptions import IncompleteRead
 
 from download_media.config import DownloadOptions
-from download_media.downloader import build_ydl_opts
+from download_media.downloader import _WholeBody, build_ydl_opts
+from download_media.i18n import t
 
 
 def test_default_video_options() -> None:
@@ -175,42 +177,70 @@ def test_carousel_items_always_get_their_id(tmp_path: Path) -> None:
     assert pp.run(info)[1]["_name_suffix"] == " [A]"
 
 
-def _filtered(**info) -> tuple[str | None, list[str]]:
+def _filtered(keep_images: bool = True, **info) -> tuple[str | None, list[str]]:
     from download_media.downloader import _skip_items_without_media
 
     skipped: list[str] = []
-    return _skip_items_without_media(skipped)(info, incomplete=True), skipped
+    match_filter = _skip_items_without_media(skipped, keep_images=keep_images)
+    return match_filter(info, incomplete=True), skipped
 
 
-def test_filter_skips_playlist_entry_without_media() -> None:
-    reason, skipped = _filtered(id="a", playlist_index=1, formats=[])
-    assert reason
+IMAGE_THUMBS = [{"url": "http://x/img.jpg"}]
+
+
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_skips_playlist_entry_without_media(keep_images: bool) -> None:
+    reason, skipped = _filtered(keep_images, id="a", playlist_index=1, formats=[])
+    assert reason == t("item_no_media", "a")
     assert skipped == ["a"]
 
 
-def test_filter_passes_playlist_metadata() -> None:
-    assert _filtered(playlist="Post", playlist_id="p") == (None, [])
+@pytest.mark.parametrize("extra", [{"thumbnails": IMAGE_THUMBS}, {"thumbnail": "http://x/i.jpg"}])
+def test_filter_passes_an_image_when_images_are_kept(extra: dict[str, Any]) -> None:
+    assert _filtered(True, id="a", playlist_index=1, formats=[], **extra) == (None, [])
 
 
-def test_filter_passes_lone_urls() -> None:
-    assert _filtered(id="a", formats=[]) == (None, [])
+@pytest.mark.parametrize("extra", [{"thumbnails": IMAGE_THUMBS}, {"thumbnail": "http://x/i.jpg"}])
+def test_filter_skips_an_image_as_an_image_in_audio_and_list_modes(extra: dict[str, Any]) -> None:
+    reason, skipped = _filtered(False, id="a", playlist_index=1, formats=[], **extra)
+    assert reason == t("item_image_skipped", "a")
+    assert skipped == ["a"]
 
 
-def test_filter_passes_entries_with_media() -> None:
-    assert _filtered(id="a", playlist_index=1, formats=[{"url": "u"}]) == (None, [])
-    assert _filtered(id="a", playlist_index=1, url="u") == (None, [])
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_passes_playlist_metadata(keep_images: bool) -> None:
+    assert _filtered(keep_images, playlist="Post", playlist_id="p") == (None, [])
+
+
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_passes_lone_urls(keep_images: bool) -> None:
+    assert _filtered(keep_images, id="a", formats=[]) == (None, [])
+    assert _filtered(keep_images, id="a", formats=[], thumbnails=IMAGE_THUMBS) == (None, [])
+
+
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_passes_entries_with_media(keep_images: bool) -> None:
+    media = {"id": "a", "playlist_index": 1, "thumbnails": IMAGE_THUMBS}
+    assert _filtered(keep_images, **media, formats=[{"url": "u"}]) == (None, [])
+    assert _filtered(keep_images, **media, url="u") == (None, [])
 
 
 def test_filter_passes_entries_resolved_later() -> None:
     assert _filtered(id="a", playlist_index=1, _type="url") == (None, [])
+    assert _filtered(False, id="a", playlist_index=1, _type="url", thumbnails=IMAGE_THUMBS) == (
+        None,
+        [],
+    )
 
 
 def test_filter_ignores_complete_entries() -> None:
     from download_media.downloader import _skip_items_without_media
 
     skipped: list[str] = []
-    match_filter = _skip_items_without_media(skipped)
+    match_filter = _skip_items_without_media(skipped, keep_images=False)
     assert match_filter({"id": "a", "playlist_index": 1}, incomplete=False) is None
+    image = {"id": "a", "playlist_index": 1, "formats": [], "thumbnails": IMAGE_THUMBS}
+    assert match_filter(image, incomplete=False) is None
     assert skipped == []
 
 
@@ -357,3 +387,64 @@ def test_a_folder_that_cannot_be_created_raises_before_yt_dlp_starts(
     assert caught.value.reason == "Not a directory"
     assert isinstance(caught.value.__cause__, NotADirectoryError)
     assert afile.read_text(encoding="utf-8") == "keep"
+
+
+class _Body:
+    """A response that hands out its body in the slices given, then nothing."""
+
+    def __init__(self, slices: list[bytes], headers: dict[str, str]) -> None:
+        self.slices = list(slices)
+        self.headers = headers
+        self.status = 200
+
+    def get_header(self, name: str) -> str | None:
+        return self.headers.get(name)
+
+    def read(self, amt: int | None = None) -> bytes:
+        if amt is None or amt < 0:
+            data, self.slices = b"".join(self.slices), []
+            return data
+        return self.slices.pop(0) if self.slices else b""
+
+
+def _drain(body: Any, amt: int | None) -> bytes:
+    if amt is None:
+        return bytes(body.read())
+    data = b""
+    while chunk := body.read(amt):
+        data += chunk
+    return data
+
+
+@pytest.mark.parametrize("amt", [None, 4], ids=["read()", "read(n)"])
+def test_an_image_body_cut_short_of_its_length_fails(amt: int | None) -> None:
+    body = _WholeBody(_Body([b"ab", b"cd"], {"Content-Length": "10"}))
+    with pytest.raises(IncompleteRead):
+        _drain(body, amt)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Content-Length": "4"},
+        {},
+        {"Content-Length": "not a number"},
+        {"Content-Length": "10", "Content-Encoding": "gzip"},
+        {"Content-Length": "10", "Content-Encoding": " GZIP "},
+    ],
+    ids=["exact", "no-length", "bad-length", "gzip", "gzip-spelled-oddly"],
+)
+@pytest.mark.parametrize("amt", [None, 4], ids=["read()", "read(n)"])
+def test_an_image_body_with_nothing_to_hold_it_to_reads_whole(
+    headers: dict[str, str], amt: int | None
+) -> None:
+    # A read(n) may return less than n before the end: that's no reason to fail.
+    body = _WholeBody(_Body([b"a", b"bcd"], headers))
+    assert _drain(body, amt) == b"abcd"
+    assert body.status == 200
+
+
+def test_an_image_body_spelled_identity_is_still_held_to_its_length() -> None:
+    body = _WholeBody(_Body([b"ab"], {"Content-Length": "3", "Content-Encoding": " Identity"}))
+    with pytest.raises(IncompleteRead):
+        _drain(body, 4)

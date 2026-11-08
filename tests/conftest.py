@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import builtins
 import functools
+import gzip
 import http.server
 import re
 import shutil
@@ -153,6 +154,26 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(b"\xff\xd8\xff\xe0" + b"\0" * 60)
             self.close_connection = True
             return None
+        flaky = re.fullmatch(r"/flaky/(\w+)(/[^?]+)", self.path)
+        if flaky and flaky[1] not in FLAKY_SEEN:  # Cut off the first time, whole after that.
+            FLAKY_SEEN.add(flaky[1])
+            self.path = "/short/" + flaky[1]
+            return self.send_head()
+        if flaky:
+            self.path = flaky[2]
+        body = re.fullmatch(r"/(nolength|gzip0)(/[^?]+)", self.path)
+        if body:  # No Content-Length, or a gzip body that is longer than the file it holds.
+            data = Path(self.translate_path(body[2])).read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", self.guess_type(body[2]))
+            if body[1] == "gzip0":
+                data = gzip.compress(data, compresslevel=0)
+                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            self.close_connection = True
+            return None
         status = re.fullmatch(r"/status/(\d{3})(?:/.*)?", self.path)  # A sub-path names the id.
         if status:
             self.send_error(int(status[1]))
@@ -171,6 +192,9 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
     # /seen/<token>/<file> serves <file> to anyone. Both record what each request sent.
     _GATE = re.compile(r"/(?P<kind>cookie|seen)/(?P<token>\w+)(?P<rest>/[^?]+)(?:\?.*)?")
 
+
+# Tokens /flaky/ already cut off once.
+FLAKY_SEEN: set[str] = set()
 
 # Per token: the path and the Cookie header of every request to /cookie/ or /seen/.
 GATE_REQUESTS: dict[str, list[tuple[str, str]]] = {}
@@ -340,6 +364,9 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     )
     source = ["ffmpeg", "-v", "error", "-i", str(root / "tiny.mp4")]
     subprocess.run([*source, "-frames:v", "1", str(root / "tiny.jpg")], check=True)
+    # A smaller JPEG than tiny.jpg, like the square crops Instagram lists before the original.
+    small = ["-frames:v", "1", "-vf", "scale=16:16", str(root / "small.jpg")]
+    subprocess.run([*source, *small], check=True)
     subprocess.run([*source, "-frames:v", "1", str(root / "tiny.png")], check=True)
     subprocess.run([*source, "-frames:v", "1", str(root / "tiny.gif")], check=True)
     subprocess.run([*source, "-vn", "-c:a", "copy", str(root / "tiny.m4a")], check=True)
@@ -517,6 +544,63 @@ class FakeSiteIE(InfoExtractor):
                 self._instagram_image("i2"),
             ]
             return self.playlist_result(entries, "post", "Post")
+        if page == "ig-repeated-video":
+            # A list can hold the same item twice (a YouTube playlist can); single mode
+            # names both the same.
+            entries = [
+                self._instagram_image("i1"),
+                self._instagram_video("v1"),
+                self._instagram_video("v1"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "ig-broken-image":
+            broken = {"url": f"{self.media_url}/status/404/i1.jpg", "width": 64, "height": 64}
+            image = {**self._instagram_image("i1"), "thumbnails": [broken]}
+            return self.playlist_result([image, self._video("v1")], "post", "Post")
+        if page == "ig-two-thumbs":
+            # Without login, Instagram's candidates carry no size: yt-dlp sorts them by URL.
+            candidates = [{"url": f"{self.media_url}/{name}"} for name in ("small.jpg", "tiny.jpg")]
+            image = {**self._instagram_image("i1"), "thumbnails": candidates}
+            return self.playlist_result([image], "post", "Post")
+        # Two candidates, the cut-off one tried first (preference), then a whole one; the
+        # next pair has a whole first try and a second one that is never reached, the last
+        # one two cut-off tries.
+        fallbacks = {
+            "ig-short-then-jpg": ("short/i1.jpg", "tiny.jpg"),
+            "ig-short-then-png": ("short/i1.jpg", "tiny.png"),
+            "ig-short-png-then-jpg": ("short/i1.png", "tiny.jpg"),
+            "ig-jpg-then-png": ("tiny.jpg", "tiny.png"),
+            "ig-short-then-short": ("short/i1.jpg", "short/i2.jpg"),
+        }
+        if page in fallbacks:
+            first, second = fallbacks[page]
+            candidates = [
+                {"url": f"{self.media_url}/{second}", "preference": 0},
+                {"url": f"{self.media_url}/{first}", "preference": 1},
+            ]
+            image = {**self._instagram_image("i1"), "thumbnails": candidates}
+            return self.playlist_result([image, self._video("v1")], "post", "Post")
+        odd_images = {
+            # Cut off long before its stated length: yt-dlp writes part of it, then fails.
+            "ig-short-image": f"{self.media_url}/short/i1.jpg",
+            # Cut off on the first request only, like a dropped connection.
+            "ig-flaky-image": f"{self.media_url}/flaky/i1/tiny.jpg",
+            # Whole, but with no Content-Length, or a Content-Length of the encoded body.
+            "ig-no-length-image": f"{self.media_url}/nolength/tiny.jpg",
+            "ig-gzip-image": f"{self.media_url}/gzip0/tiny.jpg",
+            # No scheme, and an extension yt-dlp refuses to write: both raise before the fetch.
+            "ig-relative-image": "tiny.jpg",
+            "ig-php-image": f"{self.media_url}/{JPEG_AS.format('php')}",
+        }
+        if page in odd_images:
+            image = {**self._instagram_image("i1"), "thumbnails": [{"url": odd_images[page]}]}
+            return self.playlist_result([image, self._video("v1")], "post", "Post")
+        if page == "ig-png-image":
+            image = {
+                **self._instagram_image("i1"),
+                "thumbnails": [{"url": f"{self.media_url}/tiny.png"}],
+            }
+            return self.playlist_result([image, self._video("v1")], "post", "Post")
         if page == "storyboard-video":
             return self._with_formats("v1", self._storyboard(), plain_video)
         if page == "storyboard-audio":
@@ -669,6 +753,9 @@ class FakeSiteIE(InfoExtractor):
             ]
         elif page == "hole":
             entries = [video, None]
+        elif page == "ig-linked-carousel":
+            # Entries that are links, like a profile's posts: the item is only known once followed.
+            entries = [self.url_result(follow(p)) for p in ("ig-image", "ig-video")]
         else:
             return None
         return self.playlist_result(entries, "post", "Post")

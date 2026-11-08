@@ -118,7 +118,9 @@ download type).
   preselected defaults in each prompt).
 - **`-y`:** skip the wizard and all confirmations (scripting mode).
 
-Multi-entry URLs: items with no formats (Instagram images) are skipped by a
+Multi-entry URLs: images (no formats, a thumbnail, like Instagram's) are saved
+through yt-dlp's thumbnail writer, with three yt-dlp params scoped to them
+(`_Ydl.process_video_result`). Items with nothing to fetch are still skipped by a
 `match_filter`, not by `ignoreerrors`, so a single-mode failure still raises and
 reaches the cookie fallback. yt-dlp downloads carousels even with `noplaylist`,
 so single mode names their items with `[id]`. A run only counts as done if

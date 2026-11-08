@@ -26,3 +26,11 @@ def test_t_substitutes_args() -> None:
 
 def test_t_unknown_key_returns_key() -> None:
     assert t("this-key-does-not-exist") == "this-key-does-not-exist"
+
+
+def test_carousel_image_messages() -> None:
+    for lang in ("es", "en"):
+        assert {"item_image_skipped", "image_not_saved", "ask_selection_default"} <= set(
+            _MESSAGES[lang]
+        )
+        assert not {"ig_image_warning", "ask_selection_default_videos"} & set(_MESSAGES[lang])
