@@ -1,6 +1,6 @@
 # 15 — Release runbook
 
-Status: draft
+Status: approved
 Item: `fix/release-runbook`
 
 ## Problem
@@ -279,6 +279,8 @@ The tool doesn't change, so the cases are release situations. Wizard, direct, `-
 Not needed for downloads: no runtime path changes. The runbook's real check is the 0.3.0 release, the first run of the new publishing order, of the `checkout@v7` deploy job (spec 10) and of the RPC poll. The read-only commands were run against v0.2.0 in this session (Evidence). Nothing that writes to GitHub or the AUR can be tried before a real release.
 
 ## Open decisions
+
+Resolved by the roles under the human's delegation, each on the recommended option: D1-D8 A.
 
 The human delegated these to the roles. Each has a recommendation, preferring the option that's easiest to undo; every one is a text change in a role file.
 
