@@ -231,25 +231,25 @@ New `fake_site` pages in `tests/conftest.py`:
 
 Criteria:
 
-- [ ] `scripts/pre-release.sh --no-live` passes.
-- [ ] e2e: `-y -p` on `ig-carousel` saves exactly the 4 numbered names above, and each `.jpg` is byte-identical to the fixture's `tiny.jpg`. Exit 0, `t("done")`, no `partial_result` line, one history row.
-- [ ] e2e: `-y` on `ig-carousel` saves exactly `Clip [i1].jpg`, `Clip [i2].jpg`, `Clip [v1].mp4`, `Clip [v2].mp4`. No other `.jpg` (no thumbnail next to a video).
-- [ ] e2e: the same `-y -p` run twice adds no file and leaves the images' mtimes unchanged. Exit 0 both times.
-- [ ] e2e: `-y -p --playlist-items 1,3` on `ig-carousel` saves `01 - Clip [i1].jpg`, `03 - Clip [v2].mp4`.
-- [ ] e2e: `-y -a -p` on `ig-carousel` saves only the 2 audio files, prints `t("item_image_skipped", "i1")` and `t("partial_result", 2, 4, 2, 0)`, and leaves no `.jpg`.
-- [ ] e2e: `-y -l` on `ig-carousel` lists v1 and v2, prints `t("item_image_skipped", "i1")`, saves nothing.
-- [ ] e2e: `-y -p` on `ig-broken-image` saves `02 - Clip [v1].mp4`, prints `t("image_not_saved", "i1")` and `t("partial_result", 1, 2, 0, 1)`, exit 0. `-y` on it matches `test_single_mode_stops_at_a_broken_item`: exit 1, no `t("done")`.
-- [ ] e2e: `-y -p` on `ig-two-thumbs` saves one `.jpg` byte-identical to `tiny.jpg`.
-- [ ] e2e: `-y` and `-y -p` on `carousel` (images without thumbnails) keep today's files, with `t("item_no_media", "i1")` and `t("partial_result", 2, 4, 2, 0)`.
-- [ ] e2e: wizard on `ig-carousel` with `PICKER_WALK` saves the 4 numbered files. The output has two `[image]` tags and no `[no soportado]`. The printed command, replayed into another folder, saves the same names.
-- [ ] e2e: wizard on `ig-carousel` answering `1,4` at the picker saves only the two images, without reading answers for type, quality or container. With `-i -a`, the same, and the printed command has no `-a`.
-- [ ] e2e: the existing tests on `mixed-carousel` and `no-video-carousel` are updated to the new file lists (i1 saved as `01 - Clip [i1].jpg`), with and without `--cookies firefox`, and their replays still match.
-- [ ] e2e: the lone-image tests (`ig-image`, `image-format`, `storyboard-only`, `thumbnail-image`) still pass unchanged.
-- [ ] unit (`test_downloader.py`): the `match_filter` passes an image item with thumbnails when `keep_images=True`, and skips it with `item_image_skipped` when `False`. An item with nothing at all is skipped with `item_no_media` in both. Lone URLs and the playlist's own metadata pass.
-- [ ] unit (`test_probe.py`): on `ig-carousel` every item is `supported`, and on `carousel` the images aren't.
-- [ ] unit (`test_wizard_flow.py`): Enter with no preset selects every supported item, images included. A selection of only images walks no type, quality, container or aformat step.
-- [ ] `test_i18n.py` passes: `item_image_skipped`, `image_not_saved` and `ask_selection_default` are in both blocks, and `ig_image_warning` and `ask_selection_default_videos` are in neither. `grep -rn "ig_image_warning\|ask_selection_default_videos" src tests` prints nothing.
-- [ ] `tests/live/test_live.py`: the carousel tests (with and without cookies, `-y` and `-p`) also assert that at least one `.jpg` was saved, and that no `N of M items downloaded` line appears.
+- [x] `scripts/pre-release.sh --no-live` passes.
+- [x] e2e: `-y -p` on `ig-carousel` saves exactly the 4 numbered names above, and each `.jpg` is byte-identical to the fixture's `tiny.jpg`. Exit 0, `t("done")`, no `partial_result` line, one history row.
+- [x] e2e: `-y` on `ig-carousel` saves exactly `Clip [i1].jpg`, `Clip [i2].jpg`, `Clip [v1].mp4`, `Clip [v2].mp4`. No other `.jpg` (no thumbnail next to a video).
+- [x] e2e: the same `-y -p` run twice adds no file and leaves the images' mtimes unchanged. Exit 0 both times.
+- [x] e2e: `-y -p --playlist-items 1,3` on `ig-carousel` saves `01 - Clip [i1].jpg`, `03 - Clip [v2].mp4`.
+- [x] e2e: `-y -a -p` on `ig-carousel` saves only the 2 audio files, prints `t("item_image_skipped", "i1")` and `t("partial_result", 2, 4, 2, 0)`, and leaves no `.jpg`.
+- [x] e2e: `-y -l` on `ig-carousel` lists v1 and v2, prints `t("item_image_skipped", "i1")`, saves nothing.
+- [x] e2e: `-y -p` on `ig-broken-image` saves `02 - Clip [v1].mp4`, prints `t("image_not_saved", "i1")` and `t("partial_result", 1, 2, 0, 1)`, exit 0. `-y` on it matches `test_single_mode_stops_at_a_broken_item`: exit 1, no `t("done")`.
+- [x] e2e: `-y -p` on `ig-two-thumbs` saves one `.jpg` byte-identical to `tiny.jpg`.
+- [x] e2e: `-y` and `-y -p` on `carousel` (images without thumbnails) keep today's files, with `t("item_no_media", "i1")` and `t("partial_result", 2, 4, 2, 0)`.
+- [x] e2e: wizard on `ig-carousel` with `PICKER_WALK` saves the 4 numbered files. The output has two `[image]` tags and no `[no soportado]`. The printed command, replayed into another folder, saves the same names.
+- [x] e2e: wizard on `ig-carousel` answering `1,4` at the picker saves only the two images, without reading answers for type, quality or container. With `-i -a`, the same, and the printed command has no `-a`.
+- [x] e2e: the existing tests on `mixed-carousel` and `no-video-carousel` are updated to the new file lists (i1 saved as `01 - Clip [i1].jpg`), with and without `--cookies firefox`, and their replays still match.
+- [x] e2e: the lone-image tests (`ig-image`, `image-format`, `storyboard-only`, `thumbnail-image`) still pass unchanged.
+- [x] unit (`test_downloader.py`): the `match_filter` passes an image item with thumbnails when `keep_images=True`, and skips it with `item_image_skipped` when `False`. An item with nothing at all is skipped with `item_no_media` in both. Lone URLs and the playlist's own metadata pass.
+- [x] unit (`test_probe.py`): on `ig-carousel` every item is `supported`, and on `carousel` the images aren't.
+- [x] unit (`test_wizard_flow.py`): Enter with no preset selects every supported item, images included. A selection of only images walks no type, quality, container or aformat step.
+- [x] `test_i18n.py` passes: `item_image_skipped`, `image_not_saved` and `ask_selection_default` are in both blocks, and `ig_image_warning` and `ask_selection_default_videos` are in neither. `grep -rn "ig_image_warning\|ask_selection_default_videos" src tests` prints nothing.
+- [x] `tests/live/test_live.py`: the carousel tests (with and without cookies, `-y` and `-p`) also assert that at least one `.jpg` was saved, and that no `N of M items downloaded` line appears.
 
 ## Live check
 
