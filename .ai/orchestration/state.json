@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T13:36:57-04:00",
+  "updated": "2026-11-08T13:44:47-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1695,12 +1695,14 @@
       "type": "release",
       "title": "Release 0.3.0",
       "stage": "preparation",
-      "status": "in_progress",
-      "next_agent": "release-manager",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/releases/0.3.0.md",
       "branch": null,
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "ad9f905"
+      ],
       "review": null,
       "history": [
         {
@@ -1709,6 +1711,20 @@
           "result": "approved",
           "at": "2026-11-08T13:36:57-04:00",
           "note": "Human reviewed and approved all delegated decisions shown in the review table: spec 19 D1-D7, 20 D2, 21 D1-D3, 27 D5, 29 D6-D7, 28 D1 and D5, 26 D1, 42 D1-D5, 06 D1-D2 (specs 10 and 15 CI/runbook only). Live steps of spec 18: the human runs them by hand (none waived yet). actionlint: install and run (not waived). Publishing still needs the human OK after preparation."
+        },
+        {
+          "stage": "preparation",
+          "agent": "orchestrator",
+          "result": "done",
+          "at": "2026-11-08T13:38:45-04:00",
+          "note": "actionlint 1.7.12 (installed by the human) on .github/workflows/*.yml: only finding is runner-label \"ubuntu-26.04\" unknown in 4 places, a false positive (its label list predates the image; CI run 42503757343 ran green on ubuntu-26.04). With that ignored: exit 0. shellcheck not installed, so run: blocks were not shell-checked."
+        },
+        {
+          "stage": "preparation",
+          "agent": "release-manager",
+          "result": "done",
+          "at": "2026-11-08T13:44:47-04:00",
+          "note": "Full gate with live tests exit 0: 1839 passed es and en, 9 live passed, 2 xfail (row 25), 98.70%. Version 0.3.0 minor: 15 new messages, --playlist-items, nothing removed, no breaking marker, no dep change. Notes .ai/releases/0.3.0.md (ad9f905, local). Preflight OK: gh and ssh edicsonabel, push true, no v0.3.0 tag. actionlint: runner-label false positive only. Pending: spec 18 live steps (human). Planner: spec 42 SemVer line says 0.4.0; actionlint.yaml for ubuntu-26.04; shellcheck missing."
         }
       ]
     }
