@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from yt_dlp.networking.exceptions import IncompleteRead
 
 from download_media.config import DownloadOptions
-from download_media.downloader import build_ydl_opts
+from download_media.downloader import _WholeBody, build_ydl_opts
 from download_media.i18n import t
 
 
@@ -386,3 +387,64 @@ def test_a_folder_that_cannot_be_created_raises_before_yt_dlp_starts(
     assert caught.value.reason == "Not a directory"
     assert isinstance(caught.value.__cause__, NotADirectoryError)
     assert afile.read_text(encoding="utf-8") == "keep"
+
+
+class _Body:
+    """A response that hands out its body in the slices given, then nothing."""
+
+    def __init__(self, slices: list[bytes], headers: dict[str, str]) -> None:
+        self.slices = list(slices)
+        self.headers = headers
+        self.status = 200
+
+    def get_header(self, name: str) -> str | None:
+        return self.headers.get(name)
+
+    def read(self, amt: int | None = None) -> bytes:
+        if amt is None or amt < 0:
+            data, self.slices = b"".join(self.slices), []
+            return data
+        return self.slices.pop(0) if self.slices else b""
+
+
+def _drain(body: Any, amt: int | None) -> bytes:
+    if amt is None:
+        return bytes(body.read())
+    data = b""
+    while chunk := body.read(amt):
+        data += chunk
+    return data
+
+
+@pytest.mark.parametrize("amt", [None, 4], ids=["read()", "read(n)"])
+def test_an_image_body_cut_short_of_its_length_fails(amt: int | None) -> None:
+    body = _WholeBody(_Body([b"ab", b"cd"], {"Content-Length": "10"}))
+    with pytest.raises(IncompleteRead):
+        _drain(body, amt)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Content-Length": "4"},
+        {},
+        {"Content-Length": "not a number"},
+        {"Content-Length": "10", "Content-Encoding": "gzip"},
+        {"Content-Length": "10", "Content-Encoding": " GZIP "},
+    ],
+    ids=["exact", "no-length", "bad-length", "gzip", "gzip-spelled-oddly"],
+)
+@pytest.mark.parametrize("amt", [None, 4], ids=["read()", "read(n)"])
+def test_an_image_body_with_nothing_to_hold_it_to_reads_whole(
+    headers: dict[str, str], amt: int | None
+) -> None:
+    # A read(n) may return less than n before the end: that's no reason to fail.
+    body = _WholeBody(_Body([b"a", b"bcd"], headers))
+    assert _drain(body, amt) == b"abcd"
+    assert body.status == 200
+
+
+def test_an_image_body_spelled_identity_is_still_held_to_its_length() -> None:
+    body = _WholeBody(_Body([b"ab"], {"Content-Length": "3", "Content-Encoding": " Identity"}))
+    with pytest.raises(IncompleteRead):
+        _drain(body, 4)

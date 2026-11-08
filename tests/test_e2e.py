@@ -22,7 +22,7 @@ from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.downloader import _source_url
 from download_media.i18n import t
 
-from .conftest import GATE_REQUESTS, GEO_BLOCK, HTTP_404, JUNK, NO_EXT_VIDEO, FakeSiteIE
+from .conftest import FLAKY_SEEN, GATE_REQUESTS, GEO_BLOCK, HTTP_404, JUNK, NO_EXT_VIDEO, FakeSiteIE
 
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
@@ -3487,6 +3487,7 @@ def test_wizard_on_a_lone_format_without_streams_is_refused_as_an_image(
 
 
 IG_CAROUSEL = "https://fake.test/ig-carousel"
+LINKED_CAROUSEL = "https://fake.test/ig-linked-carousel"
 IG_NUMBERED = [
     "01 - Clip [i1].jpg",
     "02 - Clip [v1].mp4",
@@ -3739,6 +3740,109 @@ def test_a_cut_off_image_is_not_reported_as_saved(run: Any, out: Path) -> None:
         assert t("image_not_saved", "i1") in output
         assert t("partial_result", 1, 2, 0, 1) in output
         assert names(out) == ["02 - Clip [v1].mp4"]
+
+
+def png_bytes(media_url: str) -> bytes:
+    with urllib.request.urlopen(f"{media_url}/tiny.png") as response:
+        return bytes(response.read())
+
+
+@pytest.mark.parametrize(
+    ("page", "image", "ext"),
+    [
+        pytest.param(
+            "ig-short-then-jpg",
+            "01 - Clip [i1].jpg",
+            "jpg",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="the next .jpg candidate takes the cut-off file for one already "
+                "present, and the partial image is reported as saved",
+            ),
+        ),
+        ("ig-short-then-png", "01 - Clip [i1].png", "png"),
+        ("ig-short-png-then-jpg", "01 - Clip [i1].jpg", "jpg"),
+    ],
+    ids=["same-extension", "other-extension", "cut-off-png"],
+)
+def test_a_cut_off_candidate_falls_back_to_the_next_one(
+    run: Any, out: Path, media_url: str, tiny_jpg: bytes, page: str, image: str, ext: str
+) -> None:
+    # yt-dlp moves on to the next candidate; what the cut-off one left must not stay.
+    code, output = run("-y", "-p", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == [image, "02 - Clip [v1].mp4"]
+    assert (out / image).read_bytes() == (tiny_jpg if ext == "jpg" else png_bytes(media_url))
+    assert t("image_not_saved", "i1") not in output
+    assert not said_partial_result(output)
+    assert t("done") in output
+
+
+def test_a_file_at_a_candidate_path_never_reached_is_left_alone(
+    run: Any, out: Path, tiny_jpg: bytes
+) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    mine = out / "01 - Clip [i1].png"
+    mine.write_bytes(b"the user's own file")
+    code, output = run("-y", "-p", "https://fake.test/ig-jpg-then-png")
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].jpg", "01 - Clip [i1].png", "02 - Clip [v1].mp4"]
+    assert (out / "01 - Clip [i1].jpg").read_bytes() == tiny_jpg
+    assert mine.read_bytes() == b"the user's own file"
+    assert not said_partial_result(output)
+
+
+def test_an_image_saved_before_survives_a_rerun_whose_link_is_cut_off(run: Any, out: Path) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    earlier = out / "01 - Clip [i1].jpg"
+    earlier.write_bytes(b"saved by an earlier run")
+    code, output = run("-y", "-p", "https://fake.test/ig-short-image")
+    assert code == 0
+    assert earlier.read_bytes() == b"saved by an earlier run"
+    assert names(out) == ["01 - Clip [i1].jpg", "02 - Clip [v1].mp4"]
+    assert t("image_not_saved", "i1") not in output
+    assert not said_partial_result(output)
+
+
+def test_a_rerun_after_a_cut_off_image_saves_it_whole(run: Any, out: Path, tiny_jpg: bytes) -> None:
+    FLAKY_SEEN.discard("i1")
+    url = "https://fake.test/ig-flaky-image"
+    code, output = run("-y", "-p", url)
+    assert code == 0
+    assert t("image_not_saved", "i1") in output
+    assert names(out) == ["02 - Clip [v1].mp4"]
+
+    code, output = run("-y", "-p", url)
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].jpg", "02 - Clip [v1].mp4"]
+    assert (out / "01 - Clip [i1].jpg").read_bytes() == tiny_jpg
+    assert t("image_not_saved", "i1") not in output
+    assert not said_partial_result(output)
+
+
+@pytest.mark.parametrize("page", ["ig-no-length-image", "ig-gzip-image"])
+def test_a_whole_image_without_a_usable_length_is_saved(
+    run: Any, out: Path, tiny_jpg: bytes, page: str
+) -> None:
+    # No Content-Length to check, or one that counts the gzip body, not the image in it.
+    code, output = run("-y", "-p", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].jpg", "02 - Clip [v1].mp4"]
+    assert (out / "01 - Clip [i1].jpg").read_bytes() == tiny_jpg
+    assert t("image_not_saved", "i1") not in output
+    assert not said_partial_result(output)
+
+
+@pytest.mark.parametrize("flags", [("-a",), ("-a", "-p")], ids=["single", "playlist"])
+@pytest.mark.parametrize("url", [IG_CAROUSEL, LINKED_CAROUSEL], ids=["carousel", "linked"])
+def test_audio_mode_never_leaves_an_image_file(
+    run: Any, out: Path, flags: tuple[str, ...], url: str
+) -> None:
+    code, output = run("-y", *flags, url)
+    assert code == 0
+    assert names(out)
+    assert all(name.endswith(".mp3") for name in names(out))
+    assert t("item_image_skipped", "i1") in output
 
 
 def test_an_image_keeps_the_extension_and_bytes_of_its_link(
