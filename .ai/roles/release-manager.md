@@ -95,16 +95,35 @@ gh release create "v<version>" --verify-tag --title "v<version>" --notes-file .a
 ## Stage `verification`
 
 ```bash
-gh run list --workflow deploy-aur.yml --limit 1
+# The tag run, picked by its tag, never by position
+gh run list --workflow deploy-aur.yml --event push --json databaseId,headBranch,conclusion \
+  --jq '.[] | select(.headBranch == "v<version>")'
 gh run watch <run-id> --exit-status
+gh run view <run-id> --json jobs --jq '.jobs[] | "\(.databaseId) \(.name) \(.conclusion)"'
+gh api "repos/{owner}/{repo}/check-runs/<job-id>/annotations" --jq '.[].message'   # for each job
 ```
 
-Then confirm the AUR serves the new version: `https://aur.archlinux.org/rpc/v5/info/download-media`.
+Both jobs (`test`, `deploy`) must succeed. No annotation may contain `Node.js 20` (spec 10). If one does, the release still stands: report it in `notes` as a regression of spec 10, for the planner.
 
-Confirm the landing page shows it too. The bump changes `docs/index.html`, so the push of `main` redeploys Pages:
+A failed job is `blocked`, never re-run on your own. Tell the human which case it is:
+
+- `test` failed on the runner (an apt timeout, a lost runner): `gh run rerun <run-id> --failed` gets a new runner.
+- `deploy` failed because of the workflow: fix it on `main` through the pipeline, then `gh workflow run deploy-aur.yml -f version=<version>`. A `workflow_dispatch` runs `main`'s workflow file for the same version, so nobody re-tags.
+- `test` failed because of the code: a new patch release. The tag stays.
+
+Then the AUR. Its git has the version as soon as the deploy pushes; the RPC, which AUR helpers read, has trailed it by minutes (about 4.5 for 0.2.0):
 
 ```bash
-gh run list --workflow deploy-pages.yml --limit 1
+curl -fsS --max-time 15 'https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=download-media' | grep -x 'pkgver=<version>'
+timeout 540 sh -c 'until curl -fsS --max-time 15 https://aur.archlinux.org/rpc/v5/info/download-media | grep -qF "\"Version\":\"<version>-"; do sleep 30; done' && echo "rpc: ok" || echo "rpc: not yet"
+```
+
+If cgit lacks the version, the deploy didn't push: read the `deploy` job's log (`Nothing to publish` means the AUR already had that `PKGBUILD`), result `blocked`. If the RPC says `not yet`, run the same poll once more (18 minutes in all, two runs because a command can't run longer than 10). Still not there with cgit right: result `blocked`, with both outputs. Never re-run the deploy because of RPC lag alone.
+
+Then the landing page, by the tagged commit (the bump changes `docs/index.html`, so the push of `main` redeploys Pages):
+
+```bash
+gh run list --workflow deploy-pages.yml --commit "$(git rev-parse "v<version>^{commit}")" --json databaseId,conclusion
 curl -s https://edicsonabel.github.io/download-media/ | grep -F "v<version> ·"
 ```
 
