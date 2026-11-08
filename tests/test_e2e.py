@@ -3780,6 +3780,33 @@ def test_an_image_whose_every_candidate_is_cut_off_is_a_failed_item(run: Any, ou
         assert names(out) == ["02 - Clip [v1].mp4"]
 
 
+def test_a_rerun_after_a_fallback_keeps_the_whole_image_it_saved(
+    run: Any, out: Path, tiny_jpg: bytes
+) -> None:
+    url = "https://fake.test/ig-short-then-jpg"
+    code, _ = run("-y", "-p", url)
+    assert code == 0
+    image = out / "01 - Clip [i1].jpg"
+    before = image.stat().st_mtime_ns
+    code, output = run("-y", "-p", url)
+    assert code == 0
+    assert names(out) == ["01 - Clip [i1].jpg", "02 - Clip [v1].mp4"]
+    assert image.read_bytes() == tiny_jpg
+    assert image.stat().st_mtime_ns == before
+    assert "thumbnail is already present" in output
+    assert t("done") in output
+    assert not said_partial_result(output)
+
+
+def test_a_video_listed_twice_next_to_an_image_is_downloaded_once(run: Any, out: Path) -> None:
+    # Single mode gives both the same name; the image hook must not touch a video's check.
+    code, output = run("-y", "https://fake.test/ig-repeated-video")
+    assert code == 0
+    assert names(out) == ["Clip [i1].jpg", "Clip [v1].mp4"]
+    assert output.count("has already been downloaded") == 1
+    assert t("done") in output
+
+
 def test_a_file_at_a_candidate_path_never_reached_is_left_alone(
     run: Any, out: Path, tiny_jpg: bytes
 ) -> None:

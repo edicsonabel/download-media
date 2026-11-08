@@ -544,6 +544,15 @@ class FakeSiteIE(InfoExtractor):
                 self._instagram_image("i2"),
             ]
             return self.playlist_result(entries, "post", "Post")
+        if page == "ig-repeated-video":
+            # A list can hold the same item twice (a YouTube playlist can); single mode
+            # names both the same.
+            entries = [
+                self._instagram_image("i1"),
+                self._instagram_video("v1"),
+                self._instagram_video("v1"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
         if page == "ig-broken-image":
             broken = {"url": f"{self.media_url}/status/404/i1.jpg", "width": 64, "height": 64}
             image = {**self._instagram_image("i1"), "thumbnails": [broken]}
