@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T20:11:27-04:00",
+  "updated": "2026-11-07T20:34:18-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1175,14 +1175,17 @@
     "fix/cookie-fallback": {
       "type": "fix",
       "title": "Cookie fallback handles a missing browser and empty --cookies runs",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/26-cookie-fallback.md",
       "branch": "fix/cookie-fallback",
       "worktree": ".worktrees/fix-cookie-fallback",
       "commits": [
-        "be7ea9d"
+        "be7ea9d",
+        "f107b29",
+        "0b8ffa6",
+        "443cd23"
       ],
       "review": {
         "approved": false,
@@ -1209,6 +1212,13 @@
           "result": "approved",
           "at": "2026-11-07T20:11:27-04:00",
           "note": "Spec approved under the human's delegation, every recommended option. D1 changes shipped behaviour; flagged for review."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-07T20:34:18-04:00",
+          "note": "Gate exit 0, 1690 passed, 2 xfailed. Tests point at a dead D-Bus and drop desktop variables. Floor passes every new test. Planner: secretstorage hint hardcoded English."
         }
       ]
     }
