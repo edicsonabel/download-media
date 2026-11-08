@@ -1,6 +1,6 @@
 # 06 — Fix the up-front cookies prompt
 
-Status: draft
+Status: done
 Item: `fix/wizard-ig-cookies`
 
 ## Problem
@@ -273,41 +273,41 @@ Selecciones hasta ahora:
 
 **Gate**
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] The only existing tests that change are the moves in "Tests" above, plus `test_cookie_hungry_sites`. The 10 that fail on the prototype unchanged: `test_declining_twice_on_a_cookie_hungry_site_asks_no_third_time`, `test_a_decline_up_front_can_be_taken_back_at_the_retry`, `test_a_browser_given_up_front_needs_no_retry`, `test_a_public_carousel_on_a_cookie_hungry_site_asks_once`, `test_a_browser_that_is_not_installed_picked_up_front_still_detects_the_page`, `test_back_at_the_second_prompt_of_a_cookie_hungry_site_asks_no_third_time`, `test_a_login_wall_after_a_missing_browser_up_front_asks_once_more_only`, `test_cookie_hungry_sites`, `test_cookie_hungry_site_asks_before_probing`, `test_run_all_splits_urls_typed_after_back_from_the_first_cookies_prompt`
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] The only existing tests that change are the moves in "Tests" above, plus `test_cookie_hungry_sites`. The 10 that fail on the prototype unchanged: `test_declining_twice_on_a_cookie_hungry_site_asks_no_third_time`, `test_a_decline_up_front_can_be_taken_back_at_the_retry`, `test_a_browser_given_up_front_needs_no_retry`, `test_a_public_carousel_on_a_cookie_hungry_site_asks_once`, `test_a_browser_that_is_not_installed_picked_up_front_still_detects_the_page`, `test_back_at_the_second_prompt_of_a_cookie_hungry_site_asks_no_third_time`, `test_a_login_wall_after_a_missing_browser_up_front_asks_once_more_only`, `test_cookie_hungry_sites`, `test_cookie_hungry_site_asks_before_probing`, `test_run_all_splits_urls_typed_after_back_from_the_first_cookies_prompt`
 
 **The `_Back` traceback**
 
-- [ ] **[fix]** e2e, `?from=x.com` carousel, replies `""`, `b`, `""`, `b`, `""`, `1`, picker, type, quality, container, folder: exit 0, `t("auth_needed_pre")` and `t("ask_cookies")` 3 times each, 2 files
-- [ ] **[fix]** Same, then `c` and `EOFError` at the second URL prompt: exit 0, `t("cancelled")`, no `t("equiv_cmd")`
-- [ ] **[fix]** Unit (`test_wizard_flow.py`), `run_all` on an X URL: `b`, URL, `b`, URL, `1`: no exception, and the walk returns options
-- [ ] **[fix]** e2e, several URLs: the loop in the second walk, 17 prompts, both downloaded
-- [ ] **[pin]** `b`, then a URL off the list: one `t("auth_needed_pre")`, two `t("ask_cookies")`
+- [x] **[fix]** e2e, `?from=x.com` carousel, replies `""`, `b`, `""`, `b`, `""`, `1`, picker, type, quality, container, folder: exit 0, `t("auth_needed_pre")` and `t("ask_cookies")` 3 times each, 2 files
+- [x] **[fix]** Same, then `c` and `EOFError` at the second URL prompt: exit 0, `t("cancelled")`, no `t("equiv_cmd")`
+- [x] **[fix]** Unit (`test_wizard_flow.py`), `run_all` on an X URL: `b`, URL, `b`, URL, `1`: no exception, and the walk returns options
+- [x] **[fix]** e2e, several URLs: the loop in the second walk, 17 prompts, both downloaded
+- [x] **[pin]** `b`, then a URL off the list: one `t("auth_needed_pre")`, two `t("ask_cookies")`
 
 **Instagram**
 
-- [ ] **[fix]** `test_cookie_hungry_sites`: `instagram` False, `x` and `facebook` True
-- [ ] **[fix]** e2e, `https://fake.test/carousel?from=instagram.com`, in `es` and `en`: no `t("auth_needed_pre")`, one `t("ask_cookies")`, `instagram /` in the banner, 2 files, 7 prompts
-- [ ] **[fix]** e2e, `https://fake.test/needs-cookies?from=instagram.com`, browser at the retry: `t("auth_needed_retry", "Login required")`, one `t("ask_cookies")`, `Clip.mp4`, `--cookies` in the printed command, 6 prompts
-- [ ] **[fix]** Same, declines: exit 1, one `t("ask_cookies")`, 7 prompts
+- [x] **[fix]** `test_cookie_hungry_sites`: `instagram` False, `x` and `facebook` True
+- [x] **[fix]** e2e, `https://fake.test/carousel?from=instagram.com`, in `es` and `en`: no `t("auth_needed_pre")`, one `t("ask_cookies")`, `instagram /` in the banner, 2 files, 7 prompts
+- [x] **[fix]** e2e, `https://fake.test/needs-cookies?from=instagram.com`, browser at the retry: `t("auth_needed_retry", "Login required")`, one `t("ask_cookies")`, `Clip.mp4`, `--cookies` in the printed command, 6 prompts
+- [x] **[fix]** Same, declines: exit 1, one `t("ask_cookies")`, 7 prompts
 
 **The summary**
 
-- [ ] **[fix]** In `es` and `en`, browser up front on `?from=x.com`: the summary line for cookies, `✓ Cookies: firefox`, is in the output before `t("ask_type")` (the label from `_summary_label("cookies")`)
-- [ ] **[fix]** Decline up front on a public X carousel: `✓ Cookies: ` + `t("no_cookies")`
-- [ ] **[fix]** Browser at the retry on `needs-cookies`: `✓ Cookies: firefox`
-- [ ] **[fix]** Decline up front on `rate-limited?from=x.com`: `t("probe_falling_back")`, one `t("ask_cookies")`, and the cookies line listed
-- [ ] **[pin]** `fake.test/carousel` with no prompt before the walk: no `Cookies:` line before the late step runs
+- [x] **[fix]** In `es` and `en`, browser up front on `?from=x.com`: the summary line for cookies, `✓ Cookies: firefox`, is in the output before `t("ask_type")` (the label from `_summary_label("cookies")`)
+- [x] **[fix]** Decline up front on a public X carousel: `✓ Cookies: ` + `t("no_cookies")`
+- [x] **[fix]** Browser at the retry on `needs-cookies`: `✓ Cookies: firefox`
+- [x] **[fix]** Decline up front on `rate-limited?from=x.com`: `t("probe_falling_back")`, one `t("ask_cookies")`, and the cookies line listed
+- [x] **[pin]** `fake.test/carousel` with no prompt before the walk: no `Cookies:` line before the late step runs
 
 **`detect_site`**
 
-- [ ] **[fix]** Unit: `detect_site` on Dropbox, Box, Fox and Netflix URLs is `generic`. On `x.com`, `mobile.twitter.com` and `twitter.com` it's `x`
-- [ ] **[fix]** e2e, `https://fake.test/carousel?from=dropbox.com`: no `t("auth_needed_pre")`, `generic /` in the banner
+- [x] **[fix]** Unit: `detect_site` on Dropbox, Box, Fox and Netflix URLs is `generic`. On `x.com`, `mobile.twitter.com` and `twitter.com` it's `x`
+- [x] **[fix]** e2e, `https://fake.test/carousel?from=dropbox.com`: no `t("auth_needed_pre")`, `generic /` in the banner
 
 **Unchanged**
 
-- [ ] **[pin]** `-i --cookies firefox` on an X carousel: no `t("auth_needed_pre")`, one `t("ask_cookies")`
-- [ ] **[pin]** Every moved test passes with `?from=x.com`: X still gets the prompt up front, spec 18's double prompt and spec 26's missing browser included
+- [x] **[pin]** `-i --cookies firefox` on an X carousel: no `t("auth_needed_pre")`, one `t("ask_cookies")`
+- [x] **[pin]** Every moved test passes with `?from=x.com`: X still gets the prompt up front, spec 18's double prompt and spec 26's missing browser included
 
 **Commits** (developer's call, one logical change each): `fix(wizard): let back at the up-front cookies prompt repeat`, `fix(wizard): list cookies asked before the walk in the summary`, `fix(probe): stop asking for cookies up front on instagram`, `fix(probe): match x.com only as a whole host name`. Each with its tests.
 
@@ -330,7 +330,44 @@ Not needed. The changed code is the wizard's own flow, and `fake_site` drives it
 
 Optional, at release, with variables already in `.ai/live.env` and no cookies: `printf '\n\n\n\n\n\n\n' | .venv/bin/download-media -i -o tmp/wizard-ig "$DM_LIVE_IG_CAROUSEL"`. It must print no `This site requires browser cookies`, show the picker, and save as many files as `[video]` rows were printed.
 
+## Validation
+
+On `main` at `13f2839` (merge `3199a0c`; `13f2839` only changes `.ai/orchestration/state.json`), with yt-dlp 2026.10.26, ffmpeg n9.0.2 and Python 3.14.9. GitHub CI run 42503757343 was running at validation time; the orchestrator checks its result.
+
+- **Gate:** not re-run here, as the orchestrator asked. The tech-lead ran `scripts/pre-release.sh --no-live` on the merge: exit 0, 1839 passed. Here, `ruff check src tests` is clean and `mypy` reports `no issues found in 14 source files`. `ruff format --check src tests` flags the same 6 files as before (row 05). Its `probe.py` hunk takes in the changed `x` line only because the whole `_SITE_PATTERNS` table is column-aligned.
+- **Targeted run:** `.venv/bin/pytest -q tests/test_probe.py tests/test_wizard_flow.py tests/test_e2e.py` gives 1400 passed, 2 xfailed (the two known opus/ogg rerun xfails, row 25).
+- **Reverting the fix:** the merged `tests/` ran against the parent's `src/` (`3199a0c^1`). Both trees came from `git archive` into the scratchpad, with `PYTHONPATH` pointing at the copy. The same three files give **48 failed**, 1352 passed. The 48 are every **[fix]** criterion below, plus the test-engineer's cases on the same behaviour. They fail on the bug itself: `_Back` escaping, `auth_needed_pre` printed for Instagram, no `Cookies:` line, `x` for Dropbox, Box, Fox and Netflix. The **[pin]** tests pass on the parent, as they should, with one exception: `test_a_url_typed_after_back_that_needs_no_cookies_is_not_asked_up_front`. It also asserts that the second cookies question comes after `probing`, i.e. that it is the late step. The parent asks the new URL up front again (D4 C's quirk), so that assertion fails there. The test is stronger than a pin, and it's the right behaviour under D4 A.
+- **Reproduction:** the Problem's command, moved to X since Instagram no longer gets the prompt. Run through the real console script under `env -i`, with `HOME` and `XDG_STATE_HOME` in empty scratch folders and a dead D-Bus address:
+  - `printf '\nb\n\nb\n' | LANG=en_US.UTF-8 .venv/bin/download-media -i 'http://127.0.0.1:9/p?from=x.com'`: `This site requires browser cookies to work.` and `Use browser cookies?` twice, the URL prompt three times, then `Cancelled.` at the EOF, exit 0. No traceback, no equivalent command.
+  - `LANG=es_ES.UTF-8` gives the same with `Este sitio requiere cookies del navegador para funcionar.`, `Selecciona [1]:` and `Cancelado.`, exit 0.
+  - The original Instagram form (`?from=instagram.com`, replies Enter then `c`) now goes straight to `Inspecting content...` / `Inspeccionando contenido...`. The probe is refused on port 9, and the run continues in manual mode, `Cancelled.` / `Cancelado.` No cookies question.
+  - Afterwards both scratch folders were still empty: no history row. Nothing left loopback. No cookies or keyring were touched.
+- **Criteria, one by one** (all in `tests/test_e2e.py` unless marked):
+  - Gate: the tech-lead's run above. The only existing lines that change are the moves in "Tests" and `test_cookie_hungry_sites` (`git diff 3199a0c^1 3199a0c -- tests/`, removed lines only: `COOKIE_HUNGRY`, the four literals, the banner assertion, the five `instagram.com/p/x/` URLs in `test_wizard_flow.py`, and the `instagram is True` line).
+  - `b`, Enter, `b`, three prompts each, 2 files: `test_back_at_the_prompt_before_the_probe_can_be_pressed_again_and_again`.
+  - Then `c` / EOF at the URL: `test_cancelling_at_the_url_prompt_after_backing_twice_ends_the_run[cancel, eof]`.
+  - Unit `run_all`: `test_wizard_flow.py::test_run_all_survives_back_twice_at_the_first_cookies_prompt` (10 prompts, options returned), plus `test_back_at_the_first_cookies_prompt_can_be_pressed_again`.
+  - Several URLs, 17 prompts: `test_back_at_a_later_walk_s_prompt_before_the_probe_can_be_pressed_again` (`asked == 17`, three `auth_needed_pre`, both saved).
+  - URL off the list after `b`: `test_a_url_typed_after_back_that_needs_no_cookies_is_not_asked_up_front`.
+  - `test_probe.py::test_cookie_hungry_sites`.
+  - Public Instagram carousel, es and en: `test_a_public_instagram_carousel_is_probed_before_any_cookies_question[es, en]`.
+  - Gated Instagram, browser at the retry: `test_a_gated_instagram_post_asks_for_cookies_once_after_the_probe`. Declining: `test_declining_cookies_on_a_gated_instagram_post_asks_once`.
+  - Summary, browser up front, es and en, before `ask_type`: `test_the_summary_lists_a_browser_given_up_front[es, en]`. Decline: `test_the_summary_lists_a_decline_up_front[es, en]`. Browser at the retry: `test_the_summary_lists_a_browser_given_after_a_login_wall`. `rate-limited?from=x.com`: `test_the_summary_of_the_manual_flow_lists_a_decline_up_front`. Pin: `test_the_summary_has_no_cookies_line_before_the_late_step`.
+  - `detect_site` unit: `test_probe.py::test_detect_site` (the four lookalikes are `generic`; `x.com`, `mobile.twitter.com`, `twitter.com` are `x`). e2e Dropbox: `test_a_host_that_only_ends_in_x_com_is_not_asked_for_cookies_up_front`.
+  - `-i --cookies firefox` on X: `test_a_browser_from_the_command_line_skips_the_prompt_before_the_probe`.
+  - Moved tests: all pass with `?from=x.com` in the targeted run, spec 18's double prompt and spec 26's missing browser included.
+- **Scope:** `git diff 3199a0c^1 3199a0c --stat` touches exactly the five files in the Files table. Nothing in `i18n.py`, `cli.py`, `downloader.py`, `pyproject.toml`, `PKGBUILD`, `README.md`, `AGENTS.md` or the version.
+
+### What changed after approval
+
+- **A fifth developer commit, a pin.** `5b0ea45` (`test(wizard): pin a command-line browser skipping the up-front prompt`) isn't one of the four commits listed under Acceptance criteria. It adds `test_a_browser_from_the_command_line_skips_the_prompt_before_the_probe`, the e2e form of the `-i --cookies firefox` pin: the loop now reads `cookies_browser` on every turn, so it guards against asking anyway. Test only, one case. It passes on the parent, as a pin should.
+- **The test-engineer added 39 cases, not 40.** `6f438b6` adds 18 functions. Collected counts from `git archive` copies run against `main`'s `src/`: 1772 (parent) → 1796 (the developer's four fix commits: 24) → 1797 (`5b0ea45`: 1) → 1836 (`6f438b6`: 39). The handoff said 40. By file: `test_e2e.py` 13 functions, 18 cases; `test_probe.py` 3 functions, 19 cases; `test_wizard_flow.py` 2 functions, 2 cases. What they cover: `c` / EOF after one or two backs, a browser picked after backing reaching the probe and the command, a decline after backing staying out of the command, the retry's answer and an unreadable browser (spec 26) in the summary, `Cookies` staying first after `b` at the first step, the manual flow with and without a prompt before it, a `BROWSER+KEYRING` from the command line, an Instagram URL typed after `b`, `-l` surviving two backs, one command per URL's cookies answer, URLs retyped after `b`, and `detect_site` on subdomains, case, ports, userinfo, and names that only contain `x.com`.
+- **`fixupx.com`, `vxtwitter.com` and `fxtwitter.com` now read `generic`.** They used to read `x`, since each holds `x.com`, so they lose the banner and the cookies question before the probe. The first two are pinned in `test_detect_site_ignores_names_that_only_contain_x_com`; `fxtwitter.com` was checked by hand. That matches yt-dlp: `TwitterBaseIE._BASE_REGEX` (`twitter.py:38`) accepts only `twitter.com`, `x.com` and the onion host, with `www.`, `m.` or `mobile.`, so these mirrors were never X to yt-dlp either.
+- **Some lookalikes still read `x`, as they did before.** Checked with `.venv/bin/python -I -c 'from download_media.probe import detect_site ...'`: `https://my-x.com/a`, `https://x.com.evil.org/a`, `https://x.com@evil.org/a` and `https://www.facebook.com/x.com/videos/1` all read `x` and get the prompt before the probe. `\b` treats `-`, `.`, `@` and `/` as word boundaries, and `detect_site` reads the whole URL by design (the tests' `?from=x.com` depends on it). The `x` pattern is checked before `facebook`, so the last one is `x` too. None of this is a regression: the old pattern matched all four. The worst outcome is one extra question and a wrong banner. Matching on the parsed host would fix it, but it would break the `?from=` trick the e2e tests rely on, so it's out of scope here.
+
 ## Open decisions
+
+Resolved by the orchestrator under the human's delegation, each on the recommended option: D1 A, D2 A, D3 A, D4 A. D1 and D2 are on 0.3.0's review list in `PLAN.md`.
 
 Delegated to the roles by the human. The orchestrator approves the recommended option. D1 and D2 change published behaviour, so they're in the list for the human's review before release.
 
