@@ -1,6 +1,6 @@
 # 10 — Pin and bound the workflows
 
-Status: draft
+Status: approved
 Item: `fix/workflow-pins`
 
 ## Problem
@@ -210,6 +210,8 @@ No download check is needed: no download path changes. The live check here is th
 If the tag run's `deploy` job fails because of this change: fix it on `main`, then run `workflow_dispatch` with the same version. A dispatch runs the workflow file from the default branch, so nobody has to re-tag.
 
 ## Open decisions
+
+Resolved by the roles under the human's delegation, each on the recommended option: D1 A, D2 A, D3 A, D4 A, D5 A, D6 A (push of main after the merge, before validation, under the same delegation).
 
 The human delegated these to the roles. Each has a recommendation, preferring the option that's easiest to undo. Every one of them is undone by a one-line revert.
 
