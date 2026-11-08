@@ -77,14 +77,14 @@ class Probe:
 # ---------------------------------------------------------------------------
 _SITE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("instagram", re.compile(r"instagram\.com", re.IGNORECASE)),
-    ("youtube",   re.compile(r"(youtube\.com|youtu\.be)", re.IGNORECASE)),
-    ("tiktok",    re.compile(r"tiktok\.com", re.IGNORECASE)),
-    ("x",         re.compile(r"\b(twitter|x)\.com\b", re.IGNORECASE)),
-    ("facebook",  re.compile(r"facebook\.com|fb\.watch", re.IGNORECASE)),
-    ("vimeo",     re.compile(r"vimeo\.com", re.IGNORECASE)),
-    ("twitch",    re.compile(r"twitch\.tv", re.IGNORECASE)),
+    ("youtube", re.compile(r"(youtube\.com|youtu\.be)", re.IGNORECASE)),
+    ("tiktok", re.compile(r"tiktok\.com", re.IGNORECASE)),
+    ("x", re.compile(r"\b(twitter|x)\.com\b", re.IGNORECASE)),
+    ("facebook", re.compile(r"facebook\.com|fb\.watch", re.IGNORECASE)),
+    ("vimeo", re.compile(r"vimeo\.com", re.IGNORECASE)),
+    ("twitch", re.compile(r"twitch\.tv", re.IGNORECASE)),
     ("soundcloud", re.compile(r"soundcloud\.com", re.IGNORECASE)),
-    ("reddit",    re.compile(r"reddit\.com", re.IGNORECASE)),
+    ("reddit", re.compile(r"reddit\.com", re.IGNORECASE)),
 ]
 
 # Sites where the wizard asks for cookies before probing, because nobody has

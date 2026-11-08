@@ -20,10 +20,12 @@ def read_clipboard() -> str | None:
     candidates: list[tuple[str, list[str]]] = []
     if os.environ.get("WAYLAND_DISPLAY"):
         candidates.append(("wl-paste", []))
-    candidates.extend([
-        ("xclip", ["-selection", "clipboard", "-o"]),
-        ("xsel", ["-b"]),
-    ])
+    candidates.extend(
+        [
+            ("xclip", ["-selection", "clipboard", "-o"]),
+            ("xsel", ["-b"]),
+        ]
+    )
 
     for cmd, args in candidates:
         if not shutil.which(cmd):

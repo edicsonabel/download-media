@@ -1,4 +1,4 @@
-"""CI invariants: pinned runners, time limits everywhere, Node 24 action majors.
+"""CI invariants: pinned runners, time limits everywhere, Node 24 action majors, one gate.
 
 Read as text on purpose: PyYAML isn't a dev dependency, and these files only use
 plain block-style keys.
@@ -6,11 +6,16 @@ plain block-style keys.
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+ROOT = Path(__file__).resolve().parent.parent
+WORKFLOWS = ROOT / ".github" / "workflows"
+GATE = ROOT / "scripts" / "pre-release.sh"
 
 RUNNER = "ubuntu-26.04"
 # Lowest major of each action that runs on Node 24. A new actions/* action must be added here.
@@ -21,6 +26,7 @@ MIN_MAJOR = {
     "upload-pages-artifact": 5,
     "deploy-pages": 5,
 }
+GATE_JOBS = [("ci.yml", "gate"), ("deploy-aur.yml", "test")]
 EXPECTED_JOBS = [
     ("ci.yml", "gate"),
     ("deploy-aur.yml", "test"),
@@ -201,3 +207,75 @@ def test_the_parser_sees_every_workflow_and_job() -> None:
     assert [(job.workflow, job.name) for job in jobs] == EXPECTED_JOBS
     assert sum(len(_apt_steps(job)) for job in jobs) == 2
     assert all(job.steps for job in jobs)
+
+
+def test_the_gate_checks_formatting() -> None:
+    lines = [line.strip() for line in GATE.read_text(encoding="utf-8").splitlines()]
+    assert ".venv/bin/ruff format --check src tests" in lines
+
+
+def test_ci_and_release_run_the_same_gate() -> None:
+    # The checks live in pre-release.sh only; a workflow that inlines them drifts from it.
+    jobs = {(job.workflow, job.name): job for job in _all_jobs()}
+    for key in GATE_JOBS:
+        runs = [step.run for step in jobs[key].steps]
+        assert "scripts/pre-release.sh --no-live\n" in runs, key
+
+
+def test_nothing_skips_or_softens_the_gate() -> None:
+    # A gate job that can't fail, or a deploy that doesn't wait for it, publishes a broken tag.
+    jobs = {(job.workflow, job.name): job for job in _all_jobs()}
+    for key in GATE_JOBS:
+        job = jobs[key]
+        [step] = [step for step in job.steps if step.run == "scripts/pre-release.sh --no-live\n"]
+        assert not {"if", "continue-on-error"} & (job.keys.keys() | step.keys.keys()), key
+    assert jobs[("deploy-aur.yml", "deploy")].keys.get("needs") == "test"
+
+
+def _run_gate(tmp_path: Path, fail: str = "<nothing>") -> tuple[int, str, list[str]]:
+    """Run a copy of the gate against stub tools that log their arguments.
+
+    The stub whose "tool args" starts with `fail` exits 1.
+    """
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy(GATE, repo / "scripts" / "pre-release.sh")
+    tools = repo / ".venv" / "bin"
+    tools.mkdir(parents=True)
+    log = tmp_path / "calls.log"
+    for tool in ("ruff", "mypy", "pytest"):
+        stub = tools / tool
+        stub.write_text(
+            "#!/bin/sh\n"
+            f'echo "{tool} $*" >> "$GATE_LOG"\n'
+            f'case "{tool} $*" in "$GATE_FAIL"*) exit 1;; esac\n',
+            encoding="utf-8",
+        )
+        stub.chmod(0o755)
+    env = {**os.environ, "GATE_LOG": str(log), "GATE_FAIL": fail}
+    found = subprocess.run(
+        ["bash", str(repo / "scripts" / "pre-release.sh"), "--no-live"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    calls = [line.rstrip() for line in log.read_text(encoding="utf-8").splitlines()]
+    return found.returncode, found.stdout, calls
+
+
+def test_the_gate_checks_formatting_between_lint_and_types(tmp_path: Path) -> None:
+    code, out, calls = _run_gate(tmp_path)
+    assert code == 0, out
+    assert calls[:3] == ["ruff check src tests", "ruff format --check src tests", "mypy"]
+    assert "==> format" in out
+
+
+def test_a_misformatted_file_stops_the_gate_at_format(tmp_path: Path) -> None:
+    code, out, calls = _run_gate(tmp_path, fail="ruff format")
+    assert code == 1
+    assert calls == ["ruff check src tests", "ruff format --check src tests"]
+    assert "==> format" in out
+    assert "==> types" not in out
+    assert "All checks passed" not in out
