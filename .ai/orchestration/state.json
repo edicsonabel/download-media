@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-07T21:53:56-04:00",
+  "updated": "2026-11-07T22:02:31-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1356,13 +1356,15 @@
     "fix/release-runbook": {
       "type": "fix",
       "title": "Release runbook: version rule, gh write preflight, AUR RPC lag",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/15-release-runbook.md",
       "branch": "fix/release-runbook",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-release-runbook",
+      "commits": [
+        "fe9fc20"
+      ],
       "review": {
         "approved": false,
         "findings": []
@@ -1374,6 +1376,20 @@
           "result": "approved",
           "at": "2026-11-07T21:53:56-04:00",
           "note": "Next in the planner's order before /release, under the human's standing delegation."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-07T22:02:31-04:00",
+          "note": "Checked against 0.2.0: old rule gives 0.1.1; RPC lag was a stale response. Decisions D1-D8. Planner: AGENTS.md says 'release tarball' but deploy-aur fetches the tag archive; spec 18 live steps aren't tests; actionlint will need running or waiving at release."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-07T22:02:31-04:00",
+          "note": "Spec approved under the human's delegation, D1-D8 A."
         }
       ]
     }
