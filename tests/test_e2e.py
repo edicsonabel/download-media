@@ -5,9 +5,11 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import shutil
 import sqlite3
 import subprocess
 import sys
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -19,7 +21,7 @@ from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.downloader import _source_url
 from download_media.i18n import t
 
-from .conftest import GEO_BLOCK, HTTP_404, JUNK, NO_EXT_VIDEO, FakeSiteIE
+from .conftest import GATE_REQUESTS, GEO_BLOCK, HTTP_404, JUNK, NO_EXT_VIDEO, FakeSiteIE
 
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
@@ -5600,3 +5602,295 @@ def test_cookies_that_load_and_find_only_images_are_not_retried(
     assert t("no_supported_items") in output
     assert t("cookies_retry", "brave") not in output
     assert fake_site == [("brave",)]
+
+
+# Spec 26, around the edges: a browser that loads, one that loads but decrypts nothing, the
+# printed commands, both languages, and the wizard walks around the new message.
+def unreadable(browser: str = "chrome") -> str:
+    """The start of t("cookies_unreadable"), whatever the reason."""
+    return t("cookies_unreadable", browser, "\0").partition("\0")[0]
+
+
+@pytest.fixture
+def token() -> str:
+    """A fresh /cookie/ or /seen/ path on the loopback server, so requests can be counted."""
+    return uuid.uuid4().hex
+
+
+def sent(token: str) -> list[tuple[str, str]]:
+    """Path and Cookie header of every request made under ``token``."""
+    return sorted(GATE_REQUESTS.get(token, []))
+
+
+def chrome_cookie(value: bytes = b"ok") -> None:
+    """A Chrome profile with one plaintext cookie for the loopback host: no keyring involved."""
+    profile = Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "Cookies")
+    con.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('version', '20')")
+    con.execute(
+        "CREATE TABLE cookies (host_key BLOB, name BLOB, value BLOB, encrypted_value BLOB,"
+        " path BLOB, expires_utc INTEGER, is_secure INTEGER)"
+    )
+    con.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
+        (b"127.0.0.1", b"dm", value, b"", b"/"),
+    )
+    con.commit()
+    con.close()
+
+
+def test_a_browser_that_loads_sends_its_cookies_to_every_item(
+    direct: Any, out: Path, token: str
+) -> None:
+    chrome_cookie()
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=(f"cookie/{token}/multi.html",))
+    assert code == 0
+    assert names(out) == MULTI
+    assert no_browser() not in output
+    assert unreadable() not in output
+    assert t("cookies_retry", "chrome") not in output
+    requests = sent(token)
+    assert len(requests) == 5  # The page and its four videos.
+    assert all("dm=ok" in cookie for _, cookie in requests)
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+    assert len(history_rows()) == 1
+
+
+def test_a_browser_that_loads_costs_no_extra_request(
+    direct: Any, out: Path, tmp_path: Path, token: str
+) -> None:
+    chrome_cookie()
+    code, _ = direct("-y", "--cookies", "chrome", pages=(f"cookie/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    without = uuid.uuid4().hex
+    code, _ = direct("-y", "-o", str(tmp_path / "again"), pages=(f"seen/{without}/poster.html",))
+    assert code == 0
+    assert [path for path, _ in sent(token)] == [path for path, _ in sent(without)]
+    assert all("dm=ok" in cookie for _, cookie in sent(token))
+    assert not any(cookie for _, cookie in sent(without))
+
+
+def test_formats_are_listed_with_a_browser_that_loads(direct: Any, token: str) -> None:
+    chrome_cookie()
+    code, output = direct("-l", "--cookies", "chrome", pages=(f"cookie/{token}/poster.html",))
+    assert code == 0
+    assert "Available formats" in output
+    assert no_browser() not in output
+    assert sent(token) and all("dm=ok" in cookie for _, cookie in sent(token))
+
+
+def test_cookies_that_load_and_get_refused_still_retry(direct: Any, out: Path, token: str) -> None:
+    # A real 401 behind cookies that loaded is spec 18's path, not a cookie-load failure.
+    chrome_cookie(b"stale")
+    code, output = direct("-y", "--cookies", "chrome", pages=(f"cookie/{token}/poster.html",))
+    assert code == 1
+    assert t("cookies_retry", "chrome") in output
+    assert no_browser() not in output
+    assert unreadable() not in output
+    assert keyring_hint() in output
+    cookies = [cookie for _, cookie in sent(token)]
+    assert cookies == sorted(["dm=stale", ""])
+    assert names(out) == []
+
+
+def test_the_wizard_says_cookies_that_load_and_get_refused_are_not_enough(
+    generic: Any, token: str
+) -> None:
+    chrome_cookie(b"stale")
+    page = f"cookie/{token}/poster.html"
+    # URL, the manual flow's four steps, the late cookies step, the preview.
+    code, output = generic(page, "", *VIDEO_STEPS, "", "", flags=("-i", "--cookies", "chrome"))
+    assert code == 1
+    assert output.count(t("probing")) == 1
+    assert t("auth_still_needed", "chrome") in output
+    assert no_browser() not in output
+    assert unreadable() not in output
+
+
+@pytest.fixture
+def no_kwallet_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A PATH with ffmpeg and ffprobe only: kwallet-query is not installed."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("ffmpeg", "ffprobe"):
+        found = shutil.which(tool)
+        assert found
+        (bin_dir / tool).symlink_to(found)
+    monkeypatch.setenv("PATH", str(bin_dir))
+
+
+KWALLET_MISSING = "kwallet-query command not found"
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "no_kwallet_query")
+def test_a_keyring_that_decrypts_nothing_in_a_playlist_is_not_a_load_failure(
+    direct: Any, out: Path
+) -> None:
+    # Under ignoreerrors yt-dlp only logs the missing tool and loads a jar it can't decrypt:
+    # there's no load failure to report, and nothing to go on without.
+    code, output = direct("-y", "-p", "--cookies", "chrome+kwallet6", pages=("multi.html",))
+    assert code == 0
+    assert names(out) == MULTI
+    assert KWALLET_MISSING in output
+    assert unreadable() not in output
+    assert no_browser() not in output
+    [line] = commands(output)
+    assert "--cookies chrome+kwallet6" in line
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "no_kwallet_query")
+def test_a_keyring_tool_that_is_missing_in_single_mode_is_unreadable(
+    direct: Any, out: Path
+) -> None:
+    code, output = direct("-y", "--cookies", "chrome+kwallet6", pages=("poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    [said] = [line for line in output.splitlines() if line.startswith(unreadable())]
+    assert KWALLET_MISSING in said
+    assert keyring_hint() not in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+def test_one_failed_url_keeps_the_missing_browser_in_the_command(
+    direct: Any, media_url: str, out: Path
+) -> None:
+    # Spec 09: --cookies goes only when every URL saved without it. Here one failed without it,
+    # so the command keeps what the user asked for.
+    code, output = direct("-y", "--cookies", "chrome", pages=("poster.html", "status/404"))
+    assert code == 1
+    assert output.count(no_browser()) == 2
+    assert names(out) == ["poster (1).mp4"]
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+    assert f"{media_url}/poster.html {media_url}/status/404" in line
+    assert len(history_rows()) == 1
+
+
+def test_formats_of_a_dead_page_with_a_missing_browser_get_no_keyring_hint(
+    direct: Any, media_url: str
+) -> None:
+    code, output = direct("-l", "--cookies", "chrome", pages=("status/404",))
+    assert code == 1
+    assert no_browser() in output
+    assert t("failed", f"{media_url}/status/404") in output
+    assert keyring_hint() not in output
+    assert "Traceback" not in output
+
+
+def test_a_missing_browser_does_not_count_as_a_failed_item(direct: Any, out: Path) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("half-gone.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert no_browser() in output
+    assert t("partial_result", 1, 2, 0, 1) in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "page", "saved"),
+    [
+        (("-P",), "poster.html", ["poster (1).mp4"]),
+        (("-a", "-p"), "multi.html", [name.replace(".mp4", ".mp3") for name in MULTI]),
+    ],
+)
+def test_a_missing_browser_in_other_modes_goes_on_without_cookies(
+    direct: Any, out: Path, flags: tuple[str, ...], page: str, saved: list[str]
+) -> None:
+    code, output = direct("-y", *flags, "--cookies", "chrome", pages=(page,))
+    assert code == 0
+    assert names(out) == saved
+    assert output.count(no_browser()) == 1
+    assert t("cookies_retry", "chrome") not in output
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_unreadable_cookies_in_both_languages(
+    direct: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    said = i18n._MESSAGES[lang]
+    other = i18n._MESSAGES["en" if lang == "es" else "es"]
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("multi.html",))
+    assert code == 0
+    assert said["cookies_no_browser"].format("chrome") in output
+    assert other["cookies_no_browser"].format("chrome") not in output
+    code, output = direct("-y", "-p", "--cookies", "safari", pages=("poster.html",))
+    assert code == 0
+    assert said["cookies_unreadable"].format("safari", "unsupported platform: linux") in output
+    assert other["cookies_unreadable"].format("safari", "unsupported platform: linux") not in output
+    assert said["done"] in output
+
+
+def test_a_missing_browser_at_the_last_wizard_step_saves_a_single_video(
+    generic: Any, home: Path
+) -> None:
+    code, output = generic("poster.html", *SINGLE_WALK[:-1], CHROME)
+    assert code == 0
+    assert len(names(home / "Videos")) == 1
+    assert output.count(no_browser()) == 1
+    assert t("cookies_retry", "chrome") not in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+def test_every_wizard_walk_reports_its_own_missing_browser(
+    media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    prompts = answers(*SINGLE_WALK, *PICKER_WALK)
+    pages = [f"{media_url}/poster.html", f"{media_url}/multi.html"]
+    code = cli.main(["-i", "--cookies", "chrome", *pages])
+    captured = capfd.readouterr()
+    output = captured.out + captured.err
+    assert len(prompts) == len(SINGLE_WALK) + len(PICKER_WALK)
+    assert code == 0
+    # Once per walk, at its probe; the downloads already run without the browser.
+    assert output.count(no_browser()) == 2
+    assert output.count(t("probing")) == 4
+    assert detected("kind_video") in output
+    assert len(names(home / "Videos")) == 5
+    lines = commands(output)
+    assert len(lines) == 2
+    assert not any("--cookies" in shlex.split(line) for line in lines)
+
+
+def test_a_login_wall_after_a_missing_browser_up_front_asks_once_more_only(
+    generic: Any, home: Path
+) -> None:
+    # Up front: chrome can't be read, the cookieless probe meets the login wall, and the retry
+    # prompt gets one more browser. That one can't be read either: no fourth probe, no loop.
+    page = "status/401/login?from=instagram.com"
+    code, output = generic(page, "", CHROME, CHROME, *VIDEO_STEPS, "")
+    assert code == 1
+    assert output.count(no_browser()) == 2
+    assert output.count(t("ask_cookies")) == 2
+    assert output.count(t("probing")) == 3
+    reason = "Unable to download webpage: HTTP Error 401: Unauthorized"
+    assert t("probe_failed", reason) in output
+    assert t("auth_still_needed", "chrome") not in output
+    assert "could not find chrome cookies database" not in output
+    assert names(home / "Videos") == []
+
+
+def test_cancelling_after_a_missing_browser_downloads_nothing(generic: Any, home: Path) -> None:
+    code, output = generic("poster.html", "", "c", flags=("-i", "--cookies", "chrome"))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert t("cancelled") in output
+    assert t("equiv_cmd") not in output
+    assert names(home / "Videos") == []
+
+
+def test_going_back_after_a_missing_browser_does_not_probe_again(generic: Any, home: Path) -> None:
+    # Back at the first step re-asks it; the walk keeps the cookieless probe.
+    replies = ("", "b", *SINGLE_WALK[1:])
+    code, output = generic("poster.html", *replies, flags=("-i", "--cookies", "chrome"))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert output.count(t("probing")) == 2
+    assert len(names(home / "Videos")) == 1
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)

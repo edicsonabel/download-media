@@ -157,7 +157,23 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         if status:
             self.send_error(int(status[1]))
             return None
+        gate = self._GATE.fullmatch(self.path)
+        if gate:
+            cookie = self.headers.get("Cookie") or ""
+            GATE_REQUESTS.setdefault(gate["token"], []).append((gate["rest"], cookie))
+            if gate["kind"] == "cookie" and "dm=ok" not in cookie:
+                self.send_error(401)
+                return None
+            self.path = gate["rest"]
         return super().send_head()
+
+    # /cookie/<token>/<file> answers 401 unless the request carries the cookie dm=ok, and
+    # /seen/<token>/<file> serves <file> to anyone. Both record what each request sent.
+    _GATE = re.compile(r"/(?P<kind>cookie|seen)/(?P<token>\w+)(?P<rest>/[^?]+)(?:\?.*)?")
+
+
+# Per token: the path and the Cookie header of every request to /cookie/ or /seen/.
+GATE_REQUESTS: dict[str, list[tuple[str, str]]] = {}
 
 
 # A text file served as a video: ffmpeg finds no stream in it.

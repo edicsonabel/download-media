@@ -71,6 +71,7 @@ def test_live_tests_keep_the_real_home(tmp_path: Path) -> None:
         HOME = os.environ["HOME"]
         VIDEOS = os.environ["XDG_VIDEOS_DIR"]
         BUS = os.environ["DBUS_SESSION_BUS_ADDRESS"]
+        DESKTOP = os.environ["XDG_CURRENT_DESKTOP"]
 
 
         @pytest.mark.live
@@ -78,12 +79,14 @@ def test_live_tests_keep_the_real_home(tmp_path: Path) -> None:
             assert os.environ["HOME"] == HOME
             assert os.environ["XDG_VIDEOS_DIR"] == VIDEOS
             assert os.environ["DBUS_SESSION_BUS_ADDRESS"] == BUS
+            assert os.environ["XDG_CURRENT_DESKTOP"] == DESKTOP
 
 
         def test_others_do_not():
             assert os.environ["HOME"] != HOME
             assert "XDG_VIDEOS_DIR" not in os.environ
             assert os.environ["DBUS_SESSION_BUS_ADDRESS"] != BUS
+            assert "XDG_CURRENT_DESKTOP" not in os.environ
     """
     (inner / "test_inner.py").write_text(textwrap.dedent(probe), encoding="utf-8")
     real = tmp_path / "real-home"
@@ -92,6 +95,7 @@ def test_live_tests_keep_the_real_home(tmp_path: Path) -> None:
         "HOME": str(real),
         "XDG_VIDEOS_DIR": str(real / "Videos"),
         "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/real-bus",
+        "XDG_CURRENT_DESKTOP": "KDE",
     }
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", "pytest.ini"],
