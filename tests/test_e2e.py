@@ -6013,3 +6013,230 @@ def test_an_extractor_bug_while_listing_formats_is_reported(run: Any) -> None:
     assert code == 1
     assert t("unexpected_bug", CRASH_BUG) in output
     assert t("failed", CRASH) in output
+
+
+# Spec 42, from the outside: every mode, both streams, both languages.
+def read_only(folder: Path) -> Path:
+    folder.mkdir()
+    folder.chmod(0o500)
+    return folder
+
+
+@pytest.mark.parametrize(
+    ("make", "reason"),
+    [
+        # A regular file where the folder should be: mkdir(exist_ok=True) still refuses it.
+        (lambda tmp: blocked_folder(tmp)[0], "File exists"),
+        (lambda tmp: blocked_folder(tmp)[1], "Not a directory"),
+        pytest.param(
+            lambda tmp: read_only(tmp / "ro") / "sub",
+            "Permission denied",
+            marks=pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the mode"),
+        ),
+    ],
+)
+def test_each_reason_a_folder_cannot_be_created_is_named(
+    run: Any, tmp_path: Path, make: Callable[[Path], Path], reason: str
+) -> None:
+    bad = make(tmp_path)
+    afile = tmp_path / "afile"
+    try:
+        code, output = run("-y", "-o", str(bad), VIDEO)
+    finally:
+        if (tmp_path / "ro").exists():
+            (tmp_path / "ro").chmod(0o755)
+    assert code == 1
+    assert "Traceback" not in output
+    assert output.count(t("output_unusable", bad, reason)) == 1
+    assert t("failed", VIDEO) in output
+    assert len(commands(output)) == 1
+    assert history_rows() == []
+    if afile.exists():
+        assert afile.read_text(encoding="utf-8") == "keep"
+    if (tmp_path / "ro").exists():
+        assert names(tmp_path / "ro") == []
+
+
+def test_folder_and_bug_messages_go_to_stderr(
+    fake_site: list[Any], tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    _, bad = blocked_folder(tmp_path)
+    code = cli.main(["-y", "-o", str(bad), VIDEO])
+    captured = capfd.readouterr()
+    assert code == 1
+    assert t("output_unusable", bad, "Not a directory") in captured.err
+    assert t("output_unusable", bad, "Not a directory") not in captured.out
+    assert t("failed", VIDEO) in captured.out
+
+    code = cli.main(["-y", "-o", str(tmp_path / "out"), CRASH])
+    captured = capfd.readouterr()
+    assert code == 1
+    assert "Traceback" in captured.err
+    assert t("unexpected_bug", CRASH_BUG) in captured.err
+    assert "Traceback" not in captured.out
+    assert t("unexpected_bug", CRASH_BUG) not in captured.out
+    # The traceback comes first: the message points at "the output above".
+    assert captured.err.index("Traceback") < captured.err.index(t("unexpected_bug", CRASH_BUG))
+    assert t("failed", CRASH) in captured.out
+
+
+def test_a_folder_that_cannot_be_created_after_the_preview(
+    run: Any, tmp_path: Path, answers: Any
+) -> None:
+    # Direct mode without -y: the preview and its confirmation come first, as today.
+    _, bad = blocked_folder(tmp_path)
+    prompts = answers("")
+    code, output = run("-o", str(bad), VIDEO)
+    assert len(prompts) == 1
+    assert code == 1
+    assert t("preview") in output
+    assert "Traceback" not in output
+    assert output.count(t("output_unusable", bad, "Not a directory")) == 1
+    assert t("failed", VIDEO) in output
+    [line] = commands(output)
+    assert "-y" in shlex.split(line)
+
+
+@pytest.mark.parametrize(
+    "flags", [("-P",), ("--playlist-items", "2"), ("-p",)], ids=["-P", "items", "-p"]
+)
+def test_a_folder_that_cannot_be_created_fails_a_carousel_once_in_every_mode(
+    run: Any, tmp_path: Path, fake_site: list[Any], flags: tuple[str, ...]
+) -> None:
+    _, bad = blocked_folder(tmp_path)
+    code, output = run("-y", *flags, "-o", str(bad), CAROUSEL)
+    assert code == 1
+    assert "Traceback" not in output
+    assert output.count(t("output_unusable", bad, "Not a directory")) == 1
+    assert output.count(t("failed", CAROUSEL)) == 1
+    assert t("items_not_found", 4, "2") not in output
+    # Nothing was asked of yt-dlp.
+    assert fake_site == []
+    assert len(commands(output)) == 1
+
+
+def test_an_extractor_bug_without_a_list_in_no_playlist_mode(run: Any, out: Path) -> None:
+    code, output = run("-y", "-P", CRASH, VIDEO)
+    assert code == 1
+    assert output.count("Traceback") == 1
+    assert t("unexpected_bug", CRASH_BUG) in output
+    assert t("failed", CRASH) in output
+    assert names(out) == ["Clip.mp4"]
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert CRASH in argv and VIDEO in argv
+
+
+def test_an_extractor_bug_between_two_urls(run: Any, out: Path) -> None:
+    code, output = run("-y", VIDEO, CRASH, VIDEO_B)
+    assert code == 1
+    assert output.count(t("done")) == 2
+    assert len(names(out)) == 2
+    assert output.count(t("unexpected_bug", CRASH_BUG)) == 1
+    assert t("failed", VIDEO) not in output
+    assert t("failed", VIDEO_B) not in output
+    # Done, failed, done: in the order the URLs ran.
+    first_done = output.index(t("done"))
+    failed = output.index(t("failed", CRASH))
+    assert first_done < failed < output.index(t("done"), first_done + 1)
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert [a for a in argv if a.startswith("https://")] == [VIDEO, CRASH, VIDEO_B]
+    rows = history_rows()
+    assert len(rows) == 2
+    assert not any(CRASH in row for row in rows)
+
+
+def test_every_url_failing_for_its_own_reason(run: Any, tmp_path: Path) -> None:
+    # Total failure: a bug and a yt-dlp error, each named, and one command.
+    code, output = run("-y", CRASH, PRIVATE)
+    assert code == 1
+    assert t("unexpected_bug", CRASH_BUG) in output
+    assert t("failed", CRASH) in output
+    assert t("failed", PRIVATE) in output
+    assert t("done") not in output
+    assert len(commands(output)) == 1
+    assert history_rows() == []
+
+
+def test_cookies_are_not_retried_for_a_folder_or_a_bug(
+    run: Any, tmp_path: Path, fake_site: list[Any]
+) -> None:
+    _, bad = blocked_folder(tmp_path)
+    code, output = run("-y", "--cookies", "brave", "-o", str(bad), VIDEO)
+    assert code == 1
+    assert t("output_unusable", bad, "Not a directory") in output
+    assert t("cookies_retry", "brave") not in output
+    assert fake_site == []
+
+    code, output = run("-y", "--cookies", "brave", CRASH)
+    assert code == 1
+    assert output.count(t("unexpected_bug", CRASH_BUG)) == 1
+    assert t("cookies_retry", "brave") not in output
+    assert len(fake_site) == 1
+    [line] = commands(output)
+    assert "--cookies" in shlex.split(line)
+
+
+def test_wizard_on_an_extractor_bug_falls_back_then_fails_cleanly(
+    fake_site: list[Any], out: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    # The probe fails, the manual flow runs, and the download reports the bug.
+    prompts = answers("", "", "", "", "", "", "")
+    code = cli.main(["-i", "-o", str(out), CRASH])
+    captured = capfd.readouterr()
+    assert len(prompts) == 7
+    assert code == 1
+    assert t("unexpected_bug", CRASH_BUG) in captured.err
+    assert t("failed", CRASH) in captured.out
+    assert len(commands(captured.out)) == 1
+    assert history_rows() == []
+
+
+def test_wizard_picker_with_a_folder_that_cannot_be_created(
+    run: Any, tmp_path: Path, answers: Any, fake_site: list[Any]
+) -> None:
+    _, bad = blocked_folder(tmp_path)
+    # URL, item selection, type, quality, container, folder, cookies.
+    answers("", "", "", "", "", str(bad), "")
+    code, output = run("-i", CAROUSEL)
+    assert code == 1
+    assert "Traceback" not in output
+    assert output.count(t("output_unusable", bad, "Not a directory")) == 1
+    assert t("failed", CAROUSEL) in output
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[argv.index("-o") + 1] == str(bad)
+
+
+def test_listing_formats_never_creates_the_folder(run: Any, tmp_path: Path) -> None:
+    afile, bad = blocked_folder(tmp_path)
+    code, output = run("-y", "-l", "-o", str(bad), VIDEO)
+    assert code == 0
+    assert t("output_unusable", bad, "Not a directory") not in output
+    assert afile.read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_unexpected_errors_in_both_languages(
+    run: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    said = i18n._MESSAGES[lang]
+    other = i18n._MESSAGES["en" if lang == "es" else "es"]
+    _, bad = blocked_folder(tmp_path)
+    code, output = run("-y", "-o", str(bad), VIDEO)
+    assert code == 1
+    assert said["output_unusable"].format(bad, "Not a directory") in output
+    assert other["output_unusable"].split("{}")[0] not in output
+    assert said["failed"].format(VIDEO) in output
+
+    code, output = run("-y", CRASH)
+    assert code == 1
+    assert said["unexpected_bug"].format(CRASH_BUG) in output
+    assert other["unexpected_bug"].split("(")[0] not in output
+    assert said["failed"].format(CRASH) in output
+
+    code, output = run("-y", "-l", CRASH)
+    assert code == 1
+    assert said["unexpected_bug"].format(CRASH_BUG) in output
