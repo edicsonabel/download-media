@@ -3844,6 +3844,20 @@ def test_a_url_typed_after_back_that_needs_no_cookies_is_not_asked_up_front(
     assert len(names(out)) == 2
 
 
+def test_a_browser_from_the_command_line_skips_the_prompt_before_the_probe(
+    wizard_on: Any, out: Path
+) -> None:
+    # The late cookies step stays, with the browser preselected.
+    flags = ("--cookies", "firefox")
+    code, output = wizard_on(X_CAROUSEL, *PICKER_WALK, flags=flags)
+    assert code == 0
+    assert t("auth_needed_pre") not in output
+    assert output.count(t("ask_cookies")) == 1
+    assert len(names(out)) == 2
+    [line] = commands(output)
+    assert "--cookies firefox" in line
+
+
 def cookies_line(value: str) -> str:
     """The running summary's cookies line."""
     return f"✓ {wizard._summary_label('cookies')}: {value}"
