@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T13:10:08-04:00",
+  "updated": "2026-11-09T13:28:17-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2082,8 +2082,8 @@
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
       "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": ".worktrees/fix-p-double-count",
@@ -2100,7 +2100,9 @@
       ],
       "review": {
         "approved": true,
-        "findings": []
+        "findings": [
+          "minor tests/conftest.py:654 comment is 123 characters, over the 100-column limit; the gate can't catch it (bb5cbf1)"
+        ]
       },
       "history": [
         {
@@ -2165,6 +2167,13 @@
           "result": "done",
           "at": "2026-11-09T13:10:08-04:00",
           "note": "Round 1 closed: real runs say 1 of 2, 1 failed, en and es; fix line removed gives 1 of 3. ReExtractInfo pinned in 6dc140e (4 cases). Mutation on the new line 6/6. Gate exit 0 at 6dc140e, 2083 passed + 2 xfailed es/en, 99%."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-09T13:28:17-04:00",
+          "note": "Gate exit 0 at 6dc140e, 2083 passed + 2 xfailed es/en, 98.87%. Every criterion holds. Real loopback runs in en and es match disk and history, no Cookie sent after a notice; keyring + broken item now 1 of 2 where main said 1 of 4. Each fix part reverted fails 5-60 tests. One minor finding (comment length). Planner risks: cookie-load wrapper records is_error=False too; count assumes no DownloadCancelled options."
         }
       ]
     }
