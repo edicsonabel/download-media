@@ -6705,6 +6705,14 @@ def test_unreadable_cookies_in_both_languages(
     assert said["done"] in output
 
 
+def test_the_spanish_notices_say_the_run_goes_on() -> None:
+    # "Se sigue sin cookies" also reads as "still no cookies".
+    spanish = i18n._MESSAGES["es"]
+    for key in ("cookies_no_browser", "cookies_unreadable"):
+        assert spanish[key].endswith(" Se continúa sin cookies.")
+    assert not any("Se sigue sin cookies" in text for text in spanish.values())
+
+
 def test_a_missing_browser_at_the_last_wizard_step_saves_a_single_video(
     generic: Any, home: Path
 ) -> None:
