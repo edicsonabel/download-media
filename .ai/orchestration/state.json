@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T14:42:13-04:00",
+  "updated": "2026-11-09T14:57:54-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2081,12 +2081,12 @@
     "fix/p-double-count": {
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
-      "worktree": ".worktrees/fix-p-double-count",
+      "worktree": null,
       "commits": [
         "ebb51d5",
         "44fa54e",
@@ -2098,7 +2098,8 @@
         "d147530",
         "6dc140e",
         "95029c0",
-        "6e53450"
+        "6e53450",
+        "09c75cb"
       ],
       "review": {
         "approved": true,
@@ -2202,6 +2203,13 @@
           "result": "merged",
           "at": "2026-11-09T14:42:13-04:00",
           "note": "Merged as 6e53450, no conflicts. Gate exit 0 on the merged tree (covers 95029c0), 2083 passed + 2 xfailed es/en, 98.87%. Undo before any push: reset main to 1f21af0. Push by the orchestrator, approved by the human."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-09T14:57:54-04:00",
+          "note": "All 23 criteria hold. Runs 1-3 and run 3 with a keyring error on main match the spec, no Cookie header sent. Criteria tests 92 passed; src reverted fails 64 plus a collection error; round-1 line alone reverted fails 3. Gate not re-run (tech-lead gate on 6e53450 plus CI run 42676371106 cover it); no live tests (spec needs none). Spec done, records the round-1 line and ReExtractInfo; PLAN row 45 done. Planner: Next paragraph, 0.4.0 review list with D1's exit 0 to 1, spec 50 D2 now covers keyring errors. Worktree and branch removed."
         }
       ]
     }
