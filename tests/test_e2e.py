@@ -8687,3 +8687,135 @@ def test_another_container_keeps_the_items_an_earlier_run_saved(
     assert output.count("has already been downloaded") == 2
     assert {name: codecs(out / name) for name in earlier} == before
     assert sorted(set(names(out)) - set(earlier)) == ["01 - Clip [x1].webm", "02 - Clip [v1].webm"]
+
+
+# Spec 30, round 2: what the container step deletes when yt-dlp reuses a file.
+
+
+def video_format(output: str) -> str:
+    """The --video-format of the one equivalent command a run printed (mp4 when left out)."""
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert "-y" in argv
+    return argv[argv.index("--video-format") + 1] if "--video-format" in argv else "mp4"
+
+
+def test_a_third_container_keeps_both_earlier_files(generic: Any, out: Path) -> None:
+    containers = ["mp4", "webm", "mkv"]
+    for container in containers:
+        code, output = generic(
+            "tiny.mp4", flags=("-y", "--video-format", container, "-o", str(out))
+        )
+        assert code == 0
+        assert t("done") in output
+        assert "Deleting original file" not in output
+        assert video_format(output) == container
+    assert names(out) == ["tiny.mkv", "tiny.mp4", "tiny.webm"]
+    assert codecs(out / "tiny.mp4") == codecs(out / "tiny.mkv") == {"video": "h264", "audio": "aac"}
+    assert codecs(out / "tiny.webm")["video"] in {"vp8", "vp9", "av1"}
+    # Each container again: its own file is the one already downloaded, and nothing converts.
+    for container in containers:
+        code, output = generic(
+            "tiny.mp4", flags=("-y", "--video-format", container, "-o", str(out))
+        )
+        assert code == 0
+        assert "has already been downloaded" in output
+        assert container_steps(output) == 0
+        assert t("done") in output
+    assert names(out) == ["tiny.mkv", "tiny.mp4", "tiny.webm"]
+    assert len(history_rows()) == 6
+
+
+def test_a_failed_conversion_leaves_an_earlier_file_whole(run: Any, out: Path) -> None:
+    url = "https://fake.test/attached"
+    code, _ = run("-y", "--video-format", "mkv", url)
+    assert code == 0
+    assert names(out) == ["Clip.mkv"]
+    assert streams(out / "Clip.mkv") == {"video", "audio", "attachment"}
+    code, output = run("-y", url)
+    assert code == 0
+    assert "has already been downloaded" in output
+    assert output.count(t("not_converted", "Clip.mkv", "mp4")) == 1
+    assert t("done") in output
+    assert names(out) == ["Clip.mkv"]
+    assert streams(out / "Clip.mkv") == {"video", "audio", "attachment"}
+    assert step_leftovers(out) == []
+    # Into a container that takes it, the earlier file stays next to the conversion.
+    code, output = run("-y", "--video-format", "webm", url)
+    assert code == 0
+    assert never_said("not_converted", output)
+    assert names(out) == ["Clip.mkv", "Clip.webm"]
+    assert streams(out / "Clip.mkv") == {"video", "audio", "attachment"}
+    assert len(history_rows()) == 3
+
+
+@pytest.mark.parametrize(
+    "left", [["Clip.fv.mp4"], ["Clip.fa.mp4", "Clip.fv.mp4"]], ids=["video-stream", "both-streams"]
+)
+def test_a_merge_that_reuses_a_stream_file_is_replaced_by_its_conversion(
+    run: Any, media_url: str, out: Path, left: list[str]
+) -> None:
+    # yt-dlp counts the merge as this run's download, even when it reused every stream.
+    out.mkdir(parents=True)
+    with urllib.request.urlopen(f"{media_url}/tiny.mp4") as response:
+        body = response.read()
+    for name in left:
+        (out / name).write_bytes(body)
+    code, output = run("-y", "--video-format", "webm", "https://fake.test/merged")
+    assert code == 0
+    assert output.count("has already been downloaded") == len(left)
+    assert names(out) == ["Clip.webm"]
+    found = codecs(out / "Clip.webm")
+    assert found["video"] in {"vp8", "vp9", "av1"}
+    assert found["audio"] in {"vorbis", "opus"}
+    assert t("done") in output
+
+
+def test_a_resumed_download_is_replaced_by_its_conversion(
+    generic: Any, media_url: str, out: Path
+) -> None:
+    out.mkdir(parents=True)
+    with urllib.request.urlopen(f"{media_url}/tiny.webm") as response:
+        body = response.read()
+    (out / "tiny.webm.part").write_bytes(body[: len(body) // 2])
+    code, output = generic("tiny.webm", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["tiny.mp4"]
+    assert codecs(out / "tiny.mp4") == {"video": "h264", "audio": "aac"}
+    assert "Deleting original file" in output
+    assert t("done") in output
+
+
+def test_several_urls_into_a_folder_with_earlier_files(
+    media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    code, _ = several(media_url, out, capfd, "tiny.mp4", "webm.html")
+    assert code == 0
+    assert names(out) == ["tiny.mp4", "webm (1).mp4"]
+    urls = [f"{media_url}/tiny.mp4", f"{media_url}/webm.html"]
+    code = cli.main(["-y", "--video-format", "mkv", "-o", str(out), *urls])
+    captured = capfd.readouterr()
+    output = captured.out + captured.err
+    assert code == 0
+    assert output.count(t("done")) == 2
+    # tiny.mp4 is reused and kept. The page's .webm went into its mp4, so it comes again,
+    # and only that fresh download gives way to its conversion.
+    assert output.count("has already been downloaded") == 1
+    assert output.count("Deleting original file") == 1
+    assert names(out) == ["tiny.mkv", "tiny.mp4", "webm (1).mkv", "webm (1).mp4"]
+    assert video_format(output) == "mkv"
+    assert len(history_rows()) == 4
+
+
+def test_wizard_into_a_folder_with_an_earlier_file(generic: Any, out: Path) -> None:
+    code, _ = generic("tiny.mp4", flags=("-y", "-o", str(out)))
+    assert code == 0
+    flags = ("-i", "--video-format", "webm", "-o", str(out))
+    code, output = generic("tiny.mp4", *SINGLE_WALK, flags=flags)
+    assert code == 0
+    assert f"{wizard._summary_label('container')}: webm" in output
+    assert "has already been downloaded" in output
+    assert names(out) == ["tiny.mp4", "tiny.webm"]
+    assert codecs(out / "tiny.mp4") == {"video": "h264", "audio": "aac"}
+    assert video_format(output) == "webm"
+    assert len(history_rows()) == 2
