@@ -31,7 +31,7 @@ from yt_dlp.utils import (
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
-from .cookies import CookieFailure, cookie_failure, ydl_cookies
+from .cookies import CookieFailure, cookie_failure, logged_failure, ydl_cookies
 from .i18n import t
 from .selection import missing_items
 
@@ -131,6 +131,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     save_images = False
     # len(errors) when the current item started.
     item_errors = 0
+    # Errors beyond the first of an item that failed in several steps.
+    repeated_errors = 0
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.errors: list[str] = []
@@ -186,9 +188,13 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
             result = super().process_info(info_dict)
         except BaseException:
             # Without ignoreerrors, report_error raises from inside process_info.
+            # An exception yt-dlp catches gets its own report, which is the item's one count; a
+            # retry counts afresh, and anything else leaves download() before the count is read.
+            self.repeated_errors += len(self.errors) - self.item_errors
             self.drop_thumbs()
             raise
         if self.item_failed():
+            self.repeated_errors += len(self.errors) - self.item_errors - 1
             self.drop_thumbs()
         else:
             self.images += self.item_images
@@ -246,7 +252,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         return len(self.errors) > self.item_errors
 
     def report_error(self, message: Any, *args: Any, **kwargs: Any) -> None:
-        self.errors.append(str(message))
+        if kwargs.get("is_error", True):
+            self.errors.append(str(message))
         super().report_error(message, *args, **kwargs)
 
     def process_ie_result(self, ie_result: Any, *args: Any, **kwargs: Any) -> Any:
@@ -281,9 +288,22 @@ def load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
 
     yt-dlp loads them on the first request. Under ignoreerrors (-p, --playlist-items) the
     failure then escapes as a bare CookieLoadError; without it, as a DownloadError.
+
+    A keyring error can also end up only logged: always under ignoreerrors, and in any mode when
+    a try inside yt-dlp swallows it. Nothing tells the jar it then returns, decrypted with an
+    empty password, from a good one, so that's a failure too.
     """
     if not spec or not ydl.params.get("cookiesfrombrowser"):
         return
+    logged: list[str] = []
+    report_error = ydl.report_error
+
+    def note(message: Any, *args: Any, **kwargs: Any) -> None:
+        logged.append(str(message))
+        report_error(message, *args, **kwargs)
+
+    # What yt-dlp's cookie logger calls. On the instance: the preview passes a plain YoutubeDL.
+    ydl.report_error = note
     try:
         _ = ydl.cookiejar  # Not cached on failure: every read retries the load.
     except (CookieLoadError, DownloadError) as exc:
@@ -291,6 +311,10 @@ def load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
         if failure is None:
             raise
         raise CookiesUnavailable(spec, failure) from exc
+    finally:
+        del ydl.report_error
+    if logged:
+        raise CookiesUnavailable(spec, logged_failure(logged[0]))
 
 
 def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
@@ -668,7 +692,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     return DownloadResult(
         saved=len(saved),
         skipped=len(skipped),
-        failed=len(ydl.errors),
+        failed=len(ydl.errors) - ydl.repeated_errors,
         missing=missing,
         playlist_count=count,
         subs_missing=opts.subs and not subs_seen,

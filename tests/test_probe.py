@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import sqlite3
 from itertools import combinations
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +18,7 @@ from download_media.probe import (
     _classify_entry,
     _classify_single,
     _media_kind,
+    _ProbeYdl,
     _read_result,
     _short_reason,
     detect_site,
@@ -1104,6 +1108,52 @@ def test_a_browser_that_is_not_installed_is_a_cookie_failure(media_url: str) -> 
     assert result.failed is True
     assert result.cookie_failure is not None
     assert result.cookie_failure.missing is True
+
+
+def test_a_keyring_error_is_a_cookie_failure(
+    media_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tool = tmp_path / "bin" / "kwallet-query"
+    tool.parent.mkdir()
+    tool.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tool.parent))
+    profile = Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "Cookies")
+    con.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('version', '20')")
+    con.execute(
+        "CREATE TABLE cookies (host_key BLOB, name BLOB, value BLOB, encrypted_value BLOB,"
+        " path BLOB, expires_utc INTEGER, is_secure INTEGER)"
+    )
+    con.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
+        (b"127.0.0.1", b"s", b"", b"v11" + b"\0" * 16, b"/"),
+    )
+    con.commit()
+    con.close()
+    result = probe(f"{media_url}/poster.html", "chrome+kwallet6")
+    assert result.failed is True
+    assert result.cookie_failure is not None
+    assert result.cookie_failure.missing is False
+    assert "kwallet-query failed" in result.cookie_failure.reason
+    assert result.error_message is not None
+    assert "kwallet-query failed" in result.error_message
+
+
+def test_what_yt_dlp_reported_outranks_the_exception_after_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def extract(self: Any, _url: str, **_kwargs: Any) -> Any:
+        self.report_error("the real cause")
+        raise RuntimeError("a generic error")
+
+    monkeypatch.setattr(_ProbeYdl, "extract_info", extract)
+    result = probe("http://127.0.0.1:9/page")
+    assert result.failed is True
+    assert result.error_message == "the real cause"
+    assert result.cookie_failure is None
 
 
 def test_a_probe_without_a_browser_has_no_cookie_failure(media_url: str) -> None:

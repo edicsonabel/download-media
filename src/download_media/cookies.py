@@ -112,6 +112,13 @@ _REASON_LENGTH = 160
 _LABELS = re.compile(r"^(?:ERROR:\s*)+")
 
 
+def _reason(message: str) -> str:
+    # yt-dlp's report_error labels the cause, in colour on a terminal; the notice frames it.
+    text = _LABELS.sub("", remove_terminal_sequences(message))
+    lines = text.strip().splitlines()
+    return textwrap.shorten(lines[0] if lines else text, _REASON_LENGTH, placeholder="...")
+
+
 def cookie_failure(exc: BaseException) -> CookieFailure | None:
     """The cookie-load failure behind ``exc``, if that's what it is."""
     # Without ignoreerrors, yt-dlp reports the CookieLoadError, which raises a DownloadError.
@@ -121,16 +128,18 @@ def cookie_failure(exc: BaseException) -> CookieFailure | None:
         return None
     # load_cookies turns any exception into CookieLoadError, raised inside the except block.
     cause = exc.__context__ or exc
-    # yt-dlp's report_error labels the cause, in colour on a terminal; the notice frames it.
-    text = _LABELS.sub("", remove_terminal_sequences(str(cause)))
-    lines = text.strip().splitlines()
-    reason = textwrap.shorten(lines[0] if lines else text, _REASON_LENGTH, placeholder="...")
+    reason = _reason(str(cause))
     missing = (
         isinstance(cause, FileNotFoundError)
-        and text.startswith("could not find ")
-        and " cookies database" in text
+        and reason.startswith("could not find ")
+        and " cookies database" in reason
     )
     return CookieFailure(missing=missing, reason=reason)
+
+
+def logged_failure(message: str) -> CookieFailure:
+    """A keyring error yt-dlp only logged, read like one it raised."""
+    return CookieFailure(missing=False, reason=_reason(message))
 
 
 def secretstorage_hint() -> None:

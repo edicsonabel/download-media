@@ -17,8 +17,8 @@ from typing import Any
 
 from yt_dlp.utils import MEDIA_EXTENSIONS, float_or_none, remove_terminal_sequences
 
-from .cookies import CookieFailure, cookie_failure, ydl_cookies
-from .downloader import _Ydl, is_saveable_image
+from .cookies import CookieFailure, ydl_cookies
+from .downloader import CookiesUnavailable, _Ydl, is_saveable_image, load_browser_cookies
 
 
 class ContentKind(str, Enum):
@@ -364,10 +364,12 @@ def probe(url: str, cookies_browser: str | None = None) -> Probe:
     try:
         with _ProbeYdl(ydl_opts) as ydl:
             errors = ydl.errors
+            load_browser_cookies(ydl, cookies_browser)
             data = ydl.extract_info(url, download=False, process=True)
         return _read_result(url, site, data, errors)
-    except Exception as exc:
-        # A missing browser reports its real cause first, then raises a generic error.
-        result = _read_result(url, site, None, errors or [str(exc)])
-        result.cookie_failure = cookie_failure(exc)
+    except CookiesUnavailable as exc:
+        result = _read_result(url, site, None, [exc.failure.reason])
+        result.cookie_failure = exc.failure
         return result
+    except Exception as exc:
+        return _read_result(url, site, None, errors or [str(exc)])
