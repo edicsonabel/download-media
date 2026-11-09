@@ -249,7 +249,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         return len(self.errors) > self.item_errors
 
     def report_error(self, message: Any, *args: Any, **kwargs: Any) -> None:
-        self.errors.append(str(message))
+        if kwargs.get("is_error", True):
+            self.errors.append(str(message))
         super().report_error(message, *args, **kwargs)
 
     def process_ie_result(self, ie_result: Any, *args: Any, **kwargs: Any) -> Any:

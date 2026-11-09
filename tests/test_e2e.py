@@ -2272,6 +2272,17 @@ def test_an_item_failing_in_two_steps_counts_once(
     assert t("done") in output
 
 
+@pytest.mark.parametrize("flags", [(), ("-p",)], ids=["single", "-p"])
+def test_a_message_yt_dlp_does_not_call_an_error_is_not_a_failure(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, "https://fake.test/unscoped-cookies")
+    assert code == 0
+    assert len(names(out)) == 1
+    assert not said_partial_result(output)
+    assert t("done") in output
+
+
 def test_playlist_where_no_item_is_media_is_a_failure(
     generic: Any, media_url: str, out: Path
 ) -> None:

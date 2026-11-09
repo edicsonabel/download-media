@@ -855,6 +855,11 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result([video, self.url_result(follow("private"))], "post", "Post")
         if page == "images-and-gated":
             return self.playlist_result([self._image("i1"), gated], "post", "Post")
+        if page == "unscoped-cookies":
+            # yt-dlp reports these with is_error=False, and saves the video all the same.
+            clip = self._video("v1")
+            clip["formats"][0]["cookies"] = "a=b"
+            return clip
         if page == "partial-rejected" and self._downloader.cookies_used:
             raise ExtractorError("Failed to parse JSON", expected=True)
         if page == "partial-rejected":
