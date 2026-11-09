@@ -6310,12 +6310,18 @@ def keyring_hint(browser: str = "chrome") -> str:
 def direct(
     media_url: str, home: Path, out: Path, answers: Any, capfd: pytest.CaptureFixture[str]
 ) -> Callable[..., tuple[int, str]]:
-    """Run loopback pages through the real generic extractor in direct mode. No prompts."""
+    """Run loopback pages through the real generic extractor in direct mode.
 
-    def _direct(*argv: str, pages: tuple[str, ...]) -> tuple[int, str]:
-        answers()
+    ``replies`` answer the preview's confirmation, once per URL; without them, any prompt fails.
+    """
+
+    def _direct(
+        *argv: str, pages: tuple[str, ...], replies: tuple[str, ...] = ()
+    ) -> tuple[int, str]:
+        prompts = answers(*replies)
         code = cli.main(["-o", str(out), *argv, *(f"{media_url}/{page}" for page in pages)])
         captured = capfd.readouterr()
+        assert prompts == [t("ask_confirm")] * len(replies)
         return code, captured.out + captured.err
 
     return _direct
@@ -6440,6 +6446,63 @@ def test_a_missing_browser_at_the_last_wizard_step_saves_the_picked_items(
     assert names(home / "Videos") == MULTI
     assert no_browser() in output
     assert "Traceback" not in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+NO_DATABASE = "could not find chrome cookies database"
+
+
+def test_the_preview_names_a_missing_browser_and_still_shows_the_page(
+    direct: Any, out: Path
+) -> None:
+    code, output = direct("--cookies", "chrome", pages=("poster.html",), replies=("",))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert f"  {t('p_title')}: poster (1)" in output
+    # yt-dlp's own line: the download doesn't read the browser a second time.
+    assert output.count(NO_DATABASE) == 1
+    assert names(out) == ["poster (1).mp4"]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(history_rows()) == 1
+
+
+def test_a_preview_cancelled_after_a_missing_browser_still_said_it(direct: Any, out: Path) -> None:
+    # The exit code is row cancel-exits'.
+    _, output = direct("--cookies", "chrome", pages=("poster.html",), replies=("n",))
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert f"  {t('p_title')}: poster (1)" in output
+    assert t("cancelled") in output
+    assert names(out) == []
+    assert commands(output) == []
+
+
+def test_a_dead_page_after_the_preview_with_a_missing_browser(
+    direct: Any, media_url: str, out: Path
+) -> None:
+    code, output = direct("--cookies", "chrome", pages=("status/404",), replies=("",))
+    assert code == 1
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert output.count(NO_DATABASE) == 1
+    assert t("failed", f"{media_url}/status/404") in output
+    assert keyring_hint() not in output
+    assert "Traceback" not in output
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+    assert names(out) == []
+
+
+def test_every_preview_names_its_missing_browser(direct: Any, out: Path) -> None:
+    pages = ("poster.html", "multi.html")
+    code, output = direct("--cookies", "chrome", pages=pages, replies=("", ""))
+    assert code == 0
+    assert output.count(no_browser()) == 2
+    assert output.count(NO_DATABASE) == 2
+    assert len(names(out)) == 5  # Single mode keeps every video of a multi-video page.
     [line] = commands(output)
     assert "--cookies" not in shlex.split(line)
 
