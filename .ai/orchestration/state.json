@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T10:54:10-04:00",
+  "updated": "2026-11-09T11:14:20-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2082,8 +2082,8 @@
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
       "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": ".worktrees/fix-p-double-count",
@@ -2094,7 +2094,8 @@
         "7046747",
         "dd0a6dd",
         "0f4ee07",
-        "bb5cbf1"
+        "bb5cbf1",
+        "d147530"
       ],
       "review": {
         "approved": false,
@@ -2137,6 +2138,13 @@
           "result": "changes_requested",
           "at": "2026-11-09T10:54:10-04:00",
           "note": "Round 1. 72 tests added. Gate exit 0 at bb5cbf1, 2077 passed + 2 xfailed es/en. Mutation 30/32, m14 and m15 equivalent. 20 real runs per locale match disk, no Cookie header. One medium finding, same line on main, but the spec's Goal needs it. No strict xfail committed: the orchestrator's dispatch limited it to out-of-item issues, against the role file. Planner: raw ERROR: 'streams' reaches the user; -l shows the kwallet-query warning."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "blocked",
+          "at": "2026-11-09T11:14:20-04:00",
+          "note": "Round 1 finding fixed in d147530, new test added. Gate NOT completed: the system stopped it for low memory during tests (en) at about 53%, no exit code; es 2079 passed + 2 xfailed, 98.87%; lint, format, mypy passed. The system notice said not to restart it unprompted, so the rerun waits on the human. Real runs: 1 of 2, 1 failed, exit 0, en and es."
         }
       ]
     }
