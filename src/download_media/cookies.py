@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shlex
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
 from yt_dlp.cookies import CookieLoadError
-from yt_dlp.utils import DownloadError
+from yt_dlp.utils import DownloadError, remove_terminal_sequences
 
 from .config import BROWSERS
 from .i18n import t
@@ -108,6 +109,7 @@ class CookieFailure:
 
 
 _REASON_LENGTH = 160
+_LABELS = re.compile(r"^(?:ERROR:\s*)+")
 
 
 def cookie_failure(exc: BaseException) -> CookieFailure | None:
@@ -119,7 +121,8 @@ def cookie_failure(exc: BaseException) -> CookieFailure | None:
         return None
     # load_cookies turns any exception into CookieLoadError, raised inside the except block.
     cause = exc.__context__ or exc
-    text = str(cause)
+    # yt-dlp's report_error labels the cause, in colour on a terminal; the notice frames it.
+    text = _LABELS.sub("", remove_terminal_sequences(str(cause)))
     lines = text.strip().splitlines()
     reason = textwrap.shorten(lines[0] if lines else text, _REASON_LENGTH, placeholder="...")
     missing = (
