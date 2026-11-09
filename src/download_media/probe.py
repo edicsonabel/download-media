@@ -18,7 +18,13 @@ from typing import Any
 from yt_dlp.utils import MEDIA_EXTENSIONS, float_or_none, remove_terminal_sequences
 
 from .cookies import CookieFailure, ydl_cookies
-from .downloader import CookiesUnavailable, _Ydl, is_saveable_image, load_browser_cookies
+from .downloader import (
+    CookiesUnavailable,
+    _ext_says_audio,
+    _Ydl,
+    is_saveable_image,
+    load_browser_cookies,
+)
 
 
 class ContentKind(str, Enum):
@@ -181,16 +187,6 @@ def _short_reason(message: str) -> str:
             break
         kept.append(sentence)
     return textwrap.shorten(" ".join(kept) or text, _REASON_LENGTH, placeholder="...")
-
-
-# yt-dlp lists these as audio, yet they can hold a video it would keep. A wrong
-# "audio" converts and deletes that video; a wrong "video" only keeps the raw file.
-# .m4a isn't one: yt-dlp's metadata step already strips video from it.
-_AUDIO_LISTED_BUT_MAY_HOLD_VIDEO = frozenset({"asf", "m4b", "ogg", "ogx", "wma"})
-
-
-def _ext_says_audio(ext: Any) -> bool:
-    return ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO
 
 
 def _audio_by_label_only(fmt: dict[str, Any]) -> bool:
