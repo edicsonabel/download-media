@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T14:57:54-04:00",
+  "updated": "2026-11-09T15:05:56-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2210,6 +2210,27 @@
           "result": "validated",
           "at": "2026-11-09T14:57:54-04:00",
           "note": "All 23 criteria hold. Runs 1-3 and run 3 with a keyring error on main match the spec, no Cookie header sent. Criteria tests 92 passed; src reverted fails 64 plus a collection error; round-1 line alone reverted fails 3. Gate not re-run (tech-lead gate on 6e53450 plus CI run 42676371106 cover it); no live tests (spec needs none). Spec done, records the round-1 line and ReExtractInfo; PLAN row 45 done. Planner: Next paragraph, 0.4.0 review list with D1's exit 0 to 1, spec 50 D2 now covers keyring errors. Worktree and branch removed."
+        }
+      ]
+    },
+    "fix/container-choice": {
+      "type": "fix",
+      "title": "Make the container choice hold on single-format sources",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/30-container-choice.md",
+      "branch": "fix/container-choice",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-09T15:05:56-04:00",
+          "note": "Human picked container-choice (PLAN row 30, the only open P1) on the planner's recommendation. The remux-or-recode call is the spec's first decision, made on the architect's measurements."
         }
       ]
     }
