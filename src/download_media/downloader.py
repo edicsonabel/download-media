@@ -20,7 +20,13 @@ from yt_dlp.cookies import CookieLoadError
 from yt_dlp.networking.exceptions import IncompleteRead, RequestError
 from yt_dlp.postprocessor.common import PostProcessor
 from yt_dlp.postprocessor.embedthumbnail import EmbedThumbnailPP
-from yt_dlp.postprocessor.ffmpeg import FFmpegEmbedSubtitlePP, FFmpegMetadataPP
+from yt_dlp.postprocessor.ffmpeg import (
+    FFmpegEmbedSubtitlePP,
+    FFmpegMetadataPP,
+    FFmpegVideoConvertorPP,
+    FFmpegVideoRemuxerPP,
+    resolve_mapping,
+)
 from yt_dlp.utils import (
     MEDIA_EXTENSIONS,
     DownloadError,
@@ -46,6 +52,19 @@ def _ext_says_audio(ext: Any) -> bool:
     return ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO
 
 
+# The generic extractor leaves an image's codecs unknown, so yt-dlp's own guard lets it through.
+_IMAGE_EXTS = frozenset({*MEDIA_EXTENSIONS.thumbnails, "gif", "jpeg"})
+
+
+def _converts(info: dict[str, Any]) -> bool:
+    """What the probe calls video: the container choice applies to it."""
+    ext = (info.get("ext") or "").lower()
+    vcodec = info.get("vcodec")
+    if vcodec == "none" or ext in _IMAGE_EXTS:
+        return False
+    return bool(vcodec) or not _ext_says_audio(ext)
+
+
 @dataclass(frozen=True, slots=True)
 class DownloadResult:
     """What one URL produced; multi-entry URLs can succeed only in part."""
@@ -64,6 +83,8 @@ class DownloadResult:
     untagged: tuple[str, ...] = ()
     # Audio files saved without the cover image they were meant to get.
     no_cover: tuple[str, ...] = ()
+    # Videos kept as downloaded because ffmpeg couldn't put them in the chosen container.
+    not_converted: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -396,11 +417,20 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
             # mp4 means "plays everywhere": WhatsApp, iOS and most TVs reject
             # VP9/AV1 even inside an mp4 container.
             ydl["format_sort"] = ["vcodec:h264", "acodec:aac"]
+        merge = opts.video_format
+        if opts.video_format == "webm":
+            # A webm on offer needs no re-encode; streams webm can't hold merge into mkv,
+            # which the container step then re-encodes.
+            ydl["format_sort"] = ["ext:webm:webm"]
+            merge = "webm/mkv"
         ydl.update(
             {
                 "format": fmt,
-                "merge_output_format": opts.video_format,
-                # download() adds the metadata step (_TagSource).
+                "merge_output_format": merge,
+                # As yt-dlp's --remux-video and --recode-video set it: a rerun finds the
+                # converted file and downloads nothing.
+                "final_ext": opts.video_format,
+                # download() adds the container step and the metadata step (_TagSource).
                 "postprocessors": [],
             }
         )
@@ -427,10 +457,12 @@ class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
     skipping the new video and re-tagging the old file with its metadata.
     """
 
-    def __init__(self, final_ext: str | None) -> None:
+    def __init__(self, final_ext: str | None, *, container: str | None = None) -> None:
         super().__init__()
-        # Audio extraction changes the extension after download.
+        # Audio extraction changes the extension after download, and so does the container
+        # step for what it converts.
         self._final_ext = final_ext
+        self._container = container
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
         # Carousel items share both title and webpage_url, so the check below
@@ -439,9 +471,15 @@ class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
             info["_name_suffix"] = f" [{info.get('id')}]"
             return [], info
         path = Path(self._downloader.prepare_filename(info))
+        paths = [path]
         if self._final_ext:
-            path = path.with_suffix(f".{self._final_ext}")
-        if path.exists() and _source_url(path) != info.get("webpage_url"):
+            paths = [path.with_suffix(f".{self._final_ext}")]
+        elif self._container:
+            # yt-dlp's final_ext: it looks for the container's name first, then the item's own,
+            # for any item, and takes the first it finds as this one already downloaded.
+            paths.insert(0, path.with_suffix(f".{self._container}"))
+        taken = next((p for p in paths if p.exists()), None)
+        if taken and _source_url(taken) != info.get("webpage_url"):
             info["_name_suffix"] = f" [{info.get('id')}]"
         return [], info
 
@@ -581,6 +619,52 @@ class _TagSource(FFmpegMetadataPP):  # type: ignore[misc]
             return [], info
 
 
+class _ContainerStep(FFmpegVideoConvertorPP):  # type: ignore[misc]
+    """yt-dlp's recode or remux into the chosen container, applied to what the probe calls video.
+
+    A file ffmpeg can't convert is kept as downloaded: yt-dlp would report a file already on
+    disk as a failed download, and stop a carousel in single mode.
+    """
+
+    def __init__(self, downloader: Any, container: str, not_converted: list[str]) -> None:
+        super().__init__(downloader, preferedformat=container)
+        self._not_converted = not_converted
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        path, ext = info["filepath"], (info.get("ext") or "").lower()
+        target, already = resolve_mapping(ext, self.mapping)
+        # yt-dlp's own skip prints a line, which nearly every mp4 download would get.
+        if already or not _converts(info):
+            return [], info
+        # ffmpeg reads a text body as a subtitle track, and would convert it into a file that
+        # passes for saved. The metadata step fails it, as it does without a conversion.
+        if not _has_media_streams(path):
+            return [], info
+        converted = Path(replace_extension(path, target, ext))
+        converted_was_there = converted.exists()
+        try:
+            return super().run(info)  # type: ignore[no-any-return]
+        except PostProcessingError:
+            # ffmpeg leaves an empty file at the target.
+            if not converted_was_there:
+                converted.unlink(missing_ok=True)
+            self._not_converted.append(Path(path).name)
+            return [], info
+
+
+class _RecodeTo(_ContainerStep):
+    @classmethod
+    def pp_key(cls) -> str:
+        # Keeps the [VideoConvertor] tag it prints, and its postprocessor_args key.
+        return "VideoConvertor"
+
+
+class _RemuxTo(_ContainerStep, FFmpegVideoRemuxerPP):  # type: ignore[misc]
+    @classmethod
+    def pp_key(cls) -> str:
+        return "VideoRemuxer"
+
+
 class _EmbedCover(EmbedThumbnailPP):  # type: ignore[misc]
     """yt-dlp's cover step, except that a cover it can't embed never fails the audio.
 
@@ -662,6 +746,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     ydl_opts["match_filter"] = _skip_items_without_media(skipped, keep_images=not opts.audio_only)
     untagged: list[str] = []
     no_cover: list[str] = []
+    not_converted: list[str] = []
     with _Ydl(ydl_opts) as ydl:
         load_browser_cookies(ydl, opts.cookies_browser)
         ydl.save_images = True
@@ -673,12 +758,17 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
                     no_cover.append(Path(path).name)
 
         ydl.add_post_hook(keep)
+        container = None if opts.audio_only else opts.video_format
+        if container:
+            # First, so the file gets its tags and subtitles in its final container.
+            step = _RemuxTo if container == "mkv" else _RecodeTo
+            ydl.add_post_processor(step(ydl, container, not_converted), when="post_process")
         # Appended after the params' postprocessors: audio extraction comes first.
         if ydl_opts.get("writethumbnail"):
             ydl.add_post_processor(_EmbedCover(ydl), when="post_process")
         ydl.add_post_processor(_TagSource(ydl, untagged), when="post_process")
         final_ext = opts.audio_format if opts.audio_only else None
-        ydl.add_post_processor(_AvoidNameClash(final_ext), when="video")
+        ydl.add_post_processor(_AvoidNameClash(final_ext, container=container), when="video")
         counts: list[int | None] = []
         items = opts.playlist_items if opts.playlist_mode == "yes" else None
         ydl.count_entries = bool(items)
@@ -709,6 +799,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         subs_not_embedded=tuple(not_embedded),
         untagged=tuple(untagged),
         no_cover=tuple(no_cover),
+        not_converted=tuple(not_converted),
     )
 
 

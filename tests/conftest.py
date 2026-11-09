@@ -96,6 +96,7 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
     # doesn't send .ogg as audio/*.
     extensions_map: ClassVar[dict[str, str]] = {
         ".asf": "video/x-ms-asf",
+        ".flv": "video/x-flv",
         ".gif": "image/gif",
         ".html": "text/html",
         ".jpg": "image/jpeg",
@@ -205,6 +206,10 @@ JUNK = "typed/video/mp4/en.vtt/junk.mp4"
 JUNK_2 = "typed/video/mp4/es.vtt/junk-2.mp4"
 # yt-dlp names a link with no extension and no media type .unknown_video.
 NO_EXT_VIDEO = "typed/application/octet-stream/tiny.mp4/stream"
+# A video, and an audio, under extensions yt-dlp lists as audio: ffmpeg can't tag either, and
+# the container step leaves both alone.
+OGA_VIDEO = "typed/audio/ogg/tiny.mp4/clip.oga"
+WEBA = "typed/audio/webm/audio.webm/clip.weba"
 # Thumbnails ffmpeg can't embed: a text body, and a WebP signature with nothing after it,
 # which yt-dlp renames to .webp and then fails to convert.
 JUNK_IMAGE = "typed/image/jpeg/en.vtt/t.jpg"
@@ -294,8 +299,9 @@ def _write_generic_pages(root: Path, base: str) -> None:
             '<video src="v1.mp4"></video><video src="tiny.jpg"></video><audio src="a1.m4a"></audio>'
         ),
         "no-video": '<video src="tiny.jpg"></video><audio src="a1.m4a"></audio>',
-        # ffmpeg can't write tags to an .ogx, and can't read a text body at all.
-        "ogx-and-mp4": '<video src="theora.ogx"></video><video src="tiny.mp4"></video>',
+        # ffmpeg can't write tags to an .oga holding a video, and can't read a text body at all.
+        # The container step skips the .oga: yt-dlp lists it as audio.
+        "oga-and-mp4": f'<video src="{OGA_VIDEO}"></video><video src="tiny.mp4"></video>',
         "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
         "all-junk": f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>',
         "two-junk-and-mp4": (
@@ -407,6 +413,9 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         shutil.copy(root / "tiny.m4a", root / f"{copy}.m4a")
     for name, text in _SUBTITLES.items():
         (root / name).write_text(text, encoding="utf-8")
+    # An attachment stream, which ffmpeg can't put in an mp4: by stream copy, no new encoder.
+    attach = ["-attach", str(root / "en.vtt"), "-metadata:s:t", "mimetype=text/plain"]
+    subprocess.run([*source, *attach, "-c", "copy", str(root / "attached.mkv")], check=True)
     # Enough for imghdr to say webp, and for ffmpeg to fail on it.
     (root / "webp-signature.bin").write_bytes(b"RIFF\0\0\0\0WEBP")
     handler = functools.partial(_QuietHandler, directory=str(root))
@@ -621,13 +630,14 @@ class FakeSiteIE(InfoExtractor):
             # A site extractor's audio with no codec named: 71 modules build this shape.
             label = {"format_id": "a", "url": f"{self.media_url}/theora.ogg", "ext": "ogg"}
             return self._with_formats("a1", {**label, "vcodec": "none"})
-        if page in ("ogx", "ogx-chapters", "ogx-subs"):
-            # A format ffmpeg can read but has no muxer for, so it can't write tags to it.
-            ogx = {"format_id": "o", "url": f"{self.media_url}/theora.ogx", "ext": "ogx"}
-            video = self._with_formats("x1", ogx)
-            if page == "ogx-chapters":
+        if page in ("weba", "weba-chapters", "weba-subs"):
+            # A format ffmpeg can read but has no muxer for, so it can't write tags to it. The
+            # container step skips it: yt-dlp lists .weba as audio.
+            weba = {"format_id": "o", "url": f"{self.media_url}/audio.webm", "ext": "weba"}
+            video = self._with_formats("x1", weba)
+            if page == "weba-chapters":
                 video["chapters"] = [{"start_time": 0, "end_time": 0.1, "title": "Start"}]
-            if page == "ogx-subs":
+            if page == "weba-subs":
                 video["subtitles"] = self._subtitles("en.vtt")
             return video
         if page == "junk-carousel":
@@ -983,6 +993,25 @@ class FakeSiteIE(InfoExtractor):
             return self.playlist_result([self._video("s1"), self._video("s2")], "post", "Post")
         return None
 
+    def _container_shape(self, page: str) -> dict[str, Any] | None:
+        """Sources in a container other than the one asked for."""
+        webm = {"format_id": "w", "url": f"{self.media_url}/tiny.webm", "ext": "webm"}
+        attached = {"format_id": "x", "url": f"{self.media_url}/attached.mkv", "ext": "mkv"}
+        if page in ("single-webm", "single-webm-b"):
+            # Same title, different pages: two videos that only share a name.
+            video = self._video(page, page=page)
+            video["formats"] = [{**webm, "vcodec": "vp8", "acodec": "vorbis"}]
+            return video
+        attached_video = self._with_formats("x1", {**attached, "vcodec": "h264", "acodec": "aac"})
+        if page == "attached":
+            return attached_video
+        if page == "attached-carousel":
+            return self.playlist_result([attached_video, self._video("v1")], "post", "Post")
+        if page == "mp4-or-webm":
+            mp4 = {"format_id": "alt", "url": f"{self.media_url}/tiny.mp4", "ext": "mp4"}
+            return self._with_formats("v1", mp4, webm)
+        return None
+
     @staticmethod
     def _image(item: str) -> dict[str, Any]:
         return {
@@ -1002,6 +1031,7 @@ class FakeSiteIE(InfoExtractor):
             or self._edge_shape(page)
             or self._subtitle_shape(page)
             or self._subtitle_attack_shape(page)
+            or self._container_shape(page)
         )
         if shape is not None:
             return shape

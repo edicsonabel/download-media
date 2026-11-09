@@ -118,6 +118,56 @@ def test_audio_only_skips_h264_preference() -> None:
     assert "format_sort" not in ydl
 
 
+@pytest.mark.parametrize("video_format", ["mp4", "mkv", "webm"])
+def test_final_ext_is_the_container_in_video_mode(video_format: str) -> None:
+    opts = DownloadOptions(urls=["http://x"], video_format=video_format)
+    assert build_ydl_opts(opts, Path("/tmp/out"))["final_ext"] == video_format
+
+
+def test_audio_only_sets_no_final_ext() -> None:
+    opts = DownloadOptions(urls=["http://x"], audio_only=True, video_format="mkv")
+    assert "final_ext" not in build_ydl_opts(opts, Path("/tmp/out"))
+
+
+def test_webm_prefers_webm_and_merges_what_it_cannot_hold_into_mkv() -> None:
+    opts = DownloadOptions(urls=["http://x"], video_format="webm")
+    ydl = build_ydl_opts(opts, Path("/tmp/out"))
+    assert ydl["format_sort"] == ["ext:webm:webm"]
+    assert ydl["merge_output_format"] == "webm/mkv"
+
+
+@pytest.mark.parametrize("video_format", ["mp4", "mkv"])
+def test_mp4_and_mkv_merge_into_themselves(video_format: str) -> None:
+    opts = DownloadOptions(urls=["http://x"], video_format=video_format)
+    assert build_ydl_opts(opts, Path("/tmp/out"))["merge_output_format"] == video_format
+
+
+@pytest.mark.parametrize(
+    ("info", "expected"),
+    [
+        ({"vcodec": "none", "acodec": "aac", "ext": "mp4"}, False),
+        ({"vcodec": "none", "acodec": None, "ext": "webm"}, False),
+        ({"vcodec": "vp9", "ext": "webm"}, True),
+        # A named codec wins over an audio extension, as in the probe.
+        ({"vcodec": "h264", "ext": "m4a"}, True),
+        ({"vcodec": None, "ext": "mp4"}, True),
+        ({"ext": "ogg"}, True),
+        ({"ext": "ogx"}, True),
+        ({"ext": "m4a"}, False),
+        ({"ext": "mp3"}, False),
+        ({"ext": "jpg"}, False),
+        ({"ext": "JPG"}, False),
+        ({"ext": "gif"}, False),
+        ({"ext": "jpeg"}, False),
+        ({"vcodec": "mjpeg", "ext": "png"}, False),
+    ],
+)
+def test_converts_reads_like_the_probe(info: dict[str, Any], expected: bool) -> None:
+    from download_media.downloader import _converts
+
+    assert _converts(info) is expected
+
+
 def _clash(tmp_path: Path, monkeypatch, *, exists: bool, stored_url: str | None, final_ext=None):
     from yt_dlp import YoutubeDL
 
@@ -161,6 +211,55 @@ def test_no_existing_file_keeps_name(tmp_path: Path, monkeypatch) -> None:
 def test_audio_checks_final_extension(tmp_path: Path, monkeypatch) -> None:
     got = _clash(tmp_path, monkeypatch, exists=True, stored_url=None, final_ext="mp3")
     assert got == " [NEW]"
+
+
+def _container_clash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ext: str, existing: dict[str, str | None]
+) -> str | None:
+    """A new item of ``ext`` under ``container="mp4"``, with files whose source URLs are given."""
+    from yt_dlp import YoutubeDL
+
+    from download_media import downloader
+
+    stored = {}
+    for name, url in existing.items():
+        (tmp_path / name).write_bytes(b"")
+        stored[tmp_path / name] = url
+    monkeypatch.setattr(downloader, "_source_url", lambda path: stored[path])
+    ydl = YoutubeDL(
+        {"outtmpl": str(tmp_path / "%(title)s%(_name_suffix|)s.%(ext)s"), "quiet": True}
+    )
+    pp = downloader._AvoidNameClash(None, container="mp4")
+    pp.set_downloader(ydl)
+    info = {"id": "NEW", "title": "Clip", "ext": ext, "webpage_url": "https://site/NEW"}
+    _, info = pp.run(info)
+    return info.get("_name_suffix")
+
+
+def test_a_container_checks_the_converted_name(tmp_path: Path, monkeypatch) -> None:
+    other = {"Clip.mp4": "https://site/OLD"}
+    assert _container_clash(tmp_path, monkeypatch, "webm", other) == " [NEW]"
+
+
+def test_a_container_keeps_the_name_of_the_same_video(tmp_path: Path, monkeypatch) -> None:
+    same = {"Clip.mp4": "https://site/NEW"}
+    assert _container_clash(tmp_path, monkeypatch, "webm", same) is None
+
+
+def test_a_container_still_checks_the_downloaded_name(tmp_path: Path, monkeypatch) -> None:
+    other = {"Clip.webm": "https://site/OLD"}
+    assert _container_clash(tmp_path, monkeypatch, "webm", other) == " [NEW]"
+
+
+def test_the_converted_name_decides_first(tmp_path: Path, monkeypatch) -> None:
+    # yt-dlp takes Clip.mp4 as this video, so a different Clip.webm doesn't matter.
+    both = {"Clip.mp4": "https://site/NEW", "Clip.webm": "https://site/OLD"}
+    assert _container_clash(tmp_path, monkeypatch, "webm", both) is None
+
+
+def test_an_image_checks_its_own_name(tmp_path: Path, monkeypatch) -> None:
+    assert _container_clash(tmp_path, monkeypatch, "jpg", {"Clip.jpg": None}) == " [NEW]"
+    assert _container_clash(tmp_path, monkeypatch, "jpg", {"Clip.jpg": "https://site/NEW"}) is None
 
 
 def test_single_video_template_has_optional_suffix() -> None:
