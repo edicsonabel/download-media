@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T19:58:26-04:00",
+  "updated": "2026-11-08T20:07:50-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1987,6 +1987,41 @@
           "result": "done",
           "at": "2026-11-08T19:58:26-04:00",
           "note": "Worktree and branch removed. No behaviour change; nothing for the 0.4.0 review list."
+        }
+      ]
+    },
+    "fix/cookie-report": {
+      "type": "fix",
+      "title": "Finish the cookie-failure report",
+      "stage": "development",
+      "status": "in_progress",
+      "next_agent": "developer",
+      "doc": ".ai/specs/50-cookie-report.md",
+      "branch": "fix/cookie-report",
+      "worktree": ".worktrees/fix-cookie-report",
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-08T19:58:41-04:00",
+          "note": "Human picked format-baseline with cookie-report (PLAN row 50) to follow."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-08T20:07:50-04:00",
+          "note": "Spec 26d5702. All 4 parts reproduced on 807a4c8 (loopback, env -i, empty HOME, dead D-Bus). Design: public load_browser_cookies called by _show_preview first (report once, preview without cookies, no second browser read; cookies_dropped keeps spec 26 D6); done_without_cookies line after Done.; cookie_failure strips ANSI + leading ERROR:; es 'Se continúa sin cookies.'. D4 cli.py:423 hint stays in row 02; D5 row 63 separate, run after 50. Planner: yt-dlp pip advice vs pacman hint; single-mode miscount with unreachable keyring (row 45 not -p only); line numbers moved after format-baseline. 0.4.0 review: preview names cookie failure + shows metadata, new line after Done., no ERROR: in reason, es wording."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T20:07:50-04:00",
+          "note": "Under the human's delegation: D1-D7 recommended options (all A / keep separate). Not breaking. Published-behaviour changes go on the 0.4.0 review list."
         }
       ]
     }
