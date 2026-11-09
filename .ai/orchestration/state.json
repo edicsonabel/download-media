@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T09:14:45-04:00",
+  "updated": "2026-11-09T09:36:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2082,12 +2082,14 @@
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "ebb51d5"
+      ],
       "review": null,
       "history": [
         {
@@ -2096,6 +2098,13 @@
           "result": "approved",
           "at": "2026-11-09T09:14:45-04:00",
           "note": "Human picked p-double-count (PLAN row 45) as the next item, on the planner's recommendation."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-09T09:36:13-04:00",
+          "note": "Spec ebb51d5. Reproduced on 728834b (loopback, fresh HOME, dead D-Bus, fake profile): 1 of 2 on one video, 2 of 3 on two for 4 keyring causes, and with no cookies -y -p -a says 1 of 3, 2 failed. Decisions D1-D3. Prototype 42 lines: en suite 1972 passed, 3 failed (1 named flip, 2 long-TMPDIR failures that also occur on main). Reverses spec 26's Out line; closes the first of spec 50's exceptions. Planner: PLAN row 45 to spec; keyring answering with no error but decrypting nothing (basictext v11) still silent; isolated_env bus socket breaks under a long TMPDIR; -l shows keyring WARNING lines; row 66 also covers -p paths."
         }
       ]
     }
