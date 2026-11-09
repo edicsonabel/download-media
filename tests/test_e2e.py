@@ -6453,6 +6453,84 @@ def test_a_missing_browser_at_the_last_wizard_step_saves_the_picked_items(
 NO_DATABASE = "could not find chrome cookies database"
 
 
+def without_cookies(browser: str = "chrome") -> str:
+    return t("done_without_cookies", browser)
+
+
+def after_done(output: str) -> list[str]:
+    """The line after each t("done")."""
+    lines = [line.strip() for line in output.splitlines()]
+    return [lines[i + 1] for i, line in enumerate(lines) if line == t("done")]
+
+
+@pytest.mark.parametrize(
+    ("flags", "page"),
+    [
+        ((), "poster.html"),
+        (("-p",), "multi.html"),
+        (("--playlist-items", "1,2"), "multi.html"),
+    ],
+)
+def test_a_run_without_the_asked_cookies_says_so_after_done(
+    direct: Any, flags: tuple[str, ...], page: str
+) -> None:
+    code, output = direct("-y", *flags, "--cookies", "chrome", pages=(page,))
+    assert code == 0
+    assert output.count(without_cookies()) == 1
+    assert after_done(output) == [without_cookies()]
+
+
+def test_a_partial_result_without_the_asked_cookies_says_so_after_done(direct: Any) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("half-gone.html",))
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert after_done(output) == [without_cookies()]
+
+
+def test_nothing_saved_without_the_asked_cookies_has_no_closing_line(direct: Any) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("status/404",))
+    assert code == 1
+    assert without_cookies() not in output
+
+
+def test_cookies_refused_by_the_site_say_so_after_done(run: Any, out: Path) -> None:
+    code, output = run("-y", "--cookies", "brave", "https://fake.test/rejects-cookies")
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.index(t("cookies_retry", "brave")) < output.index(t("done"))
+    assert after_done(output) == [without_cookies("brave")]
+
+
+def test_a_missing_browser_at_the_last_wizard_step_says_so_after_done(generic: Any) -> None:
+    code, output = generic("multi.html", *PICKER_WALK[:-1], CHROME)
+    assert code == 0
+    assert after_done(output) == [without_cookies()]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ("--cookies", "firefox", "https://fake.test/needs-cookies"),  # The cookies were used.
+        (VIDEO,),
+    ],
+)
+def test_no_closing_line_without_a_drop(run: Any, argv: tuple[str, ...]) -> None:
+    code, output = run("-y", *argv)
+    assert code == 0
+    assert t("done") in output
+    assert unreadable() not in output
+    assert t("done_without_cookies", "\0").partition("\0")[0] not in output
+
+
+def test_no_closing_line_after_the_wizard_probe_drops_the_browser(generic: Any) -> None:
+    # The walk already shows "No cookies", and the download had no browser left to drop.
+    code, output = generic("poster.html", *SINGLE_WALK, flags=("-i", "--cookies", "chrome"))
+    assert code == 0
+    assert no_browser() in output
+    assert t("done") in output
+    assert without_cookies() not in output
+
+
 def test_the_preview_names_a_missing_browser_and_still_shows_the_page(
     direct: Any, out: Path
 ) -> None:
@@ -6464,6 +6542,7 @@ def test_the_preview_names_a_missing_browser_and_still_shows_the_page(
     # yt-dlp's own line: the download doesn't read the browser a second time.
     assert output.count(NO_DATABASE) == 1
     assert names(out) == ["poster (1).mp4"]
+    assert after_done(output) == [without_cookies()]
     [line] = commands(output)
     assert "--cookies" not in shlex.split(line)
     assert len(history_rows()) == 1
@@ -6490,6 +6569,7 @@ def test_a_dead_page_after_the_preview_with_a_missing_browser(
     assert output.count(NO_DATABASE) == 1
     assert t("failed", f"{media_url}/status/404") in output
     assert keyring_hint() not in output
+    assert without_cookies() not in output
     assert "Traceback" not in output
     [line] = commands(output)
     assert "--cookies chrome" in line
@@ -6503,6 +6583,7 @@ def test_every_preview_names_its_missing_browser(direct: Any, out: Path) -> None
     assert output.count(no_browser()) == 2
     assert output.count(NO_DATABASE) == 2
     assert len(names(out)) == 5  # Single mode keeps every video of a multi-video page.
+    assert after_done(output) == [without_cookies()] * 2
     [line] = commands(output)
     assert "--cookies" not in shlex.split(line)
 
@@ -6766,6 +6847,8 @@ def test_unreadable_cookies_in_both_languages(
     assert said["cookies_unreadable"].format("safari", "unsupported platform: linux") in output
     assert other["cookies_unreadable"].format("safari", "unsupported platform: linux") not in output
     assert said["done"] in output
+    assert said["done_without_cookies"].format("safari") in output
+    assert other["done_without_cookies"].format("safari") not in output
 
 
 def test_the_spanish_notices_say_the_run_goes_on() -> None:

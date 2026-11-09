@@ -56,6 +56,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "ask_confirm": "¿Continuar con la descarga? [S/n]: ",
         "downloading": "Descargando...",
         "done": "Listo.",
+        "done_without_cookies": "Guardado sin las cookies de {0}: es lo que el sitio muestra sin iniciar sesión.",
         "untagged": (
             "{}: guardado, pero ffmpeg no pudo escribir sus metadatos, así que al repetir la "
             "descarga no se reconocerá y puede guardarse otra copia."
@@ -155,6 +156,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "ask_confirm": "Proceed with download? [Y/n]: ",
         "downloading": "Downloading...",
         "done": "Done.",
+        "done_without_cookies": "Saved without {0} cookies: this is what the site shows without logging in.",
         "untagged": (
             "{}: saved, but ffmpeg couldn't write its metadata, so a rerun won't recognize it "
             "and may save another copy."

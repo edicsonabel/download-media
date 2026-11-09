@@ -396,6 +396,9 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     if result.subs_missing:
         warn(t("subs_none", effective.sub_langs))
     ok(t("done"))
+    if cookies_dropped and opts.cookies_browser:
+        # Long runs scroll the notice away, and the site may still answer with its public page.
+        warn(t("done_without_cookies", browser_of(opts.cookies_browser)))
     history.append(
         url,
         "audio" if opts.audio_only else "video",
