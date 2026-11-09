@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T12:54:11-04:00",
+  "updated": "2026-11-09T13:10:08-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2081,9 +2081,9 @@
     "fix/p-double-count": {
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": ".worktrees/fix-p-double-count",
@@ -2095,13 +2095,12 @@
         "dd0a6dd",
         "0f4ee07",
         "bb5cbf1",
-        "d147530"
+        "d147530",
+        "6dc140e"
       ],
       "review": {
-        "approved": false,
-        "findings": [
-          "medium downloader.py:189-192 an item that reports an error under ignoreerrors and then raises is counted twice: -y -p -a on a poster video serving HTML says 1 of 3, 2 failed for 2 items; also --playlist-items -a"
-        ]
+        "approved": true,
+        "findings": []
       },
       "history": [
         {
@@ -2159,6 +2158,13 @@
           "result": "done",
           "at": "2026-11-09T12:54:11-04:00",
           "note": "Gate rerun by the orchestrator on d147530: exit 0, 2079 passed + 2 xfailed es/en, 99% coverage. Round 1 fix goes back to testing."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-09T13:10:08-04:00",
+          "note": "Round 1 closed: real runs say 1 of 2, 1 failed, en and es; fix line removed gives 1 of 3. ReExtractInfo pinned in 6dc140e (4 cases). Mutation on the new line 6/6. Gate exit 0 at 6dc140e, 2083 passed + 2 xfailed es/en, 99%."
         }
       ]
     }
