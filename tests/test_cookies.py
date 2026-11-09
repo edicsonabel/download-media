@@ -215,6 +215,20 @@ def test_an_unreachable_keyring_is_unreadable() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "text", ["could not find the local state file", "the cookies database is locked"]
+)
+def test_another_missing_file_is_not_a_missing_browser(text: str) -> None:
+    assert cookie_failure(load_error(FileNotFoundError(text))) == CookieFailure(False, text)
+
+
+def test_a_missing_browser_under_a_long_path_is_still_missing() -> None:
+    text = f'could not find chrome cookies database in "/{"long/" * 100}"'
+    failure = cookie_failure(load_error(FileNotFoundError(text)))
+    assert failure is not None
+    assert failure.missing is True
+
+
 def test_the_reason_is_one_short_line() -> None:
     error = load_error(RuntimeError("first line " + "x" * 300 + "\nsecond line"))
     failure = cookie_failure(error)
@@ -301,6 +315,7 @@ def test_a_logged_error_reads_like_a_raised_one() -> None:
     coloured = "\x1b[0;31mERROR:\x1b[0m failed to read from keyring"
     assert logged_failure(coloured).reason == "failed to read from keyring"
     assert len(logged_failure("first line " + "x " * 300).reason) <= 160
+    assert logged_failure("") == CookieFailure(missing=False, reason="")
 
 
 SECRETSTORAGE_MISSING = "secretstorage not available No module named 'secretstorage'"

@@ -18,6 +18,7 @@ from download_media.probe import (
     _classify_entry,
     _classify_single,
     _media_kind,
+    _ProbeYdl,
     _read_result,
     _short_reason,
     detect_site,
@@ -1137,6 +1138,22 @@ def test_a_keyring_error_is_a_cookie_failure(
     assert result.cookie_failure is not None
     assert result.cookie_failure.missing is False
     assert "kwallet-query failed" in result.cookie_failure.reason
+    assert result.error_message is not None
+    assert "kwallet-query failed" in result.error_message
+
+
+def test_what_yt_dlp_reported_outranks_the_exception_after_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def extract(self: Any, _url: str, **_kwargs: Any) -> Any:
+        self.report_error("the real cause")
+        raise RuntimeError("a generic error")
+
+    monkeypatch.setattr(_ProbeYdl, "extract_info", extract)
+    result = probe("http://127.0.0.1:9/page")
+    assert result.failed is True
+    assert result.error_message == "the real cause"
+    assert result.cookie_failure is None
 
 
 def test_a_probe_without_a_browser_has_no_cookie_failure(media_url: str) -> None:

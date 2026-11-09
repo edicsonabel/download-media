@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 from yt_dlp.networking.exceptions import IncompleteRead
+from yt_dlp.utils import DownloadError
 
 from download_media.config import DownloadOptions
 from download_media.downloader import _WholeBody, build_ydl_opts
@@ -474,3 +475,41 @@ def test_loading_cookies_leaves_report_error_alone(
             with pytest.raises(CookiesUnavailable):
                 load_browser_cookies(ydl, "chrome")
         assert "report_error" not in vars(ydl)
+
+
+@pytest.mark.parametrize(
+    "raised", [KeyboardInterrupt(), DownloadError("nothing to do with cookies")], ids=repr
+)
+def test_a_load_stopped_by_something_else_leaves_report_error_alone(
+    monkeypatch: pytest.MonkeyPatch, raised: BaseException
+) -> None:
+    from download_media.downloader import _Ydl, load_browser_cookies
+
+    def load(_file: Any, _browser: Any, _ydl: Any) -> Any:
+        raise raised
+
+    monkeypatch.setattr(sys.modules["yt_dlp.YoutubeDL"], "load_cookies", load)
+    params = {"quiet": True, "ignoreerrors": True, "cookiesfrombrowser": ("chrome",)}
+    with _Ydl(params) as ydl:
+        with pytest.raises(type(raised)):
+            load_browser_cookies(ydl, "chrome")
+        assert "report_error" not in vars(ydl)
+
+
+def test_the_first_error_logged_while_loading_cookies_is_the_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from yt_dlp.cookies import YoutubeDLCookieJar
+
+    from download_media.downloader import CookiesUnavailable, _Ydl, load_browser_cookies
+
+    def load(_file: Any, _browser: Any, ydl: Any) -> Any:
+        ydl.report_error("failed to read from keyring")
+        ydl.report_error("a later consequence")
+        return YoutubeDLCookieJar()
+
+    monkeypatch.setattr(sys.modules["yt_dlp.YoutubeDL"], "load_cookies", load)
+    params = {"quiet": True, "ignoreerrors": True, "cookiesfrombrowser": ("chrome",)}
+    with _Ydl(params) as ydl, pytest.raises(CookiesUnavailable) as caught:
+        load_browser_cookies(ydl, "chrome")
+    assert caught.value.failure.reason == "failed to read from keyring"
