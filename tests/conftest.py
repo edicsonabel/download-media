@@ -299,7 +299,8 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
         "all-junk": f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>',
         "two-junk-and-mp4": (
-            f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video><video src="tiny.mp4"></video>'
+            f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>'
+            '<video src="tiny.mp4"></video>'
         ),
         "audio-no-ext-video": f'<audio src="{NO_EXT_VIDEO}"></audio>',
     }
@@ -651,8 +652,9 @@ class FakeSiteIE(InfoExtractor):
             entries = [{**item, "thumbnail": thumb} for item in (broken, self._video("t2"))]
             return self.playlist_result(entries, "post", "Post")
         if page == "unprobeable-carousel":
-            # An HTML page served as the video, which ffprobe can't open, with a thumbnail: yt-dlp's cover step then raises
-            # a KeyError after audio extraction reported its own error.
+            # An HTML page served as the video, which ffprobe can't open, with a thumbnail:
+            # yt-dlp's cover step then raises a KeyError after audio extraction reported its
+            # own error.
             broken = self._video("t1", path="typed/video/mp4/poster.html/junk.mp4")
             thumb = f"{self.media_url}/tiny.jpg"
             entries = [{**item, "thumbnail": thumb} for item in (broken, self._video("t2"))]
