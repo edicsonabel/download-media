@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T14:33:00-04:00",
+  "updated": "2026-11-09T14:42:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2081,9 +2081,9 @@
     "fix/p-double-count": {
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": ".worktrees/fix-p-double-count",
@@ -2097,7 +2097,8 @@
         "bb5cbf1",
         "d147530",
         "6dc140e",
-        "95029c0"
+        "95029c0",
+        "6e53450"
       ],
       "review": {
         "approved": true,
@@ -2194,6 +2195,13 @@
           "result": "approved",
           "at": "2026-11-09T14:33:00-04:00",
           "note": "Wrapping-only commit checked by the orchestrator (diff is two wraps). Merge and push under the human's approval given at the merge point."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-09T14:42:13-04:00",
+          "note": "Merged as 6e53450, no conflicts. Gate exit 0 on the merged tree (covers 95029c0), 2083 passed + 2 xfailed es/en, 98.87%. Undo before any push: reset main to 1f21af0. Push by the orchestrator, approved by the human."
         }
       ]
     }
