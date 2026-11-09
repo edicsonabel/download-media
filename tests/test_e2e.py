@@ -27,6 +27,7 @@ from download_media.cookies import CookieFailure, ydl_cookies
 from download_media.downloader import (
     CookiesUnavailable,
     _source_url,
+    _TagSource,
     _Ydl,
     load_browser_cookies,
 )
@@ -7672,7 +7673,27 @@ def test_a_cover_step_that_raises_on_a_failed_item_keeps_the_rest(
     assert code == 0
     assert [name for name in names(out) if name.endswith(".mp3")] == ["02 - Clip [t2].mp3"]
     assert cover_leftovers(out) == []
-    assert said_partial_result(output)
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert t("done") in output
+
+
+@pytest.mark.parametrize("reported", [0, 2], ids=["only-the-raise", "two-before-it"])
+def test_an_item_that_raises_counts_once_whatever_it_reported_first(
+    monkeypatch: pytest.MonkeyPatch, run: Any, reported: int
+) -> None:
+    tag = _TagSource.run
+
+    def step(self: Any, info: dict[str, Any]) -> Any:
+        if info.get("id") != "a1":
+            return tag(self, info)
+        for _ in range(reported):
+            self._downloader.report_error("a failed step")
+        raise KeyError("streams")
+
+    monkeypatch.setattr(_TagSource, "run", step)
+    code, output = run("-y", "-p", "https://fake.test/query-carousel")
+    assert code == 0
+    assert t("partial_result", 2, 3, 0, 1) in output
     assert t("done") in output
 
 

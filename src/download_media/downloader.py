@@ -188,6 +188,9 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
             result = super().process_info(info_dict)
         except BaseException:
             # Without ignoreerrors, report_error raises from inside process_info.
+            # An exception yt-dlp catches gets its own report, which is the item's one count; a
+            # retry counts afresh, and anything else leaves download() before the count is read.
+            self.repeated_errors += len(self.errors) - self.item_errors
             self.drop_thumbs()
             raise
         if self.item_failed():
