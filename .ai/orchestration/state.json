@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T21:22:21-04:00",
+  "updated": "2026-11-09T08:48:51-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1993,9 +1993,9 @@
     "fix/cookie-report": {
       "type": "fix",
       "title": "Finish the cookie-failure report",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/50-cookie-report.md",
       "branch": "fix/cookie-report",
       "worktree": ".worktrees/fix-cookie-report",
@@ -2004,7 +2004,8 @@
         "205394c",
         "cb4aa00",
         "8a11054",
-        "44ea676"
+        "44ea676",
+        "8b405d9"
       ],
       "review": {
         "approved": true,
@@ -2059,6 +2060,13 @@
           "result": "approved",
           "at": "2026-11-08T21:22:21-04:00",
           "note": "Merge and push under the human's standing delegation. Session paused (human out of power); tech-lead not launched yet."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-09T08:48:51-04:00",
+          "note": "Merged as 8b405d9, no conflicts. Gate exit 0, 1975 passed + 2 xfailed es/en, cov 98.80%. Undo before any push: reset main to ff65b9e. Push by the orchestrator under the human's delegation."
         }
       ]
     }
