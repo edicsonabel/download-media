@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T21:08:13-04:00",
+  "updated": "2026-11-08T21:22:21-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1993,9 +1993,9 @@
     "fix/cookie-report": {
       "type": "fix",
       "title": "Finish the cookie-failure report",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/50-cookie-report.md",
       "branch": "fix/cookie-report",
       "worktree": ".worktrees/fix-cookie-report",
@@ -2006,7 +2006,10 @@
         "8a11054",
         "44ea676"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -2042,6 +2045,20 @@
           "result": "done",
           "at": "2026-11-08T21:08:13-04:00",
           "note": "44ea676 tests (amended after gate: restored 8 items_not_found asserts a sed had changed; only additions; affected tests + lint/format/mypy pass). Gate exit 0 before amend, 1975 passed + 2 xfailed. Mutation 17/18 (M7 equivalent: cookies_dropped implies browser). Covered -P, -a, playlist modes, multi-URL, nothing-saved, -l, es, site-refused after preview, cookies that load, wizard manual flow, secretstorage missing. Planner: 'Going on without cookies' then n at preview; ERROR:-only cause prints (); -p all-junk leaves junk bodies (pre-existing)."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-08T21:22:21-04:00",
+          "note": "No findings. Full gate on 44ea676 exit 0 (covers the late amend): 1975 passed + 2 xfailed es/en, cov 98.80%. 27 fix tests fail on b15b74d src. Real runs (env -i, fresh HOME, dead D-Bus, loopback) matched disk and history in every mode, en and es; label/ANSI gone from reason under a pty. Risks: yt-dlp pip advice in secretstorage reason (planner); stderr buffering order when redirected; es closing line singular (approved text)."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-08T21:22:21-04:00",
+          "note": "Merge and push under the human's standing delegation. Session paused (human out of power); tech-lead not launched yet."
         }
       ]
     }
