@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T17:29:19-04:00",
+  "updated": "2026-11-09T17:45:22-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2229,13 +2229,12 @@
         "f1e12e5",
         "c6ed880",
         "29e4302",
-        "597d135"
+        "597d135",
+        "4360f86"
       ],
       "review": {
-        "approved": false,
-        "findings": [
-          "medium downloader.py:432 + :633-652 converting a file an earlier run saved deletes it: -y on tiny.mp4, then -y --video-format webm prints has already been downloaded, converts and deletes tiny.mp4; mkv by remux; main's .webm goes the same way on the first default run after upgrading. Strict xfail test_another_container_keeps_the_file_an_earlier_run_saved"
-        ]
+        "approved": true,
+        "findings": []
       },
       "history": [
         {
@@ -2279,6 +2278,13 @@
           "result": "done",
           "at": "2026-11-09T17:29:19-04:00",
           "note": "Round 1 fixed in 597d135: the original is deleted only when yt-dlp's __real_download says this run downloaded it. Strict xfail flipped; new -p/--playlist-items test. Gate exit 0, 2156 passed + 2 xfailed. Relies on yt-dlp's internal field; a rename would keep both files (safe side). Spec's 'Deleting original file' row now holds only for files the run downloaded; architect records it at validation."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-09T17:45:22-04:00",
+          "note": "Round 1 closed in real runs: mp4, webm, mkv, webm, mp4 keeps every file, reruns convert nothing; upgrade, fresh download, failed conversion of an earlier file, DASH merges, .part resume, -p/--playlist-items, multi-URL and wizard all match disk. 7 tests in 4360f86. Mutation on the new line 3/4, survivor equivalent. Gate exit 0 at 4360f86, 2163 passed + 2 xfailed es/en. Planner: a file converted earlier is downloaded again on a run in a third container."
         }
       ]
     }
