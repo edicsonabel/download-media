@@ -131,6 +131,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     save_images = False
     # len(errors) when the current item started.
     item_errors = 0
+    # Errors beyond the first of an item that failed in several steps.
+    repeated_errors = 0
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.errors: list[str] = []
@@ -189,6 +191,7 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
             self.drop_thumbs()
             raise
         if self.item_failed():
+            self.repeated_errors += len(self.errors) - self.item_errors - 1
             self.drop_thumbs()
         else:
             self.images += self.item_images
@@ -668,7 +671,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     return DownloadResult(
         saved=len(saved),
         skipped=len(skipped),
-        failed=len(ydl.errors),
+        failed=len(ydl.errors) - ydl.repeated_errors,
         missing=missing,
         playlist_count=count,
         subs_missing=opts.subs and not subs_seen,

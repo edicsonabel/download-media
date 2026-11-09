@@ -2257,6 +2257,21 @@ def test_playlist_counts_an_item_that_is_not_media_as_failed_only(generic: Any, 
     assert untagged_warnings(output) == 0
 
 
+@pytest.mark.parametrize(
+    "flags",
+    [("-p", "-a"), ("-p", "-a", "-f", "wav"), ("--playlist-items", "1,2", "-a")],
+    ids=["-p -a", "-p -a -f wav", "--playlist-items -a"],
+)
+def test_an_item_failing_in_two_steps_counts_once(
+    generic: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    # Under ignoreerrors each failed post-processing step reports an error of its own.
+    code, output = generic("junk-and-mp4.html", flags=("-y", *flags, "-o", str(out)))
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert t("done") in output
+
+
 def test_playlist_where_no_item_is_media_is_a_failure(
     generic: Any, media_url: str, out: Path
 ) -> None:
