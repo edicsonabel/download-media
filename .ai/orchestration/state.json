@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T17:45:22-04:00",
+  "updated": "2026-11-09T18:09:23-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2217,8 +2217,8 @@
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
       "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2234,7 +2234,11 @@
       ],
       "review": {
         "approved": true,
-        "findings": []
+        "findings": [
+          "minor downloader.py:641 ffprobe failing or over 15 s makes _has_media_streams return False, so the conversion is skipped with no warning and the summary names the wrong container",
+          "minor downloader.py:655 yt-dlp's '(pass -k to keep)' now shows on most non-mp4 single-format video downloads; no -k in the tool (planner)",
+          "minor 862f4df typed fix while adding a user-facing message (feat per AGENTS.md); defensible"
+        ]
       },
       "history": [
         {
@@ -2285,6 +2289,13 @@
           "result": "done",
           "at": "2026-11-09T17:45:22-04:00",
           "note": "Round 1 closed in real runs: mp4, webm, mkv, webm, mp4 keeps every file, reruns convert nothing; upgrade, fresh download, failed conversion of an earlier file, DASH merges, .part resume, -p/--playlist-items, multi-URL and wizard all match disk. 7 tests in 4360f86. Mutation on the new line 3/4, survivor equivalent. Gate exit 0 at 4360f86, 2163 passed + 2 xfailed es/en. Planner: a file converted earlier is downloaded again on a run in a third container."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-09T18:09:23-04:00",
+          "note": "Gate exit 0 at 4360f86, 2163 passed + 2 xfailed es/en, 98.91%. 3938c1f, 862f4df, 29e4302 each pass alone. 29 changed tests follow from the spec. Real runs in en and es, each container, wizard, -p, -a, -l match disk, history, summary and command. All four departures judged needed or safe (narrower clash check measured: image not saved yet Done.). Three minor findings. Wikimedia live check left to validation."
         }
       ]
     }
