@@ -282,6 +282,16 @@ def test_a_label_in_the_middle_of_the_reason_stays() -> None:
     assert cookie_failure(error) == CookieFailure(False, "cannot open keyring: ERROR: denied")
 
 
+def test_colour_codes_leave_an_unlabelled_reason_too() -> None:
+    error = load_error(DownloadError("\x1b[1;33mno encrypted key in Local State\x1b[0m"))
+    assert cookie_failure(error) == CookieFailure(False, "no encrypted key in Local State")
+
+
+def test_only_the_label_goes_from_a_cause_that_names_errors() -> None:
+    error = load_error(DownloadError("ERROR: invalid key: ERROR: 3 bytes left"))
+    assert cookie_failure(error) == CookieFailure(False, "invalid key: ERROR: 3 bytes left")
+
+
 SECRETSTORAGE_MISSING = "secretstorage not available No module named 'secretstorage'"
 
 
