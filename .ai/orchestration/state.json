@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T09:38:14-04:00",
+  "updated": "2026-11-09T10:54:10-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2082,15 +2082,26 @@
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
       "stage": "development",
-      "status": "in_progress",
+      "status": "changes_requested",
       "next_agent": "developer",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": ".worktrees/fix-p-double-count",
       "commits": [
-        "ebb51d5"
+        "ebb51d5",
+        "44fa54e",
+        "2153e0b",
+        "7046747",
+        "dd0a6dd",
+        "0f4ee07",
+        "bb5cbf1"
       ],
-      "review": null,
+      "review": {
+        "approved": false,
+        "findings": [
+          "medium downloader.py:189-192 an item that reports an error under ignoreerrors and then raises is counted twice: -y -p -a on a poster video serving HTML says 1 of 3, 2 failed for 2 items; also --playlist-items -a"
+        ]
+      },
       "history": [
         {
           "stage": "planning",
@@ -2112,6 +2123,20 @@
           "result": "approved",
           "at": "2026-11-09T09:38:14-04:00",
           "note": "Spec approved: D1 A, D2 A, D3 A, the human's explicit answer. D1's cost accepted: a mixed profile's page only a decrypted cookie opens goes from saved, exit 0, to Download failed, exit 1. On the 0.4.0 review list."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-09T10:00:07-04:00",
+          "note": "Gate exit 0 at dd0a6dd, 2005 passed + 2 xfailed es/en, 98.81%. Unfixed src: every [fix] test fails; each of 5 fix parts reverted alone fails 2-22 tests. Hand runs match disk, no Cookie header sent. Not run: wizard on a 401 page (no acceptance test). Full suite only at dd0a6dd. Planner (read, not measured): repeated_errors adjusts only when process_info returns; load_browser_cookies records is_error=False too. Spec header still draft."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-09T10:54:10-04:00",
+          "note": "Round 1. 72 tests added. Gate exit 0 at bb5cbf1, 2077 passed + 2 xfailed es/en. Mutation 30/32, m14 and m15 equivalent. 20 real runs per locale match disk, no Cookie header. One medium finding, same line on main, but the spec's Goal needs it. No strict xfail committed: the orchestrator's dispatch limited it to out-of-item issues, against the role file. Planner: raw ERROR: 'streams' reaches the user; -l shows the kwallet-query warning."
         }
       ]
     }
