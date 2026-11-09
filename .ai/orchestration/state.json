@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T13:28:17-04:00",
+  "updated": "2026-11-09T14:31:29-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2081,9 +2081,9 @@
     "fix/p-double-count": {
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
-      "stage": "qa_review",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": ".worktrees/fix-p-double-count",
@@ -2174,6 +2174,13 @@
           "result": "approved",
           "at": "2026-11-09T13:28:17-04:00",
           "note": "Gate exit 0 at 6dc140e, 2083 passed + 2 xfailed es/en, 98.87%. Every criterion holds. Real loopback runs in en and es match disk and history, no Cookie sent after a notice; keyring + broken item now 1 of 2 where main said 1 of 4. Each fix part reverted fails 5-60 tests. One minor finding (comment length). Planner risks: cookie-load wrapper records is_error=False too; count assumes no DownloadCancelled options."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-09T14:31:29-04:00",
+          "note": "Human: fix the minor comment first, then merge and push. Merge and push approved once the comment-only commit passes lint and format."
         }
       ]
     }
