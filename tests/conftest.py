@@ -302,6 +302,8 @@ def _write_generic_pages(root: Path, base: str) -> None:
         # ffmpeg can't write tags to an .oga holding a video, and can't read a text body at all.
         # The container step skips the .oga: yt-dlp lists it as audio.
         "oga-and-mp4": f'<video src="{OGA_VIDEO}"></video><video src="tiny.mp4"></video>',
+        # A video the container step converts, and one ffmpeg can't put in an mp4.
+        "webm-and-attached": '<video src="tiny.webm"></video><video src="attached.mkv"></video>',
         "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
         "all-junk": f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>',
         "two-junk-and-mp4": (
