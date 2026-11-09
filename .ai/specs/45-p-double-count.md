@@ -1,6 +1,6 @@
 # 45 — Count failures per item, and name the keyring error behind them
 
-Status: draft
+Status: done
 Item: `fix/p-double-count`
 
 > **For the 0.4.0 review list:** this item changes published behaviour in three ways. See SemVer. D1 is the one that needs the human's eye: a page that only opened thanks to the cookies yt-dlp could still decrypt goes from a save, exit 0, to `Download failed`, exit 1.
@@ -179,6 +179,8 @@ def process_info(self, info_dict):
 
 `DownloadResult.failed` becomes `len(ydl.errors) - ydl.repeated_errors`. `ydl.errors` itself keeps every line, since `DownloadError("\n".join(ydl.errors))` and the hints read it.
 
+Amended at review: `process_info`'s `except BaseException` branch writes off what the item reported too, `repeated_errors += len(self.errors) - self.item_errors`. Without that, an item that reported an error and then raised was counted twice. The extra line also covers `ReExtractInfo`. See Validation, "What changed after approval".
+
 **3. What counts as an error.** `_Ydl.report_error` records the message only if `kwargs.get("is_error", True)`. It still calls `super()`, so yt-dlp prints as before. `_ProbeYdl` inherits this, which also keeps those lines out of `probe_partial`.
 
 ### `cookies.py`
@@ -250,29 +252,29 @@ Every `[fix]` must fail on `main`, shown by reverting the fix. Keyring tests run
 
 New fixtures, in `tests/test_e2e.py` next to `no_kwallet_query`: `kwallet_query_fails` (`PATH` holding ffmpeg, ffprobe and a `kwallet-query` script that does `exit 1`), and `empty_keyring` (`yt_dlp.cookies.secretstorage` set to a stub whose collection has no items). `no_kwallet_query` and `no_secretstorage` already exist. `KEYRING_CAUSES` parametrizes over the four, each with its spec and expected reason.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `test_a_keyring_error_goes_on_without_cookies`. Parametrized over `KEYRING_CAUSES` and `-y -p`, `-y --playlist-items 1,2` on `seen/<token>/multi.html`: exit 0, the expected files, `t("cookies_unreadable", "chrome", <reason>)` once, `said_partial_result(output)` false, `after_done(output) == [without_cookies()]`, command without `--cookies`, one history row, and `sent(token)` shows no `Cookie` on any request
-- [ ] **[fix]** `test_a_keyring_error_in_single_mode_goes_on_without_cookies`. `kwallet_query_fails`, `-y --cookies chrome+kwallet6` on `seen/<token>/poster.html`: as above, 1 file
-- [ ] **[fix]** `test_a_keyring_error_is_named_before_the_preview`. `kwallet_query_fails`, no `-y`, Enter: one prompt, the notice once and before `t("preview")`, the `t("p_title")` line, `kwallet-query failed` exactly once in the output, closing line after `t("done")`, exit 0, 1 file
-- [ ] **[fix]** `test_a_preview_cancelled_after_a_keyring_error_still_said_it`. Same, `n`: the notice before `t("preview")`, `t("cancelled")`, no files, no command
-- [ ] **[fix]** `test_formats_are_listed_after_a_keyring_error`. `kwallet_query_fails`, `-l` on `seen/<token>/poster.html`: exit 0, the notice, the format table, no `Cookie` sent
-- [ ] **[fix]** `test_a_desktop_keyring_error_suggests_another_keyring`. `kwallet_query_fails`, `XDG_CURRENT_DESKTOP=KDE`, `KDE_SESSION_VERSION=6`, `-y --cookies chrome`: the notice, then `keyring_hint()`, closing line
-- [ ] **[fix]** `test_a_dead_page_after_a_keyring_error_fails_without_a_retry_line`. `kwallet_query_fails`, `-y -p` and `-y` on `status/401`: exit 1, the notice, `t("failed", url)`, `try again with --cookies`, `t("cookies_retry", …)` and `keyring_hint()` not in the output, command keeps `--cookies`, no closing line
-- [ ] **[fix]** `test_a_page_only_the_readable_cookie_opens_now_fails` (pins D1's cost; goes if the human picks another option). A profile with `chrome_cookie()`'s plaintext cookie plus one `v11` row, `kwallet_query_fails`, `-y --cookies chrome+kwallet6` on `cookie/<token>/poster.html`: exit 1, the notice, no file, no `Cookie` sent
-- [ ] **[pin]** `test_a_jar_that_never_asks_the_keyring_keeps_its_cookies`. A `v10`-only profile (the test encrypts it with yt-dlp's `aes_cbc_encrypt_bytes` and the `peanuts` key), `kwallet_query_fails`, KDE desktop, `-y -p --cookies chrome` on `seen/<token>/multi.html`: exit 0, the notice and the closing line not in the output, `Cookie` on every request, command keeps `--cookies`
-- [ ] **[pin]** `test_a_browser_that_loads_sends_its_cookies_to_every_item`, `test_a_browser_that_loads_costs_no_extra_request`, `test_cookies_that_load_and_get_refused_still_retry` pass unchanged
-- [ ] **[fix]** `test_the_wizard_names_a_keyring_error_at_the_probe`. `kwallet_query_fails`, `-i --cookies chrome+kwallet6` on `multi.html`, `PICKER_WALK`: the notice once, `t("probe_partial", …)` not in the output, the picker offered, `t("done_without_cookies", "chrome")` not in the output (spec 50 D2), command without `--cookies`, 4 files, `said_partial_result(output)` false
-- [ ] **[fix]** `test_a_keyring_error_at_the_last_wizard_step_says_so_after_done`. `kwallet_query_fails`, `XDG_CURRENT_DESKTOP=KDE`, `KDE_SESSION_VERSION=6` (the late step offers bare browsers only), chrome at the late step on `multi.html` (spec 26's `PICKER_WALK`): the notice once, `keyring_hint()`, closing line after `t("done")`, command keeps the items and drops `--cookies`
-- [ ] **[fix]** `test_a_keyring_error_is_a_cookie_failure` (`tests/test_probe.py`). `probe(<media_url>/poster.html, "chrome+kwallet6")` with `kwallet_query_fails`' `PATH` and a fake profile: `failed` true, `cookie_failure.missing` false, the reason names `kwallet-query failed`. The two existing tests, `test_a_browser_that_is_not_installed_is_a_cookie_failure` and `test_a_probe_without_a_browser_has_no_cookie_failure`, pass unchanged
-- [ ] **[fix]** `test_a_logged_error_reads_like_a_raised_one` (`tests/test_cookies.py`). `logged_failure("kwallet-query failed with return code 1.\nmore")` → `missing` false, reason the first line; a label and escape codes come off as in `test_a_labelled_cause_loses_its_label`; a reason longer than the limit is shortened
-- [ ] **[pin]** `test_loading_cookies_leaves_report_error_alone` (`tests/test_downloader.py`). After `load_browser_cookies`, on success and on `CookiesUnavailable`, `"report_error" not in vars(ydl)`
-- [ ] **[fix]** `test_an_item_failing_in_two_steps_counts_once` (`tests/test_e2e.py`). Parametrized `-y -p -a`, `-y -p -a -f wav`, `-y --playlist-items 1,2 -a` on `junk-and-mp4.html`: exit 0, `t("partial_result", 1, 2, 0, 1)` in the output, `t("done")`
-- [ ] **[fix]** `test_a_keyring_error_and_a_broken_item_count_the_item_once`. `kwallet_query_fails`, `-y -p -a --cookies chrome+kwallet6` on `junk-and-mp4.html`: exit 0, the notice, `t("partial_result", 1, 2, 0, 1)`, closing line after `t("done")`
-- [ ] **[fix]** `test_a_message_yt_dlp_does_not_call_an_error_is_not_a_failure`. A new `fake_site` shape with an unscoped `cookies` field on its format (`tests/conftest.py`), `-y` and `-y -p`: exit 0, 1 file, `said_partial_result(output)` false, `t("done")`
-- [ ] **[pin]** `test_playlist_counts_an_item_that_is_not_media_as_failed_only`, `test_playlist_where_no_item_is_media_is_a_failure` and the `t("partial_result", 1, 2, 0, 1)` tests on `partial-*`, `test_e2e.py:518`, `:1381`, `:1827`, `:2586` pass unchanged
-- [ ] **[flip]** `test_a_keyring_that_decrypts_nothing_in_a_playlist_is_not_a_load_failure` (`test_e2e.py:6773`) pins today's behaviour and becomes `test_a_keyring_tool_that_is_missing_in_a_playlist_is_unreadable`, with the assertions of its single-mode sibling at `:6789`. It's the only existing test that flipped on the prototype; any other flip must be explained in the developer's report
-- [ ] `test_es_and_en_have_same_keys` passes with no new key: `git diff 728834b -- src/download_media/i18n.py` is empty
-- [ ] On disk, by hand, once, with the Problem's environment: runs 1, 2 and 3, comparing the files with what's reported
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** `test_a_keyring_error_goes_on_without_cookies`. Parametrized over `KEYRING_CAUSES` and `-y -p`, `-y --playlist-items 1,2` on `seen/<token>/multi.html`: exit 0, the expected files, `t("cookies_unreadable", "chrome", <reason>)` once, `said_partial_result(output)` false, `after_done(output) == [without_cookies()]`, command without `--cookies`, one history row, and `sent(token)` shows no `Cookie` on any request
+- [x] **[fix]** `test_a_keyring_error_in_single_mode_goes_on_without_cookies`. `kwallet_query_fails`, `-y --cookies chrome+kwallet6` on `seen/<token>/poster.html`: as above, 1 file
+- [x] **[fix]** `test_a_keyring_error_is_named_before_the_preview`. `kwallet_query_fails`, no `-y`, Enter: one prompt, the notice once and before `t("preview")`, the `t("p_title")` line, `kwallet-query failed` exactly once in the output, closing line after `t("done")`, exit 0, 1 file
+- [x] **[fix]** `test_a_preview_cancelled_after_a_keyring_error_still_said_it`. Same, `n`: the notice before `t("preview")`, `t("cancelled")`, no files, no command
+- [x] **[fix]** `test_formats_are_listed_after_a_keyring_error`. `kwallet_query_fails`, `-l` on `seen/<token>/poster.html`: exit 0, the notice, the format table, no `Cookie` sent
+- [x] **[fix]** `test_a_desktop_keyring_error_suggests_another_keyring`. `kwallet_query_fails`, `XDG_CURRENT_DESKTOP=KDE`, `KDE_SESSION_VERSION=6`, `-y --cookies chrome`: the notice, then `keyring_hint()`, closing line
+- [x] **[fix]** `test_a_dead_page_after_a_keyring_error_fails_without_a_retry_line`. `kwallet_query_fails`, `-y -p` and `-y` on `status/401`: exit 1, the notice, `t("failed", url)`, `try again with --cookies`, `t("cookies_retry", …)` and `keyring_hint()` not in the output, command keeps `--cookies`, no closing line
+- [x] **[fix]** `test_a_page_only_the_readable_cookie_opens_now_fails` (pins D1's cost; goes if the human picks another option). A profile with `chrome_cookie()`'s plaintext cookie plus one `v11` row, `kwallet_query_fails`, `-y --cookies chrome+kwallet6` on `cookie/<token>/poster.html`: exit 1, the notice, no file, no `Cookie` sent
+- [x] **[pin]** `test_a_jar_that_never_asks_the_keyring_keeps_its_cookies`. A `v10`-only profile (the test encrypts it with yt-dlp's `aes_cbc_encrypt_bytes` and the `peanuts` key), `kwallet_query_fails`, KDE desktop, `-y -p --cookies chrome` on `seen/<token>/multi.html`: exit 0, the notice and the closing line not in the output, `Cookie` on every request, command keeps `--cookies`
+- [x] **[pin]** `test_a_browser_that_loads_sends_its_cookies_to_every_item`, `test_a_browser_that_loads_costs_no_extra_request`, `test_cookies_that_load_and_get_refused_still_retry` pass unchanged
+- [x] **[fix]** `test_the_wizard_names_a_keyring_error_at_the_probe`. `kwallet_query_fails`, `-i --cookies chrome+kwallet6` on `multi.html`, `PICKER_WALK`: the notice once, `t("probe_partial", …)` not in the output, the picker offered, `t("done_without_cookies", "chrome")` not in the output (spec 50 D2), command without `--cookies`, 4 files, `said_partial_result(output)` false
+- [x] **[fix]** `test_a_keyring_error_at_the_last_wizard_step_says_so_after_done`. `kwallet_query_fails`, `XDG_CURRENT_DESKTOP=KDE`, `KDE_SESSION_VERSION=6` (the late step offers bare browsers only), chrome at the late step on `multi.html` (spec 26's `PICKER_WALK`): the notice once, `keyring_hint()`, closing line after `t("done")`, command keeps the items and drops `--cookies`
+- [x] **[fix]** `test_a_keyring_error_is_a_cookie_failure` (`tests/test_probe.py`). `probe(<media_url>/poster.html, "chrome+kwallet6")` with `kwallet_query_fails`' `PATH` and a fake profile: `failed` true, `cookie_failure.missing` false, the reason names `kwallet-query failed`. The two existing tests, `test_a_browser_that_is_not_installed_is_a_cookie_failure` and `test_a_probe_without_a_browser_has_no_cookie_failure`, pass unchanged
+- [x] **[fix]** `test_a_logged_error_reads_like_a_raised_one` (`tests/test_cookies.py`). `logged_failure("kwallet-query failed with return code 1.\nmore")` → `missing` false, reason the first line; a label and escape codes come off as in `test_a_labelled_cause_loses_its_label`; a reason longer than the limit is shortened
+- [x] **[pin]** `test_loading_cookies_leaves_report_error_alone` (`tests/test_downloader.py`). After `load_browser_cookies`, on success and on `CookiesUnavailable`, `"report_error" not in vars(ydl)`
+- [x] **[fix]** `test_an_item_failing_in_two_steps_counts_once` (`tests/test_e2e.py`). Parametrized `-y -p -a`, `-y -p -a -f wav`, `-y --playlist-items 1,2 -a` on `junk-and-mp4.html`: exit 0, `t("partial_result", 1, 2, 0, 1)` in the output, `t("done")`
+- [x] **[fix]** `test_a_keyring_error_and_a_broken_item_count_the_item_once`. `kwallet_query_fails`, `-y -p -a --cookies chrome+kwallet6` on `junk-and-mp4.html`: exit 0, the notice, `t("partial_result", 1, 2, 0, 1)`, closing line after `t("done")`
+- [x] **[fix]** `test_a_message_yt_dlp_does_not_call_an_error_is_not_a_failure`. A new `fake_site` shape with an unscoped `cookies` field on its format (`tests/conftest.py`), `-y` and `-y -p`: exit 0, 1 file, `said_partial_result(output)` false, `t("done")`
+- [x] **[pin]** `test_playlist_counts_an_item_that_is_not_media_as_failed_only`, `test_playlist_where_no_item_is_media_is_a_failure` and the `t("partial_result", 1, 2, 0, 1)` tests on `partial-*`, `test_e2e.py:518`, `:1381`, `:1827`, `:2586` pass unchanged
+- [x] **[flip]** `test_a_keyring_that_decrypts_nothing_in_a_playlist_is_not_a_load_failure` (`test_e2e.py:6773`) pins today's behaviour and becomes `test_a_keyring_tool_that_is_missing_in_a_playlist_is_unreadable`, with the assertions of its single-mode sibling at `:6789`. It's the only existing test that flipped on the prototype; any other flip must be explained in the developer's report
+- [x] `test_es_and_en_have_same_keys` passes with no new key: `git diff 728834b -- src/download_media/i18n.py` is empty
+- [x] On disk, by hand, once, with the Problem's environment: runs 1, 2 and 3, comparing the files with what's reported
 
 ## Live check
 
@@ -292,7 +294,41 @@ Not needed. Every path is the real yt-dlp on loopback with a fake profile and a 
 
 This makes 0.4.0's note for row 50 true for this path too: the user is told.
 
+## Validation
+
+On `main` at `defe71c` (merge `6e53450` plus one `state.json` commit), yt-dlp 2026.10.26. GitHub CI run 42676371106 on `defe71c`: success, job `gate` success.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on the merge `6e53450`: exit 0, ruff and mypy clean, 2083 passed, 9 deselected and 2 xfailed in `es` and in `en`, coverage 98.87%. `defe71c` differs from `6e53450` only in `.ai/orchestration/state.json`.
+- **Criteria:** every test the criteria name exists on `main`. The criteria tests ran on their own on `main`, as a `pytest -k` selection over their names that also catches some of the additions below: 92 passed. `git diff 728834b HEAD -- src/download_media/i18n.py` is empty.
+- **Reverting the fix:** run on a `git archive` copy of `HEAD` in the scratchpad, not on `main`. `downloader.py`, `cookies.py` and `probe.py` came from the pre-merge `1f21af0`, and the merged tests were kept. 64 failed, plus a collection error in `tests/test_cookies.py` (no `logged_failure`). Every `[fix]` test above fails, in every parameter, and so does the `[flip]`. Of `test_loading_cookies_leaves_report_error_alone`, only the `logs an error` case fails. The `[pin]` tests pass. With only the round-1 line reverted (below), three cases fail: `test_an_item_that_raises_counts_once_whatever_it_reported_first[two-before-it]` and the two `after-an-error` cases of `test_an_item_yt_dlp_extracts_again_counts_by_its_last_try`. 9 other counting tests pass.
+- **Reproduction:** the Problem's runs 1, 2 and 3, with `main`'s real console script and the Problem's environment. That means `env -i`, a fresh `HOME` and `XDG_*_HOME` per run, `LANG=en_US.UTF-8` and the dead D-Bus address. The server was a scratch `http.server` on `127.0.0.1:18945` that logs each request's `Cookie` header. Chrome was a fake profile with one `v11` cookie under a made-up key. `kwallet-query` was a fake script, first on `PATH`, that logs its call and exits 1. It was called once per keyring run. The real one in `/usr/bin` was never reached. No real cookie database or keyring was read. Downloads went to the scratchpad and were deleted afterwards.
+
+| Run | Output | Disk, server |
+| --- | ------ | ------------ |
+| 1: `-y --cookies chrome+kwallet6`, `one.html` | yt-dlp's `ERROR: kwallet-query failed …` and `Extracted 1 cookies from chrome`, then `Could not read the chrome cookies (kwallet-query failed with return code 1. …). Going on without cookies.`, no count, `Done.`, `Saved without chrome cookies: …`, command without `--cookies`, exit 0 | `one (1).mp4`, 1 history row; no `Cookie` header on any request |
+| 2: `-y -p --cookies chrome+kwallet6`, `two.html` | Same notice, no count, `Done.`, closing line, command `-y -o … -p <url>`, exit 0 | 2 files, 1 history row; no `Cookie` header |
+| 3: `-y -p -a`, `junkmix.html` | yt-dlp's two `ERROR:` lines for the junk item, `1 of 2 items downloaded (0 without downloadable media, 1 failed).`, `Done.`, exit 0 | The junk `.mp4` (row 46) and one `.mp3`: matches `1 of 2` |
+| 3 with `--cookies chrome+kwallet6` | Notice, `1 of 2 … 1 failed`, `Done.`, closing line, command without `--cookies`, exit 0 | Same 2 files; no `Cookie` header |
+
+- **Cases, tests only:** everything else in the Cases table: the preview (Enter and `n`), `-l`, `--playlist-items`, `-P`, the KDE desktop, the wizard walks, the 401 pages, the mixed and `v10`-only profiles, the unscoped `cookies` field, two URLs and `LANG=es*`. Each is covered by a named test above, or by one of the test-engineer's additions below. All passed in the gate.
+- **Not run:** live tests, as Live check says. The full gate was not re-run here, for the reason above.
+- **Scope:** outside `.ai/`, `1f21af0..6e53450` touches exactly the eight files in the Files table. No change to `cli.py`, `wizard.py`, `i18n.py`, `equivalent.py`, `README.md`, `AGENTS.md`, `pyproject.toml`, `PKGBUILD` or the version.
+
+### What changed after approval
+
+- **An item that reports and then raises counts once (`d147530`).** The test-engineer's first round found a double count that Design's item 2 missed. Under `-p -a` on a body it can't read, audio extraction reports an error. Then yt-dlp's cover step raises `KeyError` on ffprobe's empty answer: `_EmbedCover` only catches `PostProcessingError`. The exception leaves `process_info`, and `__process_iterable_entry`'s wrapper reports it again (`YoutubeDL.py:1747-1749`). That gave `1 of 3` on a page holding 2. `_Ydl.process_info`'s `except BaseException` branch now adds `len(self.errors) - self.item_errors` to `repeated_errors` before re-raising. Under `ignoreerrors` the report yt-dlp adds afterwards is the item's one count. Without `ignoreerrors` the exception leaves `download()` before the count is read.
+- **`ReExtractInfo` (`6dc140e`, test only).** It is the one exception yt-dlp catches from `process_info` without reporting it. `_handle_extraction_exceptions` (`YoutubeDL.py:1731-1737`) prints a line and runs the item again. The same `except BaseException` line writes off what the first try reported. The retry starts its own `item_errors`, so only the last try decides. A retry that saves leaves no failure. One that raises counts once, whether or not the first try reported anything. `test_an_item_yt_dlp_extracts_again_counts_by_its_last_try` covers it.
+- **Within what Design left to the developer:** `probe()`'s `except Exception` branch no longer calls `cookie_failure`. A load failure now arrives as `CookiesUnavailable`, and `probe.py` no longer imports `cookie_failure`.
+- **Tests beyond the criteria**, among others: `test_a_real_keyring_error_leaves_report_error_alone` (download and preview, every cause and mode), `test_a_keyring_error_reads_the_same_in_the_other_modes`, `test_a_keyring_error_is_named_for_each_url`, `test_a_keyring_error_is_named_before_each_preview`, `test_a_login_wall_after_a_keyring_error_gets_the_retry_prompt`, `test_every_item_broken_after_a_keyring_error_is_a_failure`, `test_a_keyring_error_with_one_url_failing_keeps_the_browser_in_the_command`, `test_a_message_yt_dlp_does_not_call_an_error_is_no_partial_probe`, `test_a_message_yt_dlp_does_not_call_an_error_does_not_add_to_a_failure` and `test_an_item_that_raises_counts_once_whatever_it_reported_first`.
+
+### Remaining notes (for the planner)
+
+1. `PLAN.md`'s "Next" paragraph still puts `p-double-count` first and says 0.4.0 "should wait for" it. The 0.4.0 review list needs the three behaviour changes under SemVer, with D1's exit 0 to exit 1.
+2. Spec 50's Goal named two exceptions. This item closes the first one. The second, the wizard's probe with no closing line (spec 50 D2), now covers keyring errors too, and is still waiting on the human.
+
 ## Open decisions
+
+Decided by the human: D1 A, D2 A, D3 A.
 
 ### D1: after a keyring error yt-dlp only logs
 
