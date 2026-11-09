@@ -8632,3 +8632,38 @@ def test_a_merge_in_another_container_keeps_the_earlier_file(run: Any, out: Path
     assert code == 0
     assert names(out) == ["Clip.mp4", "Clip.webm"]
     assert (out / "Clip.mp4").read_bytes() == before
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "spec 30: yt-dlp takes the earlier file as already downloaded (final_ext), and the "
+        "container step converts it and deletes it"
+    ),
+)
+@pytest.mark.parametrize(
+    ("page", "first", "second", "container"),
+    [
+        ("tiny.mp4", (), ("--video-format", "webm"), "webm"),
+        # A .webm saved as is: what main left behind for every single-format webm.
+        ("webm.html", ("--video-format", "webm"), (), "mp4"),
+    ],
+    ids=["mp4-then-webm", "webm-then-mp4"],
+)
+def test_another_container_keeps_the_file_an_earlier_run_saved(
+    generic: Any,
+    out: Path,
+    page: str,
+    first: tuple[str, ...],
+    second: tuple[str, ...],
+    container: str,
+) -> None:
+    code, _ = generic(page, flags=("-y", *first, "-o", str(out)))
+    assert code == 0
+    [earlier] = names(out)
+    before = codecs(out / earlier)
+    code, _ = generic(page, flags=("-y", *second, "-o", str(out)))
+    assert code == 0
+    assert (out / earlier).exists()
+    assert codecs(out / earlier) == before
+    assert any(name.endswith(f".{container}") for name in names(out))
