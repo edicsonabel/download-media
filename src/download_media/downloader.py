@@ -643,13 +643,16 @@ class _ContainerStep(FFmpegVideoConvertorPP):  # type: ignore[misc]
         converted = Path(replace_extension(path, target, ext))
         converted_was_there = converted.exists()
         try:
-            return super().run(info)  # type: ignore[no-any-return]
+            delete, info = super().run(info)
         except PostProcessingError:
             # ffmpeg leaves an empty file at the target.
             if not converted_was_there:
                 converted.unlink(missing_ok=True)
             self._not_converted.append(Path(path).name)
             return [], info
+        # yt-dlp takes a file an earlier run saved in another container as this one, already
+        # downloaded (final_ext). Only what this run downloaded gives way to its conversion.
+        return (delete if info.get("__real_download") else []), info
 
 
 class _RecodeTo(_ContainerStep):

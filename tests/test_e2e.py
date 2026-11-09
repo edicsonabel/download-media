@@ -8634,13 +8634,6 @@ def test_a_merge_in_another_container_keeps_the_earlier_file(run: Any, out: Path
     assert (out / "Clip.mp4").read_bytes() == before
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "spec 30: yt-dlp takes the earlier file as already downloaded (final_ext), and the "
-        "container step converts it and deletes it"
-    ),
-)
 @pytest.mark.parametrize(
     ("page", "first", "second", "container"),
     [
@@ -8667,3 +8660,30 @@ def test_another_container_keeps_the_file_an_earlier_run_saved(
     assert (out / earlier).exists()
     assert codecs(out / earlier) == before
     assert any(name.endswith(f".{container}") for name in names(out))
+    # Run again in the same container: the converted file is the one already downloaded.
+    kept = names(out)
+    code, output = generic(page, flags=("-y", *second, "-o", str(out)))
+    assert code == 0
+    assert "has already been downloaded" in output
+    assert "Converting video" not in output
+    assert names(out) == kept
+
+
+@pytest.mark.parametrize(
+    "mode", [("-p",), ("--playlist-items", "1,2")], ids=["p", "playlist-items"]
+)
+def test_another_container_keeps_the_items_an_earlier_run_saved(
+    run: Any, out: Path, mode: tuple[str, ...]
+) -> None:
+    url = "https://fake.test/attached-carousel"
+    code, _ = run("-y", *mode, url)
+    assert code == 0
+    # The .mkv couldn't go into mp4, and the .mp4 already was one: both as served.
+    earlier = names(out)
+    assert earlier == ["01 - Clip [x1].mkv", "02 - Clip [v1].mp4"]
+    before = {name: codecs(out / name) for name in earlier}
+    code, output = run("-y", *mode, "--video-format", "webm", url)
+    assert code == 0
+    assert output.count("has already been downloaded") == 2
+    assert {name: codecs(out / name) for name in earlier} == before
+    assert sorted(set(names(out)) - set(earlier)) == ["01 - Clip [x1].webm", "02 - Clip [v1].webm"]
