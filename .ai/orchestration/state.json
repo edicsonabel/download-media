@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T09:04:19-04:00",
+  "updated": "2026-11-09T09:14:45-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2075,6 +2075,27 @@
           "result": "validated",
           "at": "2026-11-09T09:04:19-04:00",
           "note": "All 13 criteria hold, reproduction steps 1-4 fixed. Gate on 3a88477 exit 0, 1975 passed + 2 xfailed per locale, 98.80%. CI run 42620145342 success on 3a88477. Fix reverted on scratch copies: 16 of 21 named tests fail. No live run (spec needs none). Spec's 'Cookies: No cookies' claim was wrong and is corrected; D2 stays at A, flagged for the human's review. Planner: row 45 widen to the missing notice; row 02 and 63 line numbers; PLAN Next paragraph; 0.4.0 review list. Worktree and branch removed."
+        }
+      ]
+    },
+    "fix/p-double-count": {
+      "type": "fix",
+      "title": "Count and report keyring failures correctly in every mode",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/45-p-double-count.md",
+      "branch": "fix/p-double-count",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-09T09:14:45-04:00",
+          "note": "Human picked p-double-count (PLAN row 45) as the next item, on the planner's recommendation."
         }
       ]
     }
