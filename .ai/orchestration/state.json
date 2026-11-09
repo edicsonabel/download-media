@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T11:14:20-04:00",
+  "updated": "2026-11-09T12:54:11-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2081,9 +2081,9 @@
     "fix/p-double-count": {
       "type": "fix",
       "title": "Count and report keyring failures correctly in every mode",
-      "stage": "development",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/45-p-double-count.md",
       "branch": "fix/p-double-count",
       "worktree": ".worktrees/fix-p-double-count",
@@ -2145,6 +2145,20 @@
           "result": "blocked",
           "at": "2026-11-09T11:14:20-04:00",
           "note": "Round 1 finding fixed in d147530, new test added. Gate NOT completed: the system stopped it for low memory during tests (en) at about 53%, no exit code; es 2079 passed + 2 xfailed, 98.87%; lint, format, mypy passed. The system notice said not to restart it unprompted, so the rerun waits on the human. Real runs: 1 of 2, 1 failed, exit 0, en and es."
+        },
+        {
+          "stage": "development",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-09T12:54:11-04:00",
+          "note": "Human freed memory and asked to verify; 4.5 GiB available."
+        },
+        {
+          "stage": "development",
+          "agent": "orchestrator",
+          "result": "done",
+          "at": "2026-11-09T12:54:11-04:00",
+          "note": "Gate rerun by the orchestrator on d147530: exit 0, 2079 passed + 2 xfailed es/en, 99% coverage. Round 1 fix goes back to testing."
         }
       ]
     }
