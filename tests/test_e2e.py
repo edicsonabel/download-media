@@ -7309,6 +7309,21 @@ def test_a_jar_that_never_asks_the_keyring_keeps_its_cookies(
 
 
 @pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_the_wizard_names_a_keyring_error_at_the_probe(generic: Any, home: Path) -> None:
+    flags = ("-i", "--cookies", "chrome+kwallet6")
+    code, output = generic("multi.html", *PICKER_WALK, flags=flags)
+    assert code == 0
+    assert output.count(t("cookies_unreadable", "chrome", KWALLET_FAILED)) == 1
+    assert t("probe_partial", "\0").partition("\0")[0] not in output
+    assert output.count(tag("kind_video")) == 4
+    assert without_cookies() not in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert names(home / "Videos") == MULTI
+    assert not said_partial_result(output)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
 def test_a_keyring_error_at_the_last_wizard_step_says_so_after_done(
     generic: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
