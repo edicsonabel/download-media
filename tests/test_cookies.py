@@ -246,7 +246,53 @@ def test_anything_else_is_not_a_cookie_failure(exc: Exception) -> None:
     assert cookie_failure(exc) is None
 
 
-SECRETSTORAGE_MISSING = "ERROR: secretstorage not available No module named 'secretstorage'"
+SECRETSTORAGE = (
+    "secretstorage not available as the `secretstorage` module is not installed."
+    " Please install by running `python3 -m pip install secretstorage`"
+)
+
+
+@pytest.mark.parametrize(
+    ("said", "reason"),
+    [
+        # How report_error hands the cause to load_cookies: labelled, coloured on a terminal.
+        (f"ERROR: {SECRETSTORAGE}", SECRETSTORAGE),
+        ("\x1b[0;31mERROR:\x1b[0m failed to read from keyring", "failed to read from keyring"),
+        ("ERROR: ERROR: invalid key", "invalid key"),
+    ],
+    ids=["plain", "coloured", "twice"],
+)
+def test_a_labelled_cause_loses_its_label(said: str, reason: str) -> None:
+    assert cookie_failure(load_error(DownloadError(said))) == CookieFailure(False, reason)
+
+
+def test_a_labelled_secretstorage_cause_still_gets_its_hint(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    failure = cookie_failure(load_error(DownloadError(f"ERROR: {SECRETSTORAGE}")))
+    assert failure is not None
+    report_failure("chrome", failure)
+    said = capsys.readouterr().out
+    assert t("cookies_unreadable", "chrome", SECRETSTORAGE) in said
+    assert "sudo pacman -S python-secretstorage" in said
+
+
+def test_a_label_in_the_middle_of_the_reason_stays() -> None:
+    error = load_error(RuntimeError("cannot open keyring: ERROR: denied"))
+    assert cookie_failure(error) == CookieFailure(False, "cannot open keyring: ERROR: denied")
+
+
+def test_colour_codes_leave_an_unlabelled_reason_too() -> None:
+    error = load_error(DownloadError("\x1b[1;33mno encrypted key in Local State\x1b[0m"))
+    assert cookie_failure(error) == CookieFailure(False, "no encrypted key in Local State")
+
+
+def test_only_the_label_goes_from_a_cause_that_names_errors() -> None:
+    error = load_error(DownloadError("ERROR: invalid key: ERROR: 3 bytes left"))
+    assert cookie_failure(error) == CookieFailure(False, "invalid key: ERROR: 3 bytes left")
+
+
+SECRETSTORAGE_MISSING = "secretstorage not available No module named 'secretstorage'"
 
 
 @pytest.mark.parametrize(

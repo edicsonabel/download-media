@@ -44,6 +44,7 @@ from .downloader import (
     build_ydl_opts,
     download,
     list_formats,
+    load_browser_cookies,
 )
 from .i18n import is_yes, t
 from .probe import is_auth_error
@@ -224,8 +225,13 @@ def should_run_wizard(args: argparse.Namespace, argv: list[str]) -> bool:
 # ---------------------------------------------------------------------------
 # Per-URL pipeline (preview, playlist resolution, download)
 # ---------------------------------------------------------------------------
-def _show_preview(url: str, opts: DownloadOptions) -> bool:
-    """Probe a single URL, print metadata, ask user to confirm. Returns False if cancelled."""
+class _Preview(NamedTuple):
+    confirmed: bool
+    cookies_failed: bool  # The browser's cookies couldn't be read, and that was reported.
+
+
+def _show_preview(url: str, opts: DownloadOptions) -> _Preview:
+    """Probe a single URL, print metadata, ask user to confirm."""
     info(t("fetching"))
     from typing import Any
 
@@ -239,9 +245,21 @@ def _show_preview(url: str, opts: DownloadOptions) -> bool:
     }
     if opts.cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
+    cookies_failed = False
     try:
         with YoutubeDL(ydl_opts) as ydl:
+            load_browser_cookies(ydl, opts.cookies_browser)
             data = ydl.extract_info(url, download=False)
+    except CookiesUnavailable as exc:
+        # Said before the user confirms; the download then goes on without them.
+        report_failure(exc.spec, exc.failure)
+        cookies_failed = True
+        del ydl_opts["cookiesfrombrowser"]
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                data = ydl.extract_info(url, download=False)
+        except Exception:
+            data = None
     except Exception:
         data = None
 
@@ -264,8 +282,8 @@ def _show_preview(url: str, opts: DownloadOptions) -> bool:
     try:
         reply = input(t("ask_confirm")).strip()
     except EOFError:
-        return False
-    return not reply or is_yes(reply)
+        return _Preview(False, cookies_failed)
+    return _Preview(not reply or is_yes(reply), cookies_failed)
 
 
 def _resolve_playlist_for_direct_mode(
@@ -320,9 +338,12 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
 
     # Direct-mode single: still preview before downloading
     direct_single = opts.playlist_mode == "auto" and pmode == "no" and not opts.no_confirm
-    if direct_single and not _show_preview(url, opts):
-        warn(t("cancelled"))
-        return _Outcome(False, False, None)
+    cookies_failed = False
+    if direct_single:
+        confirmed, cookies_failed = _show_preview(url, opts)
+        if not confirmed:
+            warn(t("cancelled"))
+            return _Outcome(False, False, None)
 
     effective = replace(opts, playlist_mode=pmode, playlist_items=items)
 
@@ -334,7 +355,9 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     print(f"{C.DIM}  → {effective.resolve_output()}{C.RESET}\n")
 
     try:
-        result, cookies_dropped = _download_with_cookie_fallback(url, effective)
+        result, cookies_dropped = _download_with_cookie_fallback(
+            url, effective, cookies_failed=cookies_failed
+        )
     except DownloadError as exc:
         # yt-dlp already printed the underlying error to stderr; we add a one-line
         # friendly summary so the user knows the program is exiting cleanly, not
@@ -373,6 +396,9 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     if result.subs_missing:
         warn(t("subs_none", effective.sub_langs))
     ok(t("done"))
+    if cookies_dropped and opts.cookies_browser:
+        # Long runs scroll the notice away, and the site may still answer with its public page.
+        warn(t("done_without_cookies", browser_of(opts.cookies_browser)))
     history.append(
         url,
         "audio" if opts.audio_only else "video",
@@ -381,10 +407,13 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     return _Outcome(True, cookies_dropped, pmode)
 
 
-def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> tuple[DownloadResult, bool]:
+def _download_with_cookie_fallback(
+    url: str, opts: DownloadOptions, *, cookies_failed: bool = False
+) -> tuple[DownloadResult, bool]:
     """Download ``url``; if browser cookies were used and it fails, retry once without them.
 
-    Returns the download result and whether the cookies were dropped.
+    Returns the download result and whether the cookies were dropped. ``cookies_failed``: the
+    preview already found and reported the browser's cookies unreadable.
 
     A partially decrypted cookie jar (keyring issues with Brave/Chrome) can break
     extractors that work fine anonymously — Instagram answers with an empty API
@@ -394,14 +423,13 @@ def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> tuple[Dow
     Cookies that can't be loaded at all are reported as such, and the run goes on without
     them: no request was made with them, so there's no first error to keep.
     """
+    if cookies_failed:
+        return _download_without_cookies(url, opts), True
     try:
         return download(url, opts), False
     except CookiesUnavailable as exc:
         report_failure(exc.spec, exc.failure)
-        try:
-            return download(url, replace(opts, cookies_browser=None)), True
-        except DownloadError as error:
-            raise _FailedWithoutCookies(str(error), error.exc_info) from None
+        return _download_without_cookies(url, opts), True
     except DownloadError as exc:
         if not opts.cookies_browser:
             raise
@@ -412,6 +440,14 @@ def _download_with_cookie_fallback(url: str, opts: DownloadOptions) -> tuple[Dow
         return download(url, replace(opts, cookies_browser=None)), True
     except DownloadError:
         raise first_error from None
+
+
+def _download_without_cookies(url: str, opts: DownloadOptions) -> DownloadResult:
+    """The run after the browser's cookies couldn't be read."""
+    try:
+        return download(url, replace(opts, cookies_browser=None))
+    except DownloadError as error:
+        raise _FailedWithoutCookies(str(error), error.exc_info) from None
 
 
 def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:

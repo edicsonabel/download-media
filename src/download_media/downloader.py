@@ -276,7 +276,7 @@ class OutputUnusable(Exception):
         self.reason = reason
 
 
-def _load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
+def load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
     """Load the browser's cookies before any request, so a failure looks the same in every mode.
 
     yt-dlp loads them on the first request. Under ignoreerrors (-p, --playlist-items) the
@@ -629,7 +629,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     untagged: list[str] = []
     no_cover: list[str] = []
     with _Ydl(ydl_opts) as ydl:
-        _load_browser_cookies(ydl, opts.cookies_browser)
+        load_browser_cookies(ydl, opts.cookies_browser)
         ydl.save_images = True
 
         def keep(path: str) -> None:
@@ -687,6 +687,6 @@ def list_formats(url: str, opts: DownloadOptions) -> int:
     if opts.cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
     with _Ydl(ydl_opts) as ydl:
-        _load_browser_cookies(ydl, opts.cookies_browser)
+        load_browser_cookies(ydl, opts.cookies_browser)
         ydl.save_images = True
         return int(ydl.download([url]))

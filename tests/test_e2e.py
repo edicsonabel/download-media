@@ -21,6 +21,7 @@ from download_media import cli, i18n, wizard
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.downloader import _source_url
 from download_media.i18n import t
+from download_media.probe import ContentKind, Probe
 
 from .conftest import FLAKY_SEEN, GATE_REQUESTS, GEO_BLOCK, HTTP_404, JUNK, NO_EXT_VIDEO, FakeSiteIE
 
@@ -6310,12 +6311,18 @@ def keyring_hint(browser: str = "chrome") -> str:
 def direct(
     media_url: str, home: Path, out: Path, answers: Any, capfd: pytest.CaptureFixture[str]
 ) -> Callable[..., tuple[int, str]]:
-    """Run loopback pages through the real generic extractor in direct mode. No prompts."""
+    """Run loopback pages through the real generic extractor in direct mode.
 
-    def _direct(*argv: str, pages: tuple[str, ...]) -> tuple[int, str]:
-        answers()
+    ``replies`` answer the preview's confirmation, once per URL; without them, any prompt fails.
+    """
+
+    def _direct(
+        *argv: str, pages: tuple[str, ...], replies: tuple[str, ...] = ()
+    ) -> tuple[int, str]:
+        prompts = answers(*replies)
         code = cli.main(["-o", str(out), *argv, *(f"{media_url}/{page}" for page in pages)])
         captured = capfd.readouterr()
+        assert prompts == [t("ask_confirm")] * len(replies)
         return code, captured.out + captured.err
 
     return _direct
@@ -6444,6 +6451,144 @@ def test_a_missing_browser_at_the_last_wizard_step_saves_the_picked_items(
     assert "--cookies" not in shlex.split(line)
 
 
+NO_DATABASE = "could not find chrome cookies database"
+
+
+def without_cookies(browser: str = "chrome") -> str:
+    return t("done_without_cookies", browser)
+
+
+def after_done(output: str) -> list[str]:
+    """The line after each t("done")."""
+    lines = [line.strip() for line in output.splitlines()]
+    return [lines[i + 1] for i, line in enumerate(lines) if line == t("done")]
+
+
+@pytest.mark.parametrize(
+    ("flags", "page"),
+    [
+        ((), "poster.html"),
+        (("-p",), "multi.html"),
+        (("--playlist-items", "1,2"), "multi.html"),
+    ],
+)
+def test_a_run_without_the_asked_cookies_says_so_after_done(
+    direct: Any, flags: tuple[str, ...], page: str
+) -> None:
+    code, output = direct("-y", *flags, "--cookies", "chrome", pages=(page,))
+    assert code == 0
+    assert output.count(without_cookies()) == 1
+    assert after_done(output) == [without_cookies()]
+
+
+def test_a_partial_result_without_the_asked_cookies_says_so_after_done(direct: Any) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("half-gone.html",))
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert after_done(output) == [without_cookies()]
+
+
+def test_nothing_saved_without_the_asked_cookies_has_no_closing_line(direct: Any) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=("status/404",))
+    assert code == 1
+    assert without_cookies() not in output
+
+
+def test_cookies_refused_by_the_site_say_so_after_done(run: Any, out: Path) -> None:
+    code, output = run("-y", "--cookies", "brave", "https://fake.test/rejects-cookies")
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.index(t("cookies_retry", "brave")) < output.index(t("done"))
+    assert after_done(output) == [without_cookies("brave")]
+
+
+def test_a_missing_browser_at_the_last_wizard_step_says_so_after_done(generic: Any) -> None:
+    code, output = generic("multi.html", *PICKER_WALK[:-1], CHROME)
+    assert code == 0
+    assert after_done(output) == [without_cookies()]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ("--cookies", "firefox", "https://fake.test/needs-cookies"),  # The cookies were used.
+        (VIDEO,),
+    ],
+)
+def test_no_closing_line_without_a_drop(run: Any, argv: tuple[str, ...]) -> None:
+    code, output = run("-y", *argv)
+    assert code == 0
+    assert t("done") in output
+    assert unreadable() not in output
+    assert t("done_without_cookies", "\0").partition("\0")[0] not in output
+
+
+def test_no_closing_line_after_the_wizard_probe_drops_the_browser(generic: Any) -> None:
+    # The walk already shows "No cookies", and the download had no browser left to drop.
+    code, output = generic("poster.html", *SINGLE_WALK, flags=("-i", "--cookies", "chrome"))
+    assert code == 0
+    assert no_browser() in output
+    assert t("done") in output
+    assert without_cookies() not in output
+
+
+def test_the_preview_names_a_missing_browser_and_still_shows_the_page(
+    direct: Any, out: Path
+) -> None:
+    code, output = direct("--cookies", "chrome", pages=("poster.html",), replies=("",))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert f"  {t('p_title')}: poster (1)" in output
+    # yt-dlp's own line: the download doesn't read the browser a second time.
+    assert output.count(NO_DATABASE) == 1
+    assert names(out) == ["poster (1).mp4"]
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(history_rows()) == 1
+
+
+def test_a_preview_cancelled_after_a_missing_browser_still_said_it(direct: Any, out: Path) -> None:
+    # The exit code is row cancel-exits'.
+    _, output = direct("--cookies", "chrome", pages=("poster.html",), replies=("n",))
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert f"  {t('p_title')}: poster (1)" in output
+    assert t("cancelled") in output
+    assert names(out) == []
+    assert commands(output) == []
+
+
+def test_a_dead_page_after_the_preview_with_a_missing_browser(
+    direct: Any, media_url: str, out: Path
+) -> None:
+    code, output = direct("--cookies", "chrome", pages=("status/404",), replies=("",))
+    assert code == 1
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert output.count(NO_DATABASE) == 1
+    assert t("failed", f"{media_url}/status/404") in output
+    assert keyring_hint() not in output
+    assert without_cookies() not in output
+    assert "Traceback" not in output
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+    assert names(out) == []
+
+
+def test_every_preview_names_its_missing_browser(direct: Any, out: Path) -> None:
+    pages = ("poster.html", "multi.html")
+    code, output = direct("--cookies", "chrome", pages=pages, replies=("", ""))
+    assert code == 0
+    assert output.count(no_browser()) == 2
+    assert output.count(NO_DATABASE) == 2
+    assert len(names(out)) == 5  # Single mode keeps every video of a multi-video page.
+    assert after_done(output) == [without_cookies()] * 2
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
 @pytest.mark.usefixtures("unreadable_chrome")
 def test_an_unreachable_keyring_named_by_hand_gets_no_keyring_hint(direct: Any, out: Path) -> None:
     code, output = direct("-y", "-p", "--cookies", "chrome+gnomekeyring", pages=("multi.html",))
@@ -6561,6 +6706,25 @@ def test_formats_are_listed_with_a_browser_that_loads(direct: Any, token: str) -
     assert "Available formats" in output
     assert no_browser() not in output
     assert sent(token) and all("dm=ok" in cookie for _, cookie in sent(token))
+
+
+def test_a_preview_with_cookies_that_load_keeps_them(direct: Any, out: Path, token: str) -> None:
+    chrome_cookie()
+    page = f"cookie/{token}/poster.html"
+    code, output = direct("--cookies", "chrome", pages=(page,), replies=("",))
+    assert code == 0
+    assert no_browser() not in output
+    assert unreadable() not in output
+    # The page answers 401 without the cookie: a title means the preview sent it.
+    assert f"  {t('p_title')}: poster (1)" in output
+    assert names(out) == ["poster (1).mp4"]
+    pages = [path for path, _ in sent(token) if path == "/poster.html"]
+    assert len(pages) >= 2  # The preview, then the download.
+    assert all("dm=ok" in cookie for _, cookie in sent(token))
+    assert t("cookies_retry", "chrome") not in output
+    assert without_cookies() not in output
+    [line] = commands(output)
+    assert "--cookies chrome" in line
 
 
 def test_cookies_that_load_and_get_refused_still_retry(direct: Any, out: Path, token: str) -> None:
@@ -6703,6 +6867,217 @@ def test_unreadable_cookies_in_both_languages(
     assert said["cookies_unreadable"].format("safari", "unsupported platform: linux") in output
     assert other["cookies_unreadable"].format("safari", "unsupported platform: linux") not in output
     assert said["done"] in output
+    assert said["done_without_cookies"].format("safari") in output
+    assert other["done_without_cookies"].format("safari") not in output
+
+
+def test_the_spanish_notices_say_the_run_goes_on() -> None:
+    # "Se sigue sin cookies" also reads as "still no cookies".
+    spanish = i18n._MESSAGES["es"]
+    for key in ("cookies_no_browser", "cookies_unreadable"):
+        assert spanish[key].endswith(" Se continúa sin cookies.")
+    assert not any("Se sigue sin cookies" in text for text in spanish.values())
+
+
+# Spec 50, beyond the developer's cases: every way a run reaches the download.
+
+
+def _closing_lines(output: str) -> list[int]:
+    lines = output.splitlines()
+    return [i for i, line in enumerate(lines) if line.strip() == without_cookies()]
+
+
+@pytest.mark.parametrize("flags", [("-P",), ("-y", "-P"), ("-y", "-a")])
+def test_runs_without_a_preview_say_so_after_done(direct: Any, flags: tuple[str, ...]) -> None:
+    # -P skips the preview even without -y: the notice comes at the download, once.
+    code, output = direct(*flags, "--cookies", "chrome", pages=("poster.html",))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert output.count(NO_DATABASE) == 1
+    assert t("preview") not in output
+    assert after_done(output) == [without_cookies()]
+    assert "\x1b" not in output  # Not a terminal: no colour codes around either line.
+
+
+def test_a_playlist_url_with_all_at_the_mode_prompt_says_so_after_done(
+    media_url: str, out: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    prompts = answers("2")
+    code = cli.main(["-o", str(out), "--cookies", "chrome", f"{media_url}/multi.html?list=1"])
+    output = "".join(capfd.readouterr())
+    assert prompts == [t("ask_choice", "1")]
+    assert code == 0
+    assert names(out) == MULTI
+    assert output.count(no_browser()) == 1
+    assert after_done(output) == [without_cookies()]
+
+
+def test_a_playlist_url_taken_as_single_names_the_browser_in_its_preview(
+    media_url: str, out: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    prompts = answers("1", "")
+    code = cli.main(["-o", str(out), "--cookies", "chrome", f"{media_url}/multi.html?list=1"])
+    output = "".join(capfd.readouterr())
+    assert prompts == [t("ask_choice", "1"), t("ask_confirm")]
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert output.count(NO_DATABASE) == 1
+    assert after_done(output) == [without_cookies()]
+
+
+def test_each_closing_line_follows_its_own_url(direct: Any, media_url: str) -> None:
+    pages = ("multi.html", "poster.html")
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=pages)
+    assert code == 0
+    assert after_done(output) == [without_cookies()] * 2
+    first, second = _closing_lines(output)
+    lines = output.splitlines()
+    second_url = next(i for i, line in enumerate(lines) if f"URL: {media_url}/poster.html" in line)
+    assert first < second_url < second
+
+
+def test_a_failed_url_next_to_a_saved_one_gets_no_closing_line(
+    direct: Any, media_url: str, out: Path
+) -> None:
+    code, output = direct("-y", "--cookies", "chrome", pages=("status/404", "poster.html"))
+    assert code == 1
+    assert output.count(no_browser()) == 2
+    assert after_done(output) == [without_cookies()]
+    [closing] = _closing_lines(output)
+    lines = output.splitlines()
+    failed = next(
+        i for i, line in enumerate(lines) if t("failed", f"{media_url}/status/404") in line
+    )
+    assert failed < closing
+    assert names(out) == ["poster (1).mp4"]
+    assert len(history_rows()) == 1
+
+
+def test_a_preview_cancelled_on_the_second_url_keeps_the_first_closing_line(
+    direct: Any, out: Path
+) -> None:
+    pages = ("poster.html", "multi.html")
+    _, output = direct("--cookies", "chrome", pages=pages, replies=("", "n"))
+    assert output.count(no_browser()) == 2
+    assert after_done(output) == [without_cookies()]
+    assert t("cancelled") in output
+    assert names(out) == ["poster (1).mp4"]
+
+
+def test_formats_listed_without_a_missing_browser_have_no_closing_line(direct: Any) -> None:
+    code, output = direct("-l", "--cookies", "chrome", pages=("poster.html",))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert without_cookies() not in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "page", "said"),
+    [
+        # Every item fails under ignoreerrors: the run returns with nothing saved, no exception.
+        (("-p",), "all-junk.html", ("failed", "{url}")),
+        # The list doesn't hold what was asked for.
+        (("--playlist-items", "9"), "multi.html", ("items_not_found", 4, "9")),
+    ],
+)
+def test_a_run_that_saved_nothing_without_the_asked_cookies_has_no_closing_line(
+    direct: Any, media_url: str, flags: tuple[str, ...], page: str, said: tuple[Any, ...]
+) -> None:
+    code, output = direct("-y", *flags, "--cookies", "chrome", pages=(page,))
+    assert code == 1
+    assert output.count(no_browser()) == 1
+    key, *args = said
+    assert t(key, *(str(a).format(url=f"{media_url}/{page}") for a in args)) in output
+    assert t("done") not in output
+    assert without_cookies() not in output
+    assert history_rows() == []
+
+
+def test_the_closing_line_in_spanish(direct: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(i18n, "LANG", "es")
+    code, output = direct("-y", "--cookies", "chrome", pages=("poster.html",))
+    assert code == 0
+    assert (
+        "No se encontraron cookies de chrome: ¿está chrome instalado y se ha abierto al menos "
+        "una vez? Se continúa sin cookies."
+    ) in output
+    lines = [line.strip() for line in output.splitlines()]
+    done = lines.index("Listo.")
+    assert lines[done + 1] == (
+        "Guardado sin las cookies de chrome: es lo que el sitio muestra sin iniciar sesión."
+    )
+
+
+def test_the_preview_refused_by_the_site_retries_once_and_says_so_after_done(
+    run: Any, out: Path, answers: Any
+) -> None:
+    prompts = answers("")
+    code, output = run("--cookies", "brave", "https://fake.test/rejects-cookies")
+    assert prompts == [t("ask_confirm")]
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.count(t("cookies_retry", "brave")) == 1
+    assert no_browser("brave") not in output
+    assert unreadable("brave") not in output
+    assert after_done(output) == [without_cookies("brave")]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+def test_the_manual_flow_preview_names_a_browser_picked_at_the_last_step(
+    generic: Any, home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A probe that fails for its own reasons: the walk goes manual, and cli.py previews the URL.
+    def broken(url: str, cookies_browser: str | None = None) -> Probe:
+        return Probe(url, "generic", ContentKind.UNKNOWN, failed=True, error_message="broke")
+
+    monkeypatch.setattr(wizard, "probe", broken)
+    # URL, the manual flow's four steps, chrome at the late cookies step, the preview.
+    code, output = generic("poster.html", "", *VIDEO_STEPS, CHROME, "")
+    assert code == 0
+    assert t("probe_falling_back") in output
+    assert output.count(no_browser()) == 1
+    assert output.index(no_browser()) < output.index(t("preview"))
+    assert f"  {t('p_title')}: poster (1)" in output
+    assert output.count(NO_DATABASE) == 1
+    assert len(names(home / "Videos")) == 1
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.fixture
+def no_secretstorage(monkeypatch: pytest.MonkeyPatch) -> None:
+    """yt-dlp without secretstorage, as on a broken install: its own reason, word for word."""
+    import yt_dlp.cookies
+
+    monkeypatch.setattr(yt_dlp.cookies, "secretstorage", None)
+    monkeypatch.setattr(
+        yt_dlp.cookies,
+        "_SECRETSTORAGE_UNAVAILABLE_REASON",
+        "as the `secretstorage` module is not installed.",
+    )
+
+
+SECRETSTORAGE_REASON = "secretstorage not available as the `secretstorage` module is not installed."
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "no_secretstorage")
+@pytest.mark.parametrize("replies", [(), ("",)], ids=["-y", "preview"])
+def test_yt_dlps_label_stays_out_of_the_reason(
+    direct: Any, out: Path, replies: tuple[str, ...]
+) -> None:
+    # Single mode: yt-dlp's report_error labels the cause before it reaches the tool.
+    flags = () if replies else ("-y",)
+    spec = ("--cookies", "chrome+gnomekeyring")
+    code, output = direct(*flags, *spec, pages=("poster.html",), replies=replies)
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.count(t("cookies_unreadable", "chrome", SECRETSTORAGE_REASON)) == 1
+    assert "(ERROR:" not in output
+    assert "sudo pacman -S python-secretstorage" in output
+    assert after_done(output) == [without_cookies()]
 
 
 def test_a_missing_browser_at_the_last_wizard_step_saves_a_single_video(

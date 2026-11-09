@@ -56,6 +56,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "ask_confirm": "¿Continuar con la descarga? [S/n]: ",
         "downloading": "Descargando...",
         "done": "Listo.",
+        "done_without_cookies": "Guardado sin las cookies de {0}: es lo que el sitio muestra sin iniciar sesión.",
         "untagged": (
             "{}: guardado, pero ffmpeg no pudo escribir sus metadatos, así que al repetir la "
             "descarga no se reconocerá y puede guardarse otra copia."
@@ -72,8 +73,8 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "cookies_retry": "Falló con las cookies de {}. Reintentando sin cookies...",
         "cookies_bad_spec": "valor inválido {!r}: usa NAVEGADOR[+KEYRING] (navegadores: {}; keyrings: {})",
         "cookies_keyring_hint": "  → si {0} guarda sus claves en otro keyring, indícalo: --cookies {0}+gnomekeyring (o +kwallet6, +basictext)",
-        "cookies_no_browser": "No se encontraron cookies de {0}: ¿está {0} instalado y se ha abierto al menos una vez? Se sigue sin cookies.",
-        "cookies_unreadable": "No se pudieron leer las cookies de {0} ({1}). Se sigue sin cookies.",
+        "cookies_no_browser": "No se encontraron cookies de {0}: ¿está {0} instalado y se ha abierto al menos una vez? Se continúa sin cookies.",
+        "cookies_unreadable": "No se pudieron leer las cookies de {0} ({1}). Se continúa sin cookies.",
         "item_no_media": "{}: nada que descargar, se omite",
         "item_image_skipped": "{}: es una imagen, se omite",
         "image_not_saved": "{}: no se pudo descargar la imagen",
@@ -155,6 +156,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "ask_confirm": "Proceed with download? [Y/n]: ",
         "downloading": "Downloading...",
         "done": "Done.",
+        "done_without_cookies": "Saved without {0} cookies: this is what the site shows without logging in.",
         "untagged": (
             "{}: saved, but ffmpeg couldn't write its metadata, so a rerun won't recognize it "
             "and may save another copy."
