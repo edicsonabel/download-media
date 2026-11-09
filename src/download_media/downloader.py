@@ -31,7 +31,7 @@ from yt_dlp.utils import (
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
-from .cookies import CookieFailure, cookie_failure, ydl_cookies
+from .cookies import CookieFailure, cookie_failure, logged_failure, ydl_cookies
 from .i18n import t
 from .selection import missing_items
 
@@ -285,9 +285,22 @@ def load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
 
     yt-dlp loads them on the first request. Under ignoreerrors (-p, --playlist-items) the
     failure then escapes as a bare CookieLoadError; without it, as a DownloadError.
+
+    A keyring error can also end up only logged: always under ignoreerrors, and in any mode when
+    a try inside yt-dlp swallows it. Nothing tells the jar it then returns, decrypted with an
+    empty password, from a good one, so that's a failure too.
     """
     if not spec or not ydl.params.get("cookiesfrombrowser"):
         return
+    logged: list[str] = []
+    report_error = ydl.report_error
+
+    def note(message: Any, *args: Any, **kwargs: Any) -> None:
+        logged.append(str(message))
+        report_error(message, *args, **kwargs)
+
+    # What yt-dlp's cookie logger calls. On the instance: the preview passes a plain YoutubeDL.
+    ydl.report_error = note
     try:
         _ = ydl.cookiejar  # Not cached on failure: every read retries the load.
     except (CookieLoadError, DownloadError) as exc:
@@ -295,6 +308,10 @@ def load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
         if failure is None:
             raise
         raise CookiesUnavailable(spec, failure) from exc
+    finally:
+        del ydl.report_error
+    if logged:
+        raise CookiesUnavailable(spec, logged_failure(logged[0]))
 
 
 def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:

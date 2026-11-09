@@ -23,6 +23,7 @@ from download_media.cookies import (
     browser_of,
     cookie_failure,
     detect_keyring,
+    logged_failure,
     parse_spec,
     report_failure,
     uses_keyring,
@@ -290,6 +291,16 @@ def test_colour_codes_leave_an_unlabelled_reason_too() -> None:
 def test_only_the_label_goes_from_a_cause_that_names_errors() -> None:
     error = load_error(DownloadError("ERROR: invalid key: ERROR: 3 bytes left"))
     assert cookie_failure(error) == CookieFailure(False, "invalid key: ERROR: 3 bytes left")
+
+
+def test_a_logged_error_reads_like_a_raised_one() -> None:
+    assert logged_failure("kwallet-query failed with return code 1.\nmore") == CookieFailure(
+        missing=False, reason="kwallet-query failed with return code 1."
+    )
+    assert logged_failure("ERROR: ERROR: invalid key").reason == "invalid key"
+    coloured = "\x1b[0;31mERROR:\x1b[0m failed to read from keyring"
+    assert logged_failure(coloured).reason == "failed to read from keyring"
+    assert len(logged_failure("first line " + "x " * 300).reason) <= 160
 
 
 SECRETSTORAGE_MISSING = "secretstorage not available No module named 'secretstorage'"

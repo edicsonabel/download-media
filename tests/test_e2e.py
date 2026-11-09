@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import types
 import urllib.request
 import uuid
 from collections.abc import Callable
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from yt_dlp.aes import aes_cbc_encrypt_bytes
+from yt_dlp.cookies import pbkdf2_sha1
 
 from download_media import cli, i18n, wizard
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
@@ -6673,8 +6676,8 @@ def sent(token: str) -> list[tuple[str, str]]:
     return sorted(GATE_REQUESTS.get(token, []))
 
 
-def chrome_cookie(value: bytes = b"ok") -> None:
-    """A Chrome profile with one plaintext cookie for the loopback host: no keyring involved."""
+def chrome_cookie(value: bytes = b"ok", encrypted: bytes = b"") -> None:
+    """A Chrome profile with one cookie for the loopback host: no keyring involved."""
     profile = Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default"
     profile.mkdir(parents=True)
     con = sqlite3.connect(profile / "Cookies")
@@ -6686,7 +6689,7 @@ def chrome_cookie(value: bytes = b"ok") -> None:
     )
     con.execute(
         "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
-        (b"127.0.0.1", b"dm", value, b"", b"/"),
+        (b"127.0.0.1", b"dm", value, encrypted, b"/"),
     )
     con.commit()
     con.close()
@@ -6793,23 +6796,42 @@ def no_kwallet_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", str(bin_dir))
 
 
+@pytest.fixture
+def kwallet_query_fails(no_kwallet_query: None, tmp_path: Path) -> None:
+    """A kwallet-query that always exits 1: yt-dlp logs it, in every mode, and carries on."""
+    tool = tmp_path / "bin" / "kwallet-query"
+    tool.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    tool.chmod(0o755)
+
+
+@pytest.fixture
+def empty_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A session keyring that answers, and holds no item for the browser."""
+    import yt_dlp.cookies
+
+    class Collection:
+        def close(self) -> None: ...
+
+        def get_all_items(self) -> list[Any]:
+            return []
+
+    stub = types.SimpleNamespace(dbus_init=Collection, get_default_collection=lambda con: con)
+    monkeypatch.setattr(yt_dlp.cookies, "secretstorage", stub)
+
+
 KWALLET_MISSING = "kwallet-query command not found"
 
 
 @pytest.mark.usefixtures("unreadable_chrome", "no_kwallet_query")
-def test_a_keyring_that_decrypts_nothing_in_a_playlist_is_not_a_load_failure(
-    direct: Any, out: Path
-) -> None:
-    # Under ignoreerrors yt-dlp only logs the missing tool and loads a jar it can't decrypt:
-    # there's no load failure to report, and nothing to go on without.
+def test_a_keyring_tool_that_is_missing_in_a_playlist_is_unreadable(direct: Any, out: Path) -> None:
     code, output = direct("-y", "-p", "--cookies", "chrome+kwallet6", pages=("multi.html",))
     assert code == 0
     assert names(out) == MULTI
-    assert KWALLET_MISSING in output
-    assert unreadable() not in output
-    assert no_browser() not in output
+    [said] = [line for line in output.splitlines() if line.startswith(unreadable())]
+    assert KWALLET_MISSING in said
+    assert keyring_hint() not in output
     [line] = commands(output)
-    assert "--cookies chrome+kwallet6" in line
+    assert "--cookies" not in shlex.split(line)
 
 
 @pytest.mark.usefixtures("unreadable_chrome", "no_kwallet_query")
@@ -7103,6 +7125,211 @@ def test_yt_dlps_label_stays_out_of_the_reason(
     assert output.count(t("cookies_unreadable", "chrome", SECRETSTORAGE_REASON)) == 1
     assert "(ERROR:" not in output
     assert "sudo pacman -S python-secretstorage" in output
+    assert after_done(output) == [without_cookies()]
+
+
+KWALLET_FAILED = (
+    "kwallet-query failed with return code 1. Please consult the kwallet-query man page for details"
+)
+KEYRING_CAUSES = [
+    pytest.param("kwallet_query_fails", "chrome+kwallet6", KWALLET_FAILED, id="kwallet-fails"),
+    pytest.param(
+        "no_kwallet_query",
+        "chrome+kwallet6",
+        "kwallet-query command not found. KWallet and kwallet-query must be installed to read"
+        " from KWallet. kwallet-query should beincluded in the kwallet package for...",
+        id="kwallet-missing",
+    ),
+    pytest.param("no_secretstorage", "chrome+gnomekeyring", SECRETSTORAGE_REASON, id="no-module"),
+    pytest.param(
+        "empty_keyring", "chrome+gnomekeyring", "failed to read from keyring", id="no-item"
+    ),
+]
+
+
+def no_cookie_sent(token: str) -> bool:
+    return bool(sent(token)) and not any(cookie for _, cookie in sent(token))
+
+
+def kde_desktop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The desktop yt-dlp reads to pick kwallet for a bare ``chrome``."""
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+    monkeypatch.setenv("KDE_SESSION_VERSION", "6")
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize(("cause", "spec", "reason"), KEYRING_CAUSES)
+@pytest.mark.parametrize(
+    ("flags", "saved"),
+    [(("-p",), MULTI), (("--playlist-items", "1,2"), MULTI[:2])],
+    ids=["-p", "--playlist-items"],
+)
+def test_a_keyring_error_goes_on_without_cookies(
+    direct: Any,
+    out: Path,
+    token: str,
+    request: pytest.FixtureRequest,
+    cause: str,
+    spec: str,
+    reason: str,
+    flags: tuple[str, ...],
+    saved: list[str],
+) -> None:
+    request.getfixturevalue(cause)
+    code, output = direct("-y", *flags, "--cookies", spec, pages=(f"seen/{token}/multi.html",))
+    assert code == 0
+    assert names(out) == saved
+    assert output.count(t("cookies_unreadable", "chrome", reason)) == 1
+    assert not said_partial_result(output)
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(history_rows()) == 1
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_error_in_single_mode_goes_on_without_cookies(
+    direct: Any, out: Path, token: str
+) -> None:
+    flags = ("-y", "--cookies", "chrome+kwallet6")
+    code, output = direct(*flags, pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.count(t("cookies_unreadable", "chrome", KWALLET_FAILED)) == 1
+    assert not said_partial_result(output)
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(history_rows()) == 1
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_error_is_named_before_the_preview(direct: Any, out: Path) -> None:
+    code, output = direct("--cookies", "chrome+kwallet6", pages=("poster.html",), replies=("",))
+    assert code == 0
+    notice = t("cookies_unreadable", "chrome", KWALLET_FAILED)
+    assert output.count(notice) == 1
+    assert output.index(notice) < output.index(t("preview"))
+    assert f"  {t('p_title')}: poster (1)" in output
+    # yt-dlp's own line: the download doesn't read the browser a second time.
+    assert output.count(f"ERROR: {KWALLET_FAILED}") == 1
+    assert after_done(output) == [without_cookies()]
+    assert len(names(out)) == 1
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_preview_cancelled_after_a_keyring_error_still_said_it(direct: Any, out: Path) -> None:
+    _, output = direct("--cookies", "chrome+kwallet6", pages=("poster.html",), replies=("n",))
+    notice = t("cookies_unreadable", "chrome", KWALLET_FAILED)
+    assert output.index(notice) < output.index(t("preview"))
+    assert t("cancelled") in output
+    assert names(out) == []
+    assert commands(output) == []
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_formats_are_listed_after_a_keyring_error(direct: Any, token: str) -> None:
+    flags = ("-l", "--cookies", "chrome+kwallet6")
+    code, output = direct(*flags, pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert t("cookies_unreadable", "chrome", KWALLET_FAILED) in output
+    assert "Available formats" in output
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_desktop_keyring_error_suggests_another_keyring(
+    direct: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kde_desktop(monkeypatch)
+    code, output = direct("-y", "--cookies", "chrome", pages=("poster.html",))
+    assert code == 0
+    notice = t("cookies_unreadable", "chrome", KWALLET_FAILED)
+    assert output.index(notice) < output.index(keyring_hint())
+    assert after_done(output) == [without_cookies()]
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+@pytest.mark.parametrize("flags", [("-p",), ()], ids=["-p", "single"])
+def test_a_dead_page_after_a_keyring_error_fails_without_a_retry_line(
+    direct: Any, media_url: str, flags: tuple[str, ...]
+) -> None:
+    code, output = direct("-y", *flags, "--cookies", "chrome+kwallet6", pages=("status/401",))
+    assert code == 1
+    assert t("cookies_unreadable", "chrome", KWALLET_FAILED) in output
+    assert t("failed", f"{media_url}/status/401") in output
+    assert GIVE_UP in output
+    assert t("cookies_retry", "chrome+kwallet6") not in output
+    assert keyring_hint() not in output
+    [line] = commands(output)
+    assert "--cookies chrome+kwallet6" in line
+    assert without_cookies() not in output
+
+
+@pytest.mark.usefixtures("kwallet_query_fails")
+def test_a_page_only_the_readable_cookie_opens_now_fails(
+    direct: Any, out: Path, token: str
+) -> None:
+    # Spec 45 D1's accepted cost: the jar is dropped whole, cookies that did decrypt included.
+    chrome_cookie()
+    con = sqlite3.connect(
+        Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default" / "Cookies"
+    )
+    con.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
+        (b"127.0.0.1", b"s", b"", b"v11" + b"\0" * 16, b"/"),
+    )
+    con.commit()
+    con.close()
+    flags = ("-y", "--cookies", "chrome+kwallet6")
+    code, output = direct(*flags, pages=(f"cookie/{token}/poster.html",))
+    assert code == 1
+    assert t("cookies_unreadable", "chrome", KWALLET_FAILED) in output
+    assert names(out) == []
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("kwallet_query_fails")
+def test_a_jar_that_never_asks_the_keyring_keeps_its_cookies(
+    direct: Any, out: Path, token: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key = pbkdf2_sha1(b"peanuts", salt=b"saltysalt", iterations=1, key_length=16)
+    chrome_cookie(b"", encrypted=b"v10" + aes_cbc_encrypt_bytes(b"ok", key, b" " * 16))
+    kde_desktop(monkeypatch)
+    code, output = direct("-y", "-p", "--cookies", "chrome", pages=(f"seen/{token}/multi.html",))
+    assert code == 0
+    assert names(out) == MULTI
+    assert unreadable() not in output
+    assert without_cookies() not in output
+    assert sent(token) and all("dm=ok" in cookie for _, cookie in sent(token))
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_error_at_the_last_wizard_step_says_so_after_done(
+    generic: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kde_desktop(monkeypatch)
+    code, output = generic("multi.html", *PICKER_WALK[:-1], CHROME)
+    assert code == 0
+    assert output.count(t("cookies_unreadable", "chrome", KWALLET_FAILED)) == 1
+    assert keyring_hint() in output
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--playlist-items 1,2,3,4" in line
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_error_and_a_broken_item_count_the_item_once(direct: Any) -> None:
+    flags = ("-y", "-p", "-a", "--cookies", "chrome+kwallet6")
+    code, output = direct(*flags, pages=("junk-and-mp4.html",))
+    assert code == 0
+    assert t("cookies_unreadable", "chrome", KWALLET_FAILED) in output
+    assert t("partial_result", 1, 2, 0, 1) in output
     assert after_done(output) == [without_cookies()]
 
 

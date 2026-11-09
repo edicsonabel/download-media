@@ -6,6 +6,7 @@ what we mean to hand to it.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -448,3 +449,28 @@ def test_an_image_body_spelled_identity_is_still_held_to_its_length() -> None:
     body = _WholeBody(_Body([b"ab"], {"Content-Length": "3", "Content-Encoding": " Identity"}))
     with pytest.raises(IncompleteRead):
         _drain(body, 4)
+
+
+@pytest.mark.parametrize("outcome", ["loads", "logs an error", "raises"])
+def test_loading_cookies_leaves_report_error_alone(
+    monkeypatch: pytest.MonkeyPatch, outcome: str
+) -> None:
+    from yt_dlp.cookies import YoutubeDLCookieJar
+
+    from download_media.downloader import CookiesUnavailable, _Ydl, load_browser_cookies
+
+    def load(_file: Any, _browser: Any, ydl: Any) -> Any:
+        if outcome == "logs an error":
+            ydl.report_error("failed to read from keyring")  # What yt-dlp's cookie logger calls.
+        return YoutubeDLCookieJar()
+
+    if outcome != "raises":  # isolated_env's home holds no browser: yt-dlp's own failure.
+        monkeypatch.setattr(sys.modules["yt_dlp.YoutubeDL"], "load_cookies", load)
+    params = {"quiet": True, "ignoreerrors": True, "cookiesfrombrowser": ("chrome",)}
+    with _Ydl(params) as ydl:
+        if outcome == "loads":
+            load_browser_cookies(ydl, "chrome")
+        else:
+            with pytest.raises(CookiesUnavailable):
+                load_browser_cookies(ydl, "chrome")
+        assert "report_error" not in vars(ydl)
