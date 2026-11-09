@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-08T20:07:50-04:00",
+  "updated": "2026-11-08T21:08:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -1993,13 +1993,19 @@
     "fix/cookie-report": {
       "type": "fix",
       "title": "Finish the cookie-failure report",
-      "stage": "development",
-      "status": "in_progress",
-      "next_agent": "developer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/50-cookie-report.md",
       "branch": "fix/cookie-report",
       "worktree": ".worktrees/fix-cookie-report",
-      "commits": [],
+      "commits": [
+        "0ba41b5",
+        "205394c",
+        "cb4aa00",
+        "8a11054",
+        "44ea676"
+      ],
       "review": null,
       "history": [
         {
@@ -2022,6 +2028,20 @@
           "result": "approved",
           "at": "2026-11-08T20:07:50-04:00",
           "note": "Under the human's delegation: D1-D7 recommended options (all A / keep separate). Not breaking. Published-behaviour changes go on the 0.4.0 review list."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-08T20:26:57-04:00",
+          "note": "0ba41b5 D6 strip ANSI+ERROR:; 205394c D3 es wording; cb4aa00 D1 preview loads cookies first (_Preview(confirmed, cookies_failed), _download_without_cookies, no second browser read); 8a11054 D2 done_without_cookies when cookies_dropped and cookies_browser. Gate exit 0, 1956 passed + 2 xfailed, cov 98.80%. Each fix's tests fail on revert. Manual loopback run OK, 1 file per run. Pin split in two (fake_site vs generic). Wizard manual-flow preview untested (spec lists none)."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-08T21:08:13-04:00",
+          "note": "44ea676 tests (amended after gate: restored 8 items_not_found asserts a sed had changed; only additions; affected tests + lint/format/mypy pass). Gate exit 0 before amend, 1975 passed + 2 xfailed. Mutation 17/18 (M7 equivalent: cookies_dropped implies browser). Covered -P, -a, playlist modes, multi-URL, nothing-saved, -l, es, site-refused after preview, cookies that load, wizard manual flow, secretstorage missing. Planner: 'Going on without cookies' then n at preview; ERROR:-only cause prints (); -p all-junk leaves junk bodies (pre-existing)."
         }
       ]
     }
