@@ -20,6 +20,7 @@ import pytest
 from yt_dlp import YoutubeDL
 from yt_dlp.aes import aes_cbc_encrypt_bytes
 from yt_dlp.cookies import pbkdf2_sha1
+from yt_dlp.utils import ReExtractInfo
 
 from download_media import cli, i18n, wizard
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
@@ -7695,6 +7696,40 @@ def test_an_item_that_raises_counts_once_whatever_it_reported_first(
     assert code == 0
     assert t("partial_result", 2, 3, 0, 1) in output
     assert t("done") in output
+
+
+@pytest.mark.parametrize("reported", [0, 1], ids=["clean", "after-an-error"])
+@pytest.mark.parametrize("retry", ["saves", "fails"])
+def test_an_item_yt_dlp_extracts_again_counts_by_its_last_try(
+    monkeypatch: pytest.MonkeyPatch, run: Any, out: Path, reported: int, retry: str
+) -> None:
+    # ReExtractInfo is the one exception yt-dlp catches without reporting it: it runs the
+    # item again, so only what the last try reported can make it a failure.
+    tag = _TagSource.run
+    tries: list[str] = []
+
+    def step(self: Any, info: dict[str, Any]) -> Any:
+        if info.get("id") != "a1":
+            return tag(self, info)
+        tries.append("a1")
+        if len(tries) == 1:
+            for _ in range(reported):
+                self._downloader.report_error("a failed step")
+            raise ReExtractInfo("the stream needs to be re-extracted", expected=True)
+        if retry == "fails":
+            raise KeyError("streams")
+        return tag(self, info)
+
+    monkeypatch.setattr(_TagSource, "run", step)
+    code, output = run("-y", "-p", "https://fake.test/query-carousel")
+    assert code == 0
+    assert tries == ["a1", "a1"]
+    assert t("done") in output
+    if retry == "saves":
+        assert not said_partial_result(output)
+        assert len(names(out)) == 3
+    else:
+        assert t("partial_result", 2, 3, 0, 1) in output
 
 
 @pytest.mark.usefixtures("unreadable_chrome")
