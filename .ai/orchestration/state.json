@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T17:17:22-04:00",
+  "updated": "2026-11-09T17:29:19-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2228,7 +2228,8 @@
         "862f4df",
         "f1e12e5",
         "c6ed880",
-        "29e4302"
+        "29e4302",
+        "597d135"
       ],
       "review": {
         "approved": false,
@@ -2271,6 +2272,13 @@
           "result": "changes_requested",
           "at": "2026-11-09T17:17:22-04:00",
           "note": "Round 1. Gate exit 0 at 29e4302, 2152 passed + 4 xfailed es/en (2 new strict). Mutation 30/31, M11 equivalent. Both developer departures hold (media check, name clash on every item). One medium data-loss finding. Orchestrator direction: never delete a file this run didn't download. Planner: fixups dropped by extension (file still a proper MP4 via _TagSource); '(pass -k to keep)' names a flag the tool lacks; -P on a multi-video generic page downloads all (as main); 'tiny.jpg' could come back by scoping final_ext."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-09T17:29:19-04:00",
+          "note": "Round 1 fixed in 597d135: the original is deleted only when yt-dlp's __real_download says this run downloaded it. Strict xfail flipped; new -p/--playlist-items test. Gate exit 0, 2156 passed + 2 xfailed. Relies on yt-dlp's internal field; a rename would keep both files (safe side). Spec's 'Deleting original file' row now holds only for files the run downloaded; architect records it at validation."
         }
       ]
     }
