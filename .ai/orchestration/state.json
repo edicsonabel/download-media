@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T16:07:36-04:00",
+  "updated": "2026-11-09T16:38:32-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,14 +2216,17 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
       "commits": [
-        "fea87ca"
+        "fea87ca",
+        "3938c1f",
+        "862f4df",
+        "f1e12e5"
       ],
       "review": null,
       "history": [
@@ -2247,6 +2250,13 @@
           "result": "approved",
           "at": "2026-11-09T16:07:36-04:00",
           "note": "Spec approved by the human: D1 C (remux into mkv, recode into mp4 and webm), D2 B, D3 A, D4 A, D5 A, D6 A, D7 A (not breaking, minor). Behaviour changes go on the 0.4.0 review list if it ships there."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-09T16:38:32-04:00",
+          "note": "Gate exit 0 at f1e12e5, 2136 passed + 2 xfailed es/en, 98.91%. 29 predicted e2e pins changed, each justified in 862f4df. Every [fix] test fails on the pre-fix source; each part reverted alone fails its test. Deviations: media check before converting (JUNK remuxed into a subtitle-only mkv otherwise); name-clash check covers every item, so an image named like a converted video is saved as 'tiny [tiny].jpg' (published-behaviour change beyond the spec, for the human at the merge point). Planner: yt-dlp drops m4a/HLS/moov fixups by extension under mkv/webm, not measured; AGENTS.md ffmpeg line."
         }
       ]
     }
