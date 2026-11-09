@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T15:05:56-04:00",
+  "updated": "2026-11-09T16:05:04-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2217,12 +2217,14 @@
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "fea87ca"
+      ],
       "review": null,
       "history": [
         {
@@ -2231,6 +2233,13 @@
           "result": "approved",
           "at": "2026-11-09T15:05:56-04:00",
           "note": "Human picked container-choice (PLAN row 30, the only open P1) on the planner's recommendation. The remux-or-recode call is the spec's first decision, made on the architect's measurements."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-09T16:05:04-04:00",
+          "note": "Spec fea87ca, PLAN row 30 to spec. Reproduced on 7a3d41c: default mp4 and mkv keep a .webm, mkv/webm keep an .mp4, wizard summary disagrees with disk; real Wikimedia page saves .webm. D1 measured over 13 sources x 3 containers; recommended C (remux into mkv, recode into mp4 and webm). Recode 0.7x real time into mp4 at 1080p, SSIM 0.965-0.98. Decisions D1-D7; D7 asks the human to confirm not breaking. 29 e2e pins of the raw file flip. Live check needed once at validation (Wikimedia URL). Planner: VP9/AV1 in .mp4 from merges and 10-bit/HDR sources; progress notice for long recodes."
         }
       ]
     }
