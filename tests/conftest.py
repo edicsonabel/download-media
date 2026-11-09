@@ -298,6 +298,9 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "ogx-and-mp4": '<video src="theora.ogx"></video><video src="tiny.mp4"></video>',
         "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
         "all-junk": f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video>',
+        "two-junk-and-mp4": (
+            f'<video src="{JUNK}"></video><video src="{JUNK_2}"></video><video src="tiny.mp4"></video>'
+        ),
         "audio-no-ext-video": f'<audio src="{NO_EXT_VIDEO}"></audio>',
     }
     for name, body in pages.items():
@@ -647,6 +650,13 @@ class FakeSiteIE(InfoExtractor):
             broken = self._video("t1", path=JUNK)
             entries = [{**item, "thumbnail": thumb} for item in (broken, self._video("t2"))]
             return self.playlist_result(entries, "post", "Post")
+        if page == "unprobeable-carousel":
+            # An HTML page served as the video, which ffprobe can't open, with a thumbnail: yt-dlp's cover step then raises
+            # a KeyError after audio extraction reported its own error.
+            broken = self._video("t1", path="typed/video/mp4/poster.html/junk.mp4")
+            thumb = f"{self.media_url}/tiny.jpg"
+            entries = [{**item, "thumbnail": thumb} for item in (broken, self._video("t2"))]
+            return self.playlist_result(entries, "post", "Post")
         if page == "junk-thumb":
             thumb = f"{self.media_url}/{JUNK_IMAGE}"
             return {**self._video("t1", page="junk-thumb"), "thumbnail": thumb}
@@ -860,6 +870,10 @@ class FakeSiteIE(InfoExtractor):
             clip = self._video("v1")
             clip["formats"][0]["cookies"] = "a=b"
             return clip
+        if page == "unscoped-and-broken":
+            clip = self._video("v1")
+            clip["formats"][0]["cookies"] = "a=b"
+            return self.playlist_result([clip, self._video("j1", path=JUNK)], "post", "Post")
         if page == "partial-rejected" and self._downloader.cookies_used:
             raise ExtractorError("Failed to parse JSON", expected=True)
         if page == "partial-rejected":

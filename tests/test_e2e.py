@@ -17,12 +17,19 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from yt_dlp import YoutubeDL
 from yt_dlp.aes import aes_cbc_encrypt_bytes
 from yt_dlp.cookies import pbkdf2_sha1
 
 from download_media import cli, i18n, wizard
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
-from download_media.downloader import _source_url
+from download_media.cookies import CookieFailure, ydl_cookies
+from download_media.downloader import (
+    CookiesUnavailable,
+    _source_url,
+    _Ydl,
+    load_browser_cookies,
+)
 from download_media.i18n import t
 from download_media.probe import ContentKind, Probe
 
@@ -7269,8 +7276,9 @@ def test_a_dead_page_after_a_keyring_error_fails_without_a_retry_line(
 
 
 @pytest.mark.usefixtures("kwallet_query_fails")
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["single", "-p"])
 def test_a_page_only_the_readable_cookie_opens_now_fails(
-    direct: Any, out: Path, token: str
+    direct: Any, out: Path, token: str, flags: tuple[str, ...]
 ) -> None:
     # Spec 45 D1's accepted cost: the jar is dropped whole, cookies that did decrypt included.
     chrome_cookie()
@@ -7283,10 +7291,12 @@ def test_a_page_only_the_readable_cookie_opens_now_fails(
     )
     con.commit()
     con.close()
-    flags = ("-y", "--cookies", "chrome+kwallet6")
-    code, output = direct(*flags, pages=(f"cookie/{token}/poster.html",))
+    code, output = direct(
+        *flags, "--cookies", "chrome+kwallet6", pages=(f"cookie/{token}/poster.html",)
+    )
     assert code == 1
     assert t("cookies_unreadable", "chrome", KWALLET_FAILED) in output
+    assert t("cookies_retry", "chrome+kwallet6") not in output
     assert names(out) == []
     assert no_cookie_sent(token)
 
@@ -7339,13 +7349,367 @@ def test_a_keyring_error_at_the_last_wizard_step_says_so_after_done(
 
 
 @pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
-def test_a_keyring_error_and_a_broken_item_count_the_item_once(direct: Any) -> None:
-    flags = ("-y", "-p", "-a", "--cookies", "chrome+kwallet6")
+@pytest.mark.parametrize("audio", [(), ("-a",)], ids=["video", "-a"])
+def test_a_keyring_error_and_a_broken_item_count_the_item_once(
+    direct: Any, audio: tuple[str, ...]
+) -> None:
+    flags = ("-y", "-p", *audio, "--cookies", "chrome+kwallet6")
     code, output = direct(*flags, pages=("junk-and-mp4.html",))
     assert code == 0
     assert t("cookies_unreadable", "chrome", KWALLET_FAILED) in output
     assert t("partial_result", 1, 2, 0, 1) in output
     assert after_done(output) == [without_cookies()]
+
+
+def kwallet_notice() -> str:
+    return t("cookies_unreadable", "chrome", KWALLET_FAILED)
+
+
+LOGIN_WALL = "Unable to download webpage: HTTP Error 401: Unauthorized"
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_login_wall_after_a_keyring_error_gets_the_retry_prompt(
+    generic: Any, home: Path, media_url: str
+) -> None:
+    flags = ("-i", "--cookies", "chrome+kwallet6")
+    code, output = generic("status/401", "", NO_COOKIES, *VIDEO_STEPS, "", flags=flags)
+    assert code == 1
+    assert output.count(kwallet_notice()) == 1
+    assert output.index(kwallet_notice()) < output.index(asked_for_login(LOGIN_WALL))
+    assert output.index(asked_for_login(LOGIN_WALL)) < output.index(t("probe_failed", LOGIN_WALL))
+    # The wrong advice: the browser wasn't refused, it was never read.
+    assert t("auth_still_needed", "chrome") not in output
+    assert t("failed", f"{media_url}/status/401") in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert names(home / "Videos") == []
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_error_at_the_login_prompt_keeps_the_cookieless_probe(
+    generic: Any, home: Path, media_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kde_desktop(monkeypatch)
+    code, output = generic("status/401", "", CHROME, *VIDEO_STEPS, "")
+    assert code == 1
+    assert output.count(kwallet_notice()) == 1
+    assert keyring_hint() in output
+    assert output.count(t("probing")) == 2
+    assert t("probe_failed", LOGIN_WALL) in output
+    assert t("auth_still_needed", "chrome") not in output
+    assert t("failed", f"{media_url}/status/401") in output
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert names(home / "Videos") == []
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+@pytest.mark.parametrize(
+    ("flags", "page", "ext", "count"),
+    [
+        (("-y", "-P"), "multi.html", ".mp4", 4),
+        (("-P",), "multi.html", ".mp4", 4),
+        (("-y", "-a"), "poster.html", ".mp3", 1),
+        (("-y", "-p", "-a"), "multi.html", ".mp3", 4),
+    ],
+    ids=["-y -P", "-P", "-y -a", "-y -p -a"],
+)
+def test_a_keyring_error_reads_the_same_in_the_other_modes(
+    direct: Any, out: Path, token: str, flags: tuple[str, ...], page: str, ext: str, count: int
+) -> None:
+    code, output = direct(*flags, "--cookies", "chrome+kwallet6", pages=(f"seen/{token}/{page}",))
+    assert code == 0
+    assert len(names(out)) == count
+    assert all(name.endswith(ext) for name in names(out))
+    assert output.count(kwallet_notice()) == 1
+    assert not said_partial_result(output)
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_error_keeps_the_chosen_items_in_the_command(direct: Any, out: Path) -> None:
+    flags = ("-y", "--playlist-items", "1", "--cookies", "chrome+kwallet6")
+    code, output = direct(*flags, pages=("multi.html",))
+    assert code == 0
+    assert names(out) == MULTI[:1]
+    [line] = commands(output)
+    assert "--playlist-items 1" in line
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["-y", "-p"])
+def test_a_keyring_error_is_named_for_each_url(
+    direct: Any, out: Path, token: str, flags: tuple[str, ...]
+) -> None:
+    pages = (f"seen/{token}/multi.html", f"seen/{token}/poster.html")
+    code, output = direct(*flags, "--cookies", "chrome+kwallet6", pages=pages)
+    assert code == 0
+    assert len(names(out)) == 5
+    assert output.count(kwallet_notice()) == 2
+    assert not said_partial_result(output)
+    assert after_done(output) == [without_cookies()] * 2
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(history_rows()) == 2
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_error_is_named_before_each_preview(direct: Any, out: Path) -> None:
+    pages = ("poster.html", "multi.html")
+    code, output = direct("--cookies", "chrome+kwallet6", pages=pages, replies=("", ""))
+    assert code == 0
+    assert len(names(out)) == 5
+    assert output.count(kwallet_notice()) == 2
+    assert output.count(f"ERROR: {KWALLET_FAILED}") == 2
+    assert after_done(output) == [without_cookies()] * 2
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_a_keyring_that_answers_and_decrypts_nothing_stays_as_it_was(
+    direct: Any, out: Path, token: str
+) -> None:
+    # Spec 45, Out: nothing is logged as an error, so there's no failure to name.
+    flags = ("-y", "--cookies", "chrome+basictext")
+    code, output = direct(*flags, pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert unreadable() not in output
+    assert without_cookies() not in output
+    [line] = commands(output)
+    assert "--cookies chrome+basictext" in line
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["-y", "-p"])
+def test_a_keyring_error_with_one_url_failing_keeps_the_browser_in_the_command(
+    direct: Any, out: Path, media_url: str, flags: tuple[str, ...]
+) -> None:
+    pages = ("status/401", "poster.html")
+    code, output = direct(*flags, "--cookies", "chrome+kwallet6", pages=pages)
+    assert code == 1
+    assert len(names(out)) == 1
+    assert output.count(kwallet_notice()) == 2
+    assert t("failed", f"{media_url}/status/401") in output
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies chrome+kwallet6" in line
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_the_wizard_names_a_keyring_error_for_each_url(
+    media_url: str, home: Path, answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    prompts = answers(*[""] * 13)  # One walk of six steps, one of seven: the picker.
+    urls = [f"{media_url}/poster.html", f"{media_url}/multi.html"]
+    code = cli.main(["-i", "--cookies", "chrome+kwallet6", *urls])
+    captured = capfd.readouterr()
+    output = captured.out + captured.err
+    assert code == 0
+    assert len(prompts) == 13
+    assert output.count(kwallet_notice()) == 2
+    assert output.count(t("probing")) == 4
+    assert len(names(home / "Videos")) == 5
+    assert not said_partial_result(output)
+    for line in commands(output):
+        assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize(("cause", "spec", "reason"), KEYRING_CAUSES)
+@pytest.mark.parametrize(
+    ("flags", "replies", "saved"),
+    [(("-y",), (), 1), (("-l",), (), 0), ((), ("",), 1)],
+    ids=["-y", "-l", "preview"],
+)
+def test_each_keyring_cause_is_named_outside_a_playlist_too(
+    direct: Any,
+    out: Path,
+    token: str,
+    request: pytest.FixtureRequest,
+    cause: str,
+    spec: str,
+    reason: str,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    saved: int,
+) -> None:
+    request.getfixturevalue(cause)
+    page = f"seen/{token}/poster.html"
+    code, output = direct(*flags, "--cookies", spec, pages=(page,), replies=replies)
+    assert code == 0
+    assert len(names(out)) == saved
+    assert output.count(t("cookies_unreadable", "chrome", reason)) == 1
+    assert no_cookie_sent(token)
+    assert not said_partial_result(output)
+    assert after_done(output) == ([without_cookies()] if saved else [])
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize(("cause", "spec", "reason"), KEYRING_CAUSES)
+def test_the_wizard_names_each_keyring_cause_at_the_probe(
+    generic: Any,
+    home: Path,
+    token: str,
+    request: pytest.FixtureRequest,
+    cause: str,
+    spec: str,
+    reason: str,
+) -> None:
+    request.getfixturevalue(cause)
+    page = f"seen/{token}/multi.html"
+    code, output = generic(page, *PICKER_WALK, flags=("-i", "--cookies", spec))
+    assert code == 0
+    assert output.count(t("cookies_unreadable", "chrome", reason)) == 1
+    assert partly_inspected("\0").partition("\0")[0] not in output
+    assert names(home / "Videos") == MULTI
+    assert no_cookie_sent(token)
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "no_secretstorage")
+def test_a_missing_secretstorage_in_a_playlist_names_the_package(direct: Any) -> None:
+    code, output = direct("-y", "-p", "--cookies", "chrome+gnomekeyring", pages=("multi.html",))
+    assert code == 0
+    assert "sudo pacman -S python-secretstorage" in output
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+@pytest.mark.parametrize(
+    ("flags", "replies", "closing"),
+    [(("-y", "-p"), (), True), ((), ("",), True), (("-l",), (), False)],
+    ids=["-y -p", "preview", "-l"],
+)
+def test_a_desktop_keyring_error_suggests_another_keyring_in_the_other_modes(
+    direct: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    closing: bool,
+) -> None:
+    kde_desktop(monkeypatch)
+    code, output = direct(*flags, "--cookies", "chrome", pages=("poster.html",), replies=replies)
+    assert code == 0
+    assert output.index(kwallet_notice()) < output.index(keyring_hint())
+    assert output.count(keyring_hint()) == 1
+    assert after_done(output) == ([without_cookies()] if closing else [])
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+@pytest.mark.parametrize(("flags", "replies"), [((), ("",)), (("-l",), ())], ids=["preview", "-l"])
+def test_a_dead_page_after_a_keyring_error_in_the_other_modes(
+    direct: Any, media_url: str, flags: tuple[str, ...], replies: tuple[str, ...]
+) -> None:
+    pages = ("status/401",)
+    code, output = direct(*flags, "--cookies", "chrome+kwallet6", pages=pages, replies=replies)
+    assert code == 1
+    assert output.count(kwallet_notice()) == 1
+    assert t("failed", f"{media_url}/status/401") in output
+    assert GIVE_UP in output
+    assert t("cookies_retry", "chrome+kwallet6") not in output
+    assert without_cookies() not in output
+
+
+@pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
+def test_every_item_broken_after_a_keyring_error_is_a_failure(direct: Any, media_url: str) -> None:
+    flags = ("-y", "-p", "-a", "--cookies", "chrome+kwallet6")
+    code, output = direct(*flags, pages=("all-junk.html",))
+    assert code == 1
+    assert kwallet_notice() in output
+    assert t("failed", f"{media_url}/all-junk.html") in output
+    assert t("done") not in output
+    assert without_cookies() not in output
+    assert not said_partial_result(output)
+    [line] = commands(output)
+    assert "--cookies chrome+kwallet6" in line
+
+
+@pytest.mark.parametrize("flags", [("-p", "-a"), ("--playlist-items", "1,2,3", "-a")], ids=str)
+def test_two_broken_items_count_two(generic: Any, out: Path, flags: tuple[str, ...]) -> None:
+    code, output = generic("two-junk-and-mp4.html", flags=("-y", *flags, "-o", str(out)))
+    assert code == 0
+    assert t("partial_result", 1, 3, 0, 2) in output
+
+
+def test_a_missing_item_and_a_broken_one_are_reported_apart(generic: Any, out: Path) -> None:
+    flags = ("-y", "--playlist-items", "1,2,9", "-a", "-o", str(out))
+    code, output = generic("junk-and-mp4.html", flags=flags)
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert t("items_not_found", 2, "9") in output
+
+
+@pytest.mark.parametrize("flags", [("-p",), ("-p", "-a")], ids=["video", "-a"])
+def test_a_message_yt_dlp_does_not_call_an_error_does_not_add_to_a_failure(
+    run: Any, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, "https://fake.test/unscoped-and-broken")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+
+
+def test_a_message_yt_dlp_does_not_call_an_error_is_no_partial_probe(
+    wizard_on: Any, out: Path
+) -> None:
+    code, output = wizard_on("https://fake.test/unscoped-and-broken", *PICKER_WALK)
+    assert code == 0
+    assert partly_inspected("\0").partition("\0")[0] not in output
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert len(names(out)) == 2  # The broken item's body stays (spec 28, Out).
+
+
+@pytest.mark.parametrize("flags", [("-p", "-a"), ("--playlist-items", "1,2", "-a")], ids=str)
+def test_a_cover_step_that_raises_on_a_failed_item_keeps_the_rest(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, "https://fake.test/unprobeable-carousel")
+    assert code == 0
+    assert [name for name in names(out) if name.endswith(".mp3")] == ["02 - Clip [t2].mp3"]
+    assert cover_leftovers(out) == []
+    assert said_partial_result(output)
+    assert t("done") in output
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize(("cause", "spec", "reason"), KEYRING_CAUSES)
+@pytest.mark.parametrize("ignoreerrors", [False, True], ids=["single", "ignoreerrors"])
+@pytest.mark.parametrize("ydl_class", [YoutubeDL, _Ydl], ids=["preview", "download"])
+def test_a_real_keyring_error_leaves_report_error_alone(
+    request: pytest.FixtureRequest,
+    cause: str,
+    spec: str,
+    reason: str,
+    ignoreerrors: bool,
+    ydl_class: Any,
+) -> None:
+    request.getfixturevalue(cause)
+    params = {
+        "quiet": True,
+        "no_warnings": True,
+        "ignoreerrors": ignoreerrors,
+        "cookiesfrombrowser": ydl_cookies(spec),
+    }
+    with ydl_class(params) as ydl:
+        with pytest.raises(CookiesUnavailable) as caught:
+            load_browser_cookies(ydl, spec)
+        assert caught.value.failure == CookieFailure(False, reason)
+        assert "report_error" not in vars(ydl)
+
+
+@pytest.mark.parametrize("ydl_class", [YoutubeDL, _Ydl], ids=["preview", "download"])
+def test_a_real_load_that_works_leaves_report_error_alone(ydl_class: Any) -> None:
+    chrome_cookie()
+    params = {"quiet": True, "cookiesfrombrowser": ydl_cookies("chrome")}
+    with ydl_class(params) as ydl:
+        load_browser_cookies(ydl, "chrome")
+        assert "report_error" not in vars(ydl)
+        assert [cookie.name for cookie in ydl.cookiejar] == ["dm"]
 
 
 def test_a_missing_browser_at_the_last_wizard_step_saves_a_single_video(
