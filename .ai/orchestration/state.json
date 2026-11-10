@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T05:39:54-04:00",
+  "updated": "2026-11-10T05:48:24-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3029,14 +3029,15 @@
     "fix/untagged-per-item": {
       "type": "fix",
       "title": "Name only saved items as untagged",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/69-untagged-per-item.md",
       "branch": "fix/untagged-per-item",
       "worktree": ".worktrees/fix-untagged-per-item",
       "commits": [
-        "a1c8379"
+        "a1c8379",
+        "8d4926f"
       ],
       "review": null,
       "history": [
@@ -3060,6 +3061,13 @@
           "result": "approved",
           "at": "2026-11-10T05:25:40-04:00",
           "note": "Spec approved under the overnight delegation, every recommended option (D1 all three lists, D2 per-item names on _Ydl added when saved, D3 unit test to _Ydl, D4 subs_none when only failed items had subtitles). Not breaking. Three review items. Development starts now in parallel."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T05:48:24-04:00",
+          "note": "8d4926f: per-item item_untagged, item_not_embedded, item_subs_seen on _Ydl, copied in keep() only for saved items. Strict xfail flipped; 6 new e2e cases fail on the old code. Gate exit 0, 2532 passed + 9 xfailed. DownloadResult, download() return, cli/i18n untouched."
         }
       ]
     }
