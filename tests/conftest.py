@@ -312,9 +312,9 @@ def _write_generic_pages(root: Path, base: str) -> None:
         ),
         "audio-no-ext-video": f'<audio src="{NO_EXT_VIDEO}"></audio>',
         # Under -a, a video without sound fails audio extraction, and ffmpeg can't tag the .oga.
+        # Not rotated: ffprobe's "video," for a rotated one can fail the item on another path.
         "silent-oga-and-m4a": (
-            '<audio src="typed/audio/ogg/rotated-silent.mov/clip.oga"></audio>'
-            '<audio src="a1.m4a"></audio>'
+            '<audio src="typed/audio/ogg/silent.mov/clip.oga"></audio><audio src="a1.m4a"></audio>'
         ),
     }
     for name, body in pages.items():
@@ -412,6 +412,7 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     shutil.copy(root / "tiny.m4a", root / "tiny.m4b")
     # A container yt-dlp can't embed subtitles in, by stream copy: no new encoder.
     subprocess.run([*source, "-c", "copy", str(root / "tiny.flv")], check=True)
+    subprocess.run([*source, "-an", "-c", "copy", str(root / "silent.mov")], check=True)
     hls = ["-c", "copy", "-f", "hls", "-hls_playlist_type", "vod", str(root / "tiny.m3u8")]
     subprocess.run([*source, *hls], check=True)
     for copy in ("v1", "v2", "v3", "v4"):
