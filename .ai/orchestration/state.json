@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:56:50-04:00",
+  "updated": "2026-11-10T03:09:04-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2671,14 +2671,17 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
       "worktree": ".worktrees/fix-subs-failures",
       "commits": [
-        "1ddf169"
+        "1ddf169",
+        "26980ac",
+        "c369973",
+        "da03a4a"
       ],
       "review": null,
       "history": [
@@ -2709,6 +2712,13 @@
           "result": "approved",
           "at": "2026-11-10T02:50:57-04:00",
           "note": "Development starts from main 5b41234 (cancel-exits merged; its gate still running, base kept if it passes)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T03:09:04-04:00",
+          "note": "Three commits (D1/D2 keep the video and warn subs_failed; D3 empty subtitles left out of the embed with subs_empty; D4 delete a failed item's subtitle files; README). Gate exit 0 at da03a4a, 2372 passed + 7 xfailed. Reverting src fails 36 new tests for the right reasons. Only the named test flipped."
         }
       ]
     },
