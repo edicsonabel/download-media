@@ -2476,7 +2476,7 @@
           "agent": "architect",
           "result": "validated",
           "at": "2026-11-10T02:33:00-04:00",
-          "note": "Criteria hold on main: m4a keeps its cover and tags, reruns keep one cover, mp3 cover + ID3v2.3 (date TYER=2026, same as yt-dlp's CLI), opus/wav unchanged, video mode identical to before. 26 criteria tests pass. Gate not re-run (tech-lead 2dc4607). CI on 0c76bcd failed twice at 'Install ffmpeg' timeout (infra, no test ran); retried. Spec done with D3 corrected; PLAN row 41 done; items moved to the 0.4.0 list (25-28), item 26 flags the mp3 date loss. Worktree and branch removed."
+          "note": "Criteria hold on main: m4a keeps its cover and tags, reruns keep one cover, mp3 cover + ID3v2.3 (date TYER=2026, same as yt-dlp's CLI), opus/wav unchanged, video mode identical to before. 26 criteria tests pass. Gate not re-run (tech-lead 2dc4607). CI on 0c76bcd failed twice at 'Install ffmpeg' timeout (infra, no test ran); retried. Spec done with D3 corrected; PLAN row 41 done; items moved to the 0.4.0 list (25-28), item 26 flags the mp3 date loss. Worktree and branch removed. CI run 42767255885 attempt 3 succeeded on 0c76bcd."
         }
       ]
     },
