@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:03:59-04:00",
+  "updated": "2026-11-10T02:06:10-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2553,9 +2553,9 @@
     "fix/cancel-exits": {
       "type": "fix",
       "title": "Catch Ctrl-C and settle cancel and refusal exit codes and wording",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/23-cancel-exits.md",
       "branch": "fix/cancel-exits",
       "worktree": ".worktrees/fix-cancel-exits",
@@ -2565,7 +2565,9 @@
         "67d5e21",
         "ee9278a",
         "86a9e76",
-        "711028a"
+        "711028a",
+        "043c0b3",
+        "6667735"
       ],
       "review": {
         "approved": false,
@@ -2609,6 +2611,13 @@
           "result": "changes_requested",
           "at": "2026-11-10T01:50:06-04:00",
           "note": "Round 1. 23 tests + 5 strict xfails in 711028a. Gate exit 0, 2117 passed + 6 xfailed. Mutation 28/29, survivor equivalent. Real-process matrix held (prompt, probe, preview, download, post-processing, between URLs, -l; pipe and pty; es/en; script and module). 52 flips hide nothing. Two findings. Planner: Ctrl-C while importing yt-dlp, before main(), still a traceback (strict xfail, needs a lighter console-script module); SIGINT flood cosmetic."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T02:06:10-04:00",
+          "note": "Round 1 fixed: 043c0b3 guards each flush in entry() (stdout to /dev/null on failure) before the self-kill; 6667735 catches KeyboardInterrupt around main() in entry() as 130. Three strict xfails flipped; each fails without its fix. Real pipe with reader gone: empty stderr, 130. Gate exit 0 at 6667735, 2120 passed + 3 xfailed."
         }
       ]
     },
