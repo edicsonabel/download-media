@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:42:49-04:00",
+  "updated": "2026-11-10T01:50:06-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2520,9 +2520,9 @@
     "fix/cancel-exits": {
       "type": "fix",
       "title": "Catch Ctrl-C and settle cancel and refusal exit codes and wording",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/23-cancel-exits.md",
       "branch": "fix/cancel-exits",
       "worktree": ".worktrees/fix-cancel-exits",
@@ -2531,9 +2531,16 @@
         "eeefe62",
         "67d5e21",
         "ee9278a",
-        "86a9e76"
+        "86a9e76",
+        "711028a"
       ],
-      "review": null,
+      "review": {
+        "approved": false,
+        "findings": [
+          "major cli.py:620-628 entry() flushes stdout before the self-kill; with the pipe's reader gone (| tee log) BrokenPipeError: traceback, exit 120, bash loop continues (regression vs main). Strict xfails test_ctrl_c_with_the_pipe_s_reader_gone_still_dies_by_sigint, test_ctrl_c_stops_a_calling_bash_loop[reader-gone]",
+          "minor cli.py:551-554 a second Ctrl-C while main() prints Cancelled. escapes main() and entry(): traceback before SIGINT death. Strict xfail test_a_second_ctrl_c_on_the_cancel_line_shows_no_traceback"
+        ]
+      },
       "history": [
         {
           "stage": "planning",
@@ -2562,6 +2569,13 @@
           "result": "done",
           "at": "2026-11-10T00:46:00-04:00",
           "note": "Four commits: D1-D3 entry() and interrupted line; D4/D5 exit 1 (52 cases in 23 functions flip 0 to 1, named in 67d5e21); D6 messages; README/AGENTS docs. Gate exit 0 at 86a9e76, 2096 passed + 2 xfailed. Revert proofs per commit. Console: Ctrl-C at prompt and mid-download, es and en, no traceback, returncode -2. AGENTS.md stack line updated to cli:entry. Planner: row 46 to Ctrl-C leftovers; 0.4.0 review items."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-10T01:50:06-04:00",
+          "note": "Round 1. 23 tests + 5 strict xfails in 711028a. Gate exit 0, 2117 passed + 6 xfailed. Mutation 28/29, survivor equivalent. Real-process matrix held (prompt, probe, preview, download, post-processing, between URLs, -l; pipe and pty; es/en; script and module). 52 flips hide nothing. Two findings. Planner: Ctrl-C while importing yt-dlp, before main(), still a traceback (strict xfail, needs a lighter console-script module); SIGINT flood cosmetic."
         }
       ]
     },
