@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T03:46:24-04:00",
+  "updated": "2026-11-10T03:56:16-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2679,9 +2679,9 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
       "worktree": ".worktrees/fix-subs-failures",
@@ -2689,9 +2689,15 @@
         "1ddf169",
         "26980ac",
         "c369973",
-        "da03a4a"
+        "da03a4a",
+        "88121be"
       ],
-      "review": null,
+      "review": {
+        "approved": false,
+        "findings": [
+          "medium downloader.py:340 / drop_subs :354-359 D4 deletes a subtitle file an earlier run saved under the same name (yt-dlp rewrites it, the video fails, drop_subs removes it); main keeps it. Strict xfail test_a_failed_video_never_takes_a_subtitle_an_earlier_run_saved"
+        ]
+      },
       "history": [
         {
           "stage": "planning",
@@ -2727,6 +2733,13 @@
           "result": "done",
           "at": "2026-11-10T03:09:04-04:00",
           "note": "Three commits (D1/D2 keep the video and warn subs_failed; D3 empty subtitles left out of the embed with subs_empty; D4 delete a failed item's subtitle files; README). Gate exit 0 at da03a4a, 2372 passed + 7 xfailed. Reverting src fails 36 new tests for the right reasons. Only the named test flipped."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-10T03:56:16-04:00",
+          "note": "Round 1. Gate exit 0 at 88121be, 2417 passed + 8 xfailed. Every failure shape across every mode held; count, cookies retry, containers, default track fine. Mutation 32/34, survivors equivalent. One medium finding (D4 deleting an earlier run's subtitle), prototyped fix: only track paths that didn't exist before the write."
         }
       ]
     },
