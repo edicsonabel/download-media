@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T00:13:45-04:00",
+  "updated": "2026-11-10T00:18:28-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2415,13 +2415,15 @@
     "fix/cancel-exits": {
       "type": "fix",
       "title": "Catch Ctrl-C and settle cancel and refusal exit codes and wording",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/23-cancel-exits.md",
       "branch": "fix/cancel-exits",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-cancel-exits",
+      "commits": [
+        "d81e78d"
+      ],
       "review": null,
       "history": [
         {
@@ -2430,6 +2432,20 @@
           "result": "approved",
           "at": "2026-11-10T00:02:18-04:00",
           "note": "Next P2 in PLAN.md's order, under the human's overnight delegation. Spec written in parallel."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T00:18:28-04:00",
+          "note": "Spec d81e78d, PLAN row 23 to spec. Reproduced on 1e74654: Ctrl-C at every point gives a traceback (SIGINT death); mid-download Cancelled. glued to progress, .part left; mid-conversion a truncated mp3 under its final name, rerun saves a second copy; closed stdin exits 0; wizard cancel/refusal 0, preview n 1. D1-D7. ~20 tests flip 0 to 1. No live check. Planner: row 46 could extend to Ctrl-C leftovers."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T00:18:28-04:00",
+          "note": "Spec approved under the human's overnight delegation, every recommended option: D1 one line then die by SIGINT via a new entry() console script (pyproject target changes), D2 Cancelled. or a new interrupted line, D3 equivalent command after a mid-download Ctrl-C, D4 every cancel exits 1 (wizard c and EOF were 0), D5 wizard refusal exits 1, D6 drop 'Cancelling.' from two messages, D7 keep preview notice. Read as not breaking (AGENTS.md lists flags, defaults, paths; spec 45 set the exit 0 to 1 precedent), but D4 and D5 change exit codes scripts may read: top of the 0.4.0 review list for the human."
         }
       ]
     }
