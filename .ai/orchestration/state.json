@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T03:18:30-04:00",
+  "updated": "2026-11-10T03:46:24-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2733,9 +2733,9 @@
     "fix/kind-edges": {
       "type": "fix",
       "title": "Close the remaining media-kind edge cases",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/37-kind-edges.md",
       "branch": "fix/kind-edges",
       "worktree": ".worktrees/fix-kind-edges",
@@ -2743,9 +2743,13 @@
         "5123f99",
         "1f852cc",
         "ae4adf9",
-        "ec60e65"
+        "ec60e65",
+        "ad5a4fe"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -2781,6 +2785,13 @@
           "result": "done",
           "at": "2026-11-10T03:18:30-04:00",
           "note": "Three commits, one per decision. Gate exit 0 at ec60e65, 2425 passed + 8 xfailed. Each fix reverted fails its tests (D1 6, D2 25, D3 17). Real runs match disk. Deviation: the TINY.M4A row moved to REAL_AUDIO_UNDER_A_LABEL (tiny.m4a holds no video); one unlisted test now counts 2 [image] not 3. Planner: upper-ext-names; row 38 storyboard cause."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T03:46:24-04:00",
+          "note": "No bugs. ~324 runs vs main: -y identical everywhere; wizard changes only where the spec says. Tests in ad5a4fe (17 fix tests fail on main's src). Mutation 16/18, survivors equivalent. Gate exit 0, 2440 passed + 11 xfailed. Strict xfails: .ogv rerun (row 25); direct uppercase image link saved as a one-frame mp4 (pre-existing, planner row). Planner: uppercase .MP3 rerun reconverts; -y -p undownloadable-carousel counts; -i --playlist-items preselects a [?] entry; D3 cost on real Vorbis under a video type."
         }
       ]
     },
