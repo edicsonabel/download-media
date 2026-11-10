@@ -861,11 +861,6 @@ def test_ctrl_c_with_stdout_piped_keeps_its_line_on_a_line_of_its_own(
     assert "Traceback" not in err.decode()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="F1: entry() flushes stdout before its self-kill; with the pipe's reader gone, the "
-    "flush raises BrokenPipeError: a traceback, and exit 120 instead of death by SIGINT",
-)
 def test_ctrl_c_with_the_pipe_s_reader_gone_still_dies_by_sigint() -> None:
     import os
     import signal
@@ -886,6 +881,7 @@ def test_ctrl_c_with_the_pipe_s_reader_gone_still_dies_by_sigint() -> None:
         _reap(proc)
     assert proc.returncode == -signal.SIGINT
     assert b"Traceback" not in err
+    assert b"Exception ignored" not in err
 
 
 # A reader that forwards up to the prompt and leaves, as `| tee log` does on the same Ctrl-C.
@@ -921,15 +917,7 @@ def _wait_gone(pid: int, timeout: float = 30) -> None:
     "piped",
     [
         pytest.param(False, id="plain"),
-        pytest.param(
-            True,
-            id="reader-gone",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="F1: with the pipe's reader gone, entry()'s flush raises BrokenPipeError, "
-                "the tool exits 120 and bash runs the next iteration",
-            ),
-        ),
+        pytest.param(True, id="reader-gone"),
     ],
 )
 def test_ctrl_c_stops_a_calling_bash_loop(piped: bool) -> None:

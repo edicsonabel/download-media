@@ -622,8 +622,15 @@ def entry() -> NoReturn:
     code = main()
     if code == EXIT_INTERRUPTED:
         # Without the flush, output still buffered for a pipe dies with the process.
-        sys.stdout.flush()
-        sys.stderr.flush()
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                stream.flush()
+            except OSError:
+                # The pipe's reader died from the same Ctrl-C (`| tee log`). Point the stream
+                # at devnull, so Python's shutdown has nothing left to fail on.
+                devnull = os.open(os.devnull, os.O_WRONLY)
+                os.dup2(devnull, stream.fileno())
+                os.close(devnull)
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         os.kill(os.getpid(), signal.SIGINT)
     sys.exit(code)
