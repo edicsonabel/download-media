@@ -1,6 +1,6 @@
 # 23 — Cancel exits
 
-Status: draft
+Status: done
 Item: `fix/cancel-exits`
 
 ## Problem
@@ -174,28 +174,28 @@ There are no separate rows for cookies or carousels. With cookies, the only path
 
 `[fix]` fails on `main`, shown by reverting the fix. `[pin]` passes before and after. Unit tests script prompts with the `answers` fixture, which already raises exception types. Anything that runs yt-dlp is on `fake_site` or `media_url`.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `test_ctrl_c_mid_download_names_the_url_and_folder` (`test_cli.py`, replaces `test_interrupt_propagates_after_cancel_message`). `download` raises `KeyboardInterrupt`. `_download_one` raises `cli._Interrupted`, an instance of `KeyboardInterrupt`, with `.outcome == _Outcome(False, False, "no")`. Stdout has `"\n" + t("interrupted", url, folder)` and no `t("cancelled")`
-- [ ] **[fix]** `test_main_returns_the_interrupt_status_after_ctrl_c_in_the_wizard` (`test_cli.py`). `wizard.run_all` raises `KeyboardInterrupt`: `cli.main([]) == cli.EXIT_INTERRUPTED == 130`, `t("cancelled")` on its own line, no `Traceback` in stderr
-- [ ] **[fix]** `test_entry_dies_by_sigint_after_an_interrupt` (`test_cli.py`). `cli.main` is patched to return 130, and `signal.signal` and `os.kill` to record. `entry()` sets `SIG_DFL` for SIGINT and sends SIGINT to its own pid. With 0 or 1 it raises `SystemExit` with that code and sends nothing
-- [ ] **[fix]** `test_ctrl_c_ends_the_process_by_sigint_without_a_traceback` (`test_cli.py`). A real subprocess, `sys.executable -m download_media -i http://127.0.0.1:9/x`, in its own session, with `PYTHONUNBUFFERED=1` and stdin a pipe kept open. Once the URL prompt is read from stdout, SIGINT goes to its group (only the process the test started). Then: `returncode == -signal.SIGINT`, `t("cancelled")` in stdout, no `Traceback` in stderr
-- [ ] **[fix]** `test_the_console_script_runs_the_interrupt_aware_entry` (`test_packaging.py`). `pyproject.toml`'s `download-media` script is `download_media.cli:entry`
-- [ ] **[fix]** `test_ctrl_c_at_a_wizard_prompt_downloads_nothing` (e2e). `wizard_on(VIDEO, "", KeyboardInterrupt)`: 130, `t("cancelled")`, nothing on disk, no history row, no `t("equiv_cmd")`, no `Traceback`
-- [ ] **[fix]** `test_ctrl_c_during_the_wizard_probe_downloads_nothing` (e2e). `wizard.probe` patched to raise `KeyboardInterrupt`: same assertions
-- [ ] **[fix]** `test_ctrl_c_mid_download_keeps_earlier_urls_and_prints_their_command` (e2e). `-y VIDEO VIDEO_B`, with `YoutubeDL.dl` raising `KeyboardInterrupt` on the second URL only. 130, the first URL's file only, one history row (`VIDEO`), `t("interrupted", VIDEO_B, out)`, no `t("cancelled")`. One command listing both URLs, with `-y -o {out}`
-- [ ] **[fix]** `test_ctrl_c_at_the_second_preview_prints_the_first_url_s_command` (e2e). Direct `VIDEO VIDEO_B`, `answers("", KeyboardInterrupt)`: 130, `t("cancelled")`, the first file only, a command listing `VIDEO` only
-- [ ] **[fix]** `test_ctrl_c_mid_playlist_stops_the_run` (e2e). `-y -p CAROUSEL`, `dl` raising on the second downloadable item. 130, the first item on disk, no `partial_result`, no history row, the command carries `-p`
-- [ ] **[fix]** `test_ctrl_c_during_post_processing_says_files_may_be_left` (e2e, `media_url`). `-y -a` on `audio.html`, with `FFmpegExtractAudioPP.run_ffmpeg` raising `KeyboardInterrupt`: 130, `t("interrupted", …)`, no `t("done")`, no history row. The downloaded source is still on disk: the tool doesn't delete yt-dlp's files
-- [ ] **[fix]** `test_cancelling_after_the_thumbnail_leaves_none`: `cli.main(...) == cli.EXIT_INTERRUPTED` instead of `pytest.raises(KeyboardInterrupt)`. `names(out) == []` stays
-- [ ] **[fix]** Exit-code flips, with no other assertion changed:
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** `test_ctrl_c_mid_download_names_the_url_and_folder` (`test_cli.py`, replaces `test_interrupt_propagates_after_cancel_message`). `download` raises `KeyboardInterrupt`. `_download_one` raises `cli._Interrupted`, an instance of `KeyboardInterrupt`, with `.outcome == _Outcome(False, False, "no")`. Stdout has `"\n" + t("interrupted", url, folder)` and no `t("cancelled")`
+- [x] **[fix]** `test_main_returns_the_interrupt_status_after_ctrl_c_in_the_wizard` (`test_cli.py`). `wizard.run_all` raises `KeyboardInterrupt`: `cli.main([]) == cli.EXIT_INTERRUPTED == 130`, `t("cancelled")` on its own line, no `Traceback` in stderr
+- [x] **[fix]** `test_entry_dies_by_sigint_after_an_interrupt` (`test_cli.py`). `cli.main` is patched to return 130, and `signal.signal` and `os.kill` to record. `entry()` sets `SIG_DFL` for SIGINT and sends SIGINT to its own pid. With 0 or 1 it raises `SystemExit` with that code and sends nothing
+- [x] **[fix]** `test_ctrl_c_ends_the_process_by_sigint_without_a_traceback` (`test_cli.py`). A real subprocess, `sys.executable -m download_media -i http://127.0.0.1:9/x`, in its own session, with `PYTHONUNBUFFERED=1` and stdin a pipe kept open. Once the URL prompt is read from stdout, SIGINT goes to its group (only the process the test started). Then: `returncode == -signal.SIGINT`, `t("cancelled")` in stdout, no `Traceback` in stderr
+- [x] **[fix]** `test_the_console_script_runs_the_interrupt_aware_entry` (`test_packaging.py`). `pyproject.toml`'s `download-media` script is `download_media.cli:entry`
+- [x] **[fix]** `test_ctrl_c_at_a_wizard_prompt_downloads_nothing` (e2e). `wizard_on(VIDEO, "", KeyboardInterrupt)`: 130, `t("cancelled")`, nothing on disk, no history row, no `t("equiv_cmd")`, no `Traceback`
+- [x] **[fix]** `test_ctrl_c_during_the_wizard_probe_downloads_nothing` (e2e). `wizard.probe` patched to raise `KeyboardInterrupt`: same assertions
+- [x] **[fix]** `test_ctrl_c_mid_download_keeps_earlier_urls_and_prints_their_command` (e2e). `-y VIDEO VIDEO_B`, with `YoutubeDL.dl` raising `KeyboardInterrupt` on the second URL only. 130, the first URL's file only, one history row (`VIDEO`), `t("interrupted", VIDEO_B, out)`, no `t("cancelled")`. One command listing both URLs, with `-y -o {out}`
+- [x] **[fix]** `test_ctrl_c_at_the_second_preview_prints_the_first_url_s_command` (e2e). Direct `VIDEO VIDEO_B`, `answers("", KeyboardInterrupt)`: 130, `t("cancelled")`, the first file only, a command listing `VIDEO` only
+- [x] **[fix]** `test_ctrl_c_mid_playlist_stops_the_run` (e2e). `-y -p CAROUSEL`, `dl` raising on the second downloadable item. 130, the first item on disk, no `partial_result`, no history row, the command carries `-p`
+- [x] **[fix]** `test_ctrl_c_during_post_processing_says_files_may_be_left` (e2e, `media_url`). `-y -a` on `audio.html`, with `FFmpegExtractAudioPP.run_ffmpeg` raising `KeyboardInterrupt`: 130, `t("interrupted", …)`, no `t("done")`, no history row. The downloaded source is still on disk: the tool doesn't delete yt-dlp's files
+- [x] **[fix]** `test_cancelling_after_the_thumbnail_leaves_none`: `cli.main(...) == cli.EXIT_INTERRUPTED` instead of `pytest.raises(KeyboardInterrupt)`. `names(out) == []` stays
+- [x] **[fix]** Exit-code flips, with no other assertion changed:
   - `test_wizard_cancelled_downloads_nothing`, `test_main_cancelled_wizard_exits_clean` (renamed `…_exits_1`), `test_a_lone_image_is_refused_at_once` and `test_wizard_skips_a_refused_url_and_says_so_at_the_end` now expect 1.
   - `test_a_refusal_before_a_saved_url_still_exits_clean` is renamed `…_exits_1` and expects 1.
   - `test_wizard_with_every_url_refused_is_cancelled` is renamed `test_wizard_with_every_url_refused_names_them_and_exits_1`: 1, no `t("cancelled")`, `t("wizard_skipped", url)` for both.
   - Every other wizard cancel or refusal test that asserts 0 flips to 1. These include `test_cancel_in_the_second_walk_cancels_the_whole_run`, `test_cancel_at_any_prompt_of_a_later_walk_downloads_nothing` and `test_cancelling_after_a_missing_browser_downloads_nothing`, about 20 in all, some parametrized. The developer lists them in the report, and every other failing test is a regression.
-- [ ] **[fix]** `test_refusals_do_not_say_cancelling` (`test_i18n.py`). In both blocks, `image_only_skipped` and `no_supported_items` contain neither `Cancel` nor `Cancelando`
-- [ ] **[pin]** `test_direct_mode_preview_can_be_declined`, `test_direct_mode_preview_treats_eof_as_cancel`, `test_failed_declined_and_saved_urls_in_one_run`, `test_carousel_of_only_images_is_a_failure`, `test_base_exceptions_are_not_swallowed`, `test_listing_formats_lets_base_exceptions_through` pass unchanged
-- [ ] `interrupted` exists in both blocks (`test_es_and_en_have_same_keys`)
-- [ ] **Console check** on loopback, after `pip install -e .`, which regenerates `.venv/bin/download-media` from the new `[project.scripts]`. Repeat R1 and R4 with the console script in its own process group and SIGINT sent to the group:
+- [x] **[fix]** `test_refusals_do_not_say_cancelling` (`test_i18n.py`). In both blocks, `image_only_skipped` and `no_supported_items` contain neither `Cancel` nor `Cancelando`
+- [x] **[pin]** `test_direct_mode_preview_can_be_declined`, `test_direct_mode_preview_treats_eof_as_cancel`, `test_failed_declined_and_saved_urls_in_one_run`, `test_carousel_of_only_images_is_a_failure`, `test_base_exceptions_are_not_swallowed`, `test_listing_formats_lets_base_exceptions_through` pass unchanged
+- [x] `interrupted` exists in both blocks (`test_es_and_en_have_same_keys`)
+- [x] **Console check** on loopback, after `pip install -e .`, which regenerates `.venv/bin/download-media` from the new `[project.scripts]`. Repeat R1 and R4 with the console script in its own process group and SIGINT sent to the group:
   - R1: a blank line, `Cancelled.`, no `Traceback`, `returncode -2`.
   - R4: `Interrupted while downloading <url>. Unfinished files may be left in <dir>.` on its own line, then `Equivalent command…` with the `-y` command, no `Traceback`, `returncode -2`, `clip.mp4.part` on disk, no history row.
   - With `LANG=es_ES.UTF-8`: `Cancelado.` and `Interrumpido mientras se descargaba …`.
@@ -203,6 +203,41 @@ There are no separate rows for cookies or carousels. With cookies, the only path
 ## Live check
 
 Not needed. Nothing here depends on a site. Signals, exit codes and messages are local, and yt-dlp's interrupt paths are the same for every extractor. The console check above runs the real process path: the entry point, signal delivery to the process group, and ffmpeg in the group for R5. A terminal's Ctrl-C sends the same SIGINT to the same group.
+
+## Validation
+
+On `main` at `cf87835` (merge `5b41234`, then `.ai/` commits only: `git diff --stat 5b41234 HEAD -- src tests pyproject.toml` is empty), yt-dlp 2026.10.26, Python 3.14.9. GitHub CI on `cf87835` was still running when this was written.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on the merge `5b41234`: `All checks passed.`, exit 0, 2339 passed, 9 deselected, 7 xfailed. No file outside `.ai/` has changed since.
+- **Criteria tests:** a `pytest -k` selection of every test the criteria name, `[fix]` and `[pin]`, including the renamed exit-code flips and `test_es_and_en_have_same_keys`, ran on `main`: 48 passed, each name confirmed in the `-rA` output. The revert proof of the `[fix]` tests is the test-engineer's.
+- **Merged tests:** every test function in either parent of `5b41234` is at the merge, except seven, and none is new. Each is a rename or replacement made on purpose by its own commit, and its successor is on `main`:
+  - From this branch, all as this spec asks: `test_interrupt_propagates_after_cancel_message` becomes `test_ctrl_c_mid_download_names_the_url_and_folder` (`eeefe62`). `test_main_cancelled_wizard_exits_clean` and `test_a_refusal_before_a_saved_url_still_exits_clean` become `…_exits_1` (`67d5e21`). `test_wizard_with_every_url_refused_is_cancelled` becomes `…_names_them_and_exits_1` (`ee9278a`).
+  - From `main`: `test_a_keyring_that_answers_and_decrypts_nothing_stays_as_it_was` becomes `…_is_named` (`feb1576`, spec 67). `test_wizard_keeps_an_ogx_and_reports_it_untagged` becomes `test_wizard_converts_an_ogx_video_and_tags_it`, and `test_wizard_keeps_audio_in_such_a_container_raw_when_nothing_says_it_is_audio` drops `raw_` (`862f4df`, spec 30, whose message lists both).
+  - The branch's whole diff to `src/` and `tests/` reaches the merge line for line. `main`'s does too, apart from hunks that only realign.
+- **Console check:** `main`'s real console script, `.venv/bin/download-media`, which imports `entry`. Each run had its own process group (`start_new_session`), stdin a pipe kept open, a fresh `HOME`, all `XDG_*` folders and `XDG_RUNTIME_DIR` in the scratchpad, and a dead D-Bus address. A scratch `http.server` served an 8 s, 1.5 MB H.264/AAC `clip.mp4` under `/fast/` and under `/slow/` (about 64 KB/s). "Ctrl-C" is `os.killpg(pid, SIGINT)`, sent only to the group the driver started. Everything was deleted afterwards.
+
+| Run | Output | Exit | Disk, history |
+| --- | ------ | ---- | ------------- |
+| R1, `download-media`, Ctrl-C at `Video URL (c=cancel):` | `\nCancelled.` on its own line, no `Traceback` | `-2` | nothing, 0 rows |
+| R1, `download-media <fast>`, Enter at the URL, Ctrl-C at `Select [1]:` of the type step | same | `-2` | nothing, 0 rows |
+| same with `LANG=es_ES.UTF-8` | `Selecciona [1]: \nCancelado.` | `-2` | nothing, 0 rows |
+| R4, `-y -o <dir> <slow>`, Ctrl-C at about 20 % | progress line, newline, `Interrupted while downloading <url>. Unfinished files may be left in <dir>.`, then `Equivalent command…` with `download-media -y -o <dir> <url>`, no `Traceback` | `-2` | `clip.mp4.part` (325,932 B), 0 rows |
+| same with `LANG=es_ES.UTF-8` | `Interrumpido mientras se descargaba <url>. Pueden quedar archivos sin terminar en <dir>.`, `Comando equivalente…` | `-2` | `clip.mp4.part`, 0 rows |
+| R4b, the printed command on R4's folder, served from `/fast/` | `Resuming download at byte 325932`, `Done.` | 0 | one `clip.mp4`, 8.0 s, decodes clean |
+| Wizard `c`, `download-media <fast>`, `c` at the URL prompt | `Cancelled.` | **1** | nothing, 0 rows |
+| Saved, `-y -o <dir> <fast>` | `Done.`, the command | 0 | one `clip.mp4`, 1 row |
+
+- **Cases, tests only:** the probe, the preview, `-p`, post-processing, a second URL, a second Ctrl-C, `| tee`, refusals and the wizard's exit-code flips. Each is a criterion test or one of the test-engineer's additions, all in the gate. The `| tee` and second-Ctrl-C paths were also run for real by the test-engineer (28 runs), not here.
+- **Scope:** `3419952..02346f3` touches exactly the ten files in the Files table. No `wizard.py`, `PKGBUILD` or version change.
+
+### What changed after approval
+
+- **Code, beyond Design:** two guards in `entry()`, from the test-engineer's round 1.
+  - **The flush** (`043c0b3`). With `download-media … | tee log`, the same Ctrl-C kills `tee` first, so the flush before the self-kill raised `BrokenPipeError`: a traceback, exit 120, and a calling bash loop went on. A flush that fails now points the stream at `/dev/null`, and the self-kill goes ahead.
+  - **A second Ctrl-C** (`6667735`). One that arrives while `main` prints its cancel line escaped `main` and showed a traceback before the SIGINT death. `entry()` now catches `KeyboardInterrupt` around `main()` and treats it as 130.
+- **Known window, QA, read in the code:** `ok(t("done"))` (`cli.py:414`) and `history.append` (`:418-422`) sit after the `try`. A Ctrl-C in the few milliseconds between them reaches the loop's plain `except KeyboardInterrupt`. It prints `Cancelled.`, writes no history row, and leaves that URL out of the equivalent command, although its file is saved. It still ends by SIGINT. Not fixed; it's in `PLAN.md`'s known residuals.
+- **Minor, QA:** `outcomes and` in the final `return` is redundant: `outcomes` is empty only when `runs` is, and then `refused` isn't. It's harmless.
+- **Spec text:** none. The 0.4.0 review items below moved to `PLAN.md` as items 29 to 33.
 
 ## Decisions
 
@@ -258,7 +293,7 @@ A is the only option that removes the traceback without changing what a script s
 
 ## Review list for 0.4.0
 
-Add these to `PLAN.md`'s "Next release" list when this merges. None is breaking by `AGENTS.md`'s list.
+In `PLAN.md`'s "Next release" list as items 29 to 33 since validation, in the order D4, D5 and D6, D1 to D3, the wording, the entry point. None is breaking by `AGENTS.md`'s list.
 
 1. Ctrl-C prints one line instead of a traceback, and still ends the process by SIGINT (a shell shows 130, and a calling loop stops). After a Ctrl-C during a download, the line names the URL and folder, and the equivalent command is printed (D1–D3). New message: `interrupted`.
 2. A cancelled wizard (`c`, EOF, `-i -l` included) exits 1 instead of 0 (D4).
