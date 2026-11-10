@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T06:43:02-04:00",
+  "updated": "2026-11-10T06:53:02-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2890,9 +2890,9 @@
     "feature/ig-lone-images": {
       "type": "feature",
       "title": "Save a lone Instagram image post when cookies are given",
-      "stage": "development",
-      "status": "in_progress",
-      "next_agent": "developer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/61-ig-lone-images.md",
       "branch": "feature/ig-lone-images",
       "worktree": ".worktrees/feature-ig-lone-images",
@@ -2903,9 +2903,14 @@
         "878d0a9",
         "ec3985a",
         "5ee7b45",
-        "d5b8d18"
+        "d5b8d18",
+        "0ca9eac",
+        "33a464c"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -2955,6 +2960,13 @@
           "result": "approved",
           "at": "2026-11-10T06:32:47-04:00",
           "note": "Before QA: once fix/intent-flags lands on main, the developer merges main into this branch and cuts test_wizard_in_list_mode_names_a_lone_image to a single URL reply (QA of intent-flags found it fails on the merged tree because -i -l now asks only for the URL)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T06:53:02-04:00",
+          "note": "Merged main (intent-flags) into the branch as 0ca9eac, no conflicts. 33a464c cuts test_wizard_in_list_mode_names_a_lone_image to one reply (matches -y -l plus the wizard title). Shared IMAGE parameter passes. Gate exit 0 at 33a464c, 2978 passed + 15 xfailed."
         }
       ]
     },
