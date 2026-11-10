@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:15:01-04:00",
+  "updated": "2026-11-10T02:22:40-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2561,9 +2561,9 @@
     "fix/cancel-exits": {
       "type": "fix",
       "title": "Catch Ctrl-C and settle cancel and refusal exit codes and wording",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/23-cancel-exits.md",
       "branch": "fix/cancel-exits",
       "worktree": ".worktrees/fix-cancel-exits",
@@ -2575,14 +2575,12 @@
         "86a9e76",
         "711028a",
         "043c0b3",
-        "6667735"
+        "6667735",
+        "02346f3"
       ],
       "review": {
-        "approved": false,
-        "findings": [
-          "major cli.py:620-628 entry() flushes stdout before the self-kill; with the pipe's reader gone (| tee log) BrokenPipeError: traceback, exit 120, bash loop continues (regression vs main). Strict xfails test_ctrl_c_with_the_pipe_s_reader_gone_still_dies_by_sigint, test_ctrl_c_stops_a_calling_bash_loop[reader-gone]",
-          "minor cli.py:551-554 a second Ctrl-C while main() prints Cancelled. escapes main() and entry(): traceback before SIGINT death. Strict xfail test_a_second_ctrl_c_on_the_cancel_line_shows_no_traceback"
-        ]
+        "approved": true,
+        "findings": []
       },
       "history": [
         {
@@ -2626,6 +2624,13 @@
           "result": "done",
           "at": "2026-11-10T02:06:10-04:00",
           "note": "Round 1 fixed: 043c0b3 guards each flush in entry() (stdout to /dev/null on failure) before the self-kill; 6667735 catches KeyboardInterrupt around main() in entry() as 130. Three strict xfails flipped; each fails without its fix. Real pipe with reader gone: empty stderr, 130. Gate exit 0 at 6667735, 2120 passed + 3 xfailed."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T02:22:40-04:00",
+          "note": "Round 1 closed: 16 bash-loop runs (tee, cat, > log, plain; script and module; es/en) and 12 pty runs end by SIGINT, no traceback. Exit codes match main otherwise. Tests in 02346f3; mutation 7/7. Gate exit 0, 2125 passed + 5 xfailed. Pre-existing on main, strict xfails, planner row broken-stdout: | head -1 prints BrokenPipe noise and exits 120; >&- crashes in ui.py at import."
         }
       ]
     },
