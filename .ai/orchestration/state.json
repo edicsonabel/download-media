@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T09:05:34-04:00",
+  "updated": "2026-11-10T09:25:59-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3223,9 +3223,9 @@
     "fix/failure-leftovers": {
       "type": "fix",
       "title": "Remove what a failed or interrupted download leaves",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/46-failure-leftovers.md",
       "branch": "fix/failure-leftovers",
       "worktree": ".worktrees/fix-failure-leftovers",
@@ -3233,13 +3233,12 @@
         "1a4e349",
         "e829fbd",
         "e9b7044",
-        "92e95d7"
+        "92e95d7",
+        "1e51210"
       ],
       "review": {
-        "approved": false,
-        "findings": [
-          "medium downloader.py drop_media + build_ydl_opts (-a sets no final_ext): a failed -a rerun deletes the .mp3 an earlier run saved (extraction overwrites it; __real_download covers only the source). Strict xfail test_a_failed_rerun_keeps_the_audio_an_earlier_run_saved[single|-p] (failure injected in _TagSource)"
-        ]
+        "approved": true,
+        "findings": []
       },
       "history": [
         {
@@ -3283,6 +3282,13 @@
           "result": "done",
           "at": "2026-11-10T09:05:34-04:00",
           "note": "Round 1 fixed in 92e95d7: _Ydl.post_process records the files beside the download when post-processing starts; drop_media skips any filepath already on that list. Strict xfail flipped; fails without the guard. Gate exit 0, 2960 passed + 13 xfailed."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T09:25:59-04:00",
+          "note": "Round 1 closed in a real CLI run (failed -a rerun keeps tone.mp3; e9b7044 deleted it). Scope checks: -o folder, dated subfolders absolute/relative, same URL twice, carousel item twice. Guard mutation 6/7, survivor equivalent. 10k-file folder snapshot ~110 ms per item. Gate exit 0 at 1e51210, 2964 passed + 14 xfailed. Pre-existing strict xfail (planner row): a failed -a rerun leaves the earlier .mp3 overwritten by an untagged copy; next rerun saves '[id].mp3' beside it."
         }
       ]
     }
