@@ -2672,7 +2672,7 @@
           "agent": "architect",
           "result": "validated",
           "at": "2026-11-10T03:10:33-04:00",
-          "note": "All 18 criteria hold; 48 criteria tests pass. Console runs through entry(): Ctrl-C at prompts (en/es) -2 with Cancelled.; mid-download interrupted line + command, .part left, rerun resumes and exits 0; wizard c exits 1; saved run 0. Merged tests: seven gone, each a deliberate rename by its own commit. Spec done with entry() guards and QA's ms window recorded; PLAN row 23 done; items 29-33 in the 0.4.0 list, D4/D5 first. CI on cf87835 pending at validation time. Worktree and branch removed."
+          "note": "All 18 criteria hold; 48 criteria tests pass. Console runs through entry(): Ctrl-C at prompts (en/es) -2 with Cancelled.; mid-download interrupted line + command, .part left, rerun resumes and exits 0; wizard c exits 1; saved run 0. Merged tests: seven gone, each a deliberate rename by its own commit. Spec done with entry() guards and QA's ms window recorded; PLAN row 23 done; items 29-33 in the 0.4.0 list, D4/D5 first. CI on cf87835 pending at validation time. Worktree and branch removed. CI run 42771905992 on cf87835 succeeded (attempt 1)."
         }
       ]
     },
