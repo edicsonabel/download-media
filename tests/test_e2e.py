@@ -8439,6 +8439,30 @@ def test_a_rotated_video_is_converted(
     assert codecs(out / saved) == {"video": "h264", "audio": "aac"}
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="an item the metadata step fails stays named as not converted",
+)
+@pytest.mark.parametrize(
+    "flags", [("-p",), ("--playlist-items", "1,2")], ids=["-p", "--playlist-items"]
+)
+def test_an_item_that_failed_is_not_named_as_not_converted(
+    generic: Any, out: Path, monkeypatch: pytest.MonkeyPatch, flags: tuple[str, ...]
+) -> None:
+    # The junk item fails and the mp4 is saved: the warnings are only for what was saved.
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("missing"))
+        mode = ("-y", *flags, "--video-format", "mkv", "-o", str(out))
+        code, output = generic("junk-and-mp4.html", flags=mode)
+    junk, video = (f"0{n} - junk-and-mp4 ({n}) [junk-and-mp4-{n}].mp4" for n in (1, 2))
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert output.count(t("not_converted", video, "mkv")) == 1
+    assert t("done") in output
+    assert t("not_converted", junk, "mkv") not in output
+
+
 @pytest.mark.parametrize(
     ("flags", "saved"),
     [
