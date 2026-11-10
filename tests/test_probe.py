@@ -1142,6 +1142,30 @@ def test_a_keyring_error_is_a_cookie_failure(
     assert "kwallet-query failed" in result.error_message
 
 
+def test_cookies_that_decrypt_to_nothing_are_a_cookie_failure(media_url: str) -> None:
+    # One v11 cookie, and basictext asks no keyring for its key: yt-dlp logs no error.
+    profile = Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "Cookies")
+    con.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('version', '20')")
+    con.execute(
+        "CREATE TABLE cookies (host_key BLOB, name BLOB, value BLOB, encrypted_value BLOB,"
+        " path BLOB, expires_utc INTEGER, is_secure INTEGER)"
+    )
+    con.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
+        (b"127.0.0.1", b"s", b"", b"v11" + b"\0" * 16, b"/"),
+    )
+    con.commit()
+    con.close()
+    result = probe(f"{media_url}/poster.html", "chrome+basictext")
+    assert result.failed is True
+    assert result.cookie_failure is not None
+    assert result.cookie_failure.undecrypted is True
+    assert result.cookie_failure.missing is False
+
+
 def test_what_yt_dlp_reported_outranks_the_exception_after_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

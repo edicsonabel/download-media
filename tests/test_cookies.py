@@ -23,6 +23,7 @@ from download_media.cookies import (
     browser_of,
     cookie_failure,
     detect_keyring,
+    jar_failure,
     logged_failure,
     parse_spec,
     report_failure,
@@ -346,3 +347,39 @@ def test_the_report_adds_the_hint_that_fits_the_cause(
     }
     for key, text in expected.items():
         assert (text in said) == (key in lines), key
+
+
+UNDECRYPTED = CookieFailure(False, t("cookies_none_decrypted"), undecrypted=True)
+
+
+@pytest.mark.parametrize(
+    ("spec", "cookies", "valued", "warned", "failure"),
+    [
+        ("chrome", 0, False, True, UNDECRYPTED),  # Every cookie left out, each with a warning.
+        ("chrome+kwallet6", 1, False, False, UNDECRYPTED),  # A wrong key: an empty value.
+        ("brave+basictext", 2, False, True, UNDECRYPTED),
+        ("chrome", 0, False, False, CookieFailure(True, "no cookies in the database")),
+        ("firefox", 0, False, False, CookieFailure(True, "no cookies in the database")),
+        ("firefox", 1, False, False, None),  # Not encrypted: an empty value is the site's own.
+        ("safari", 1, False, True, None),
+        ("chrome", 1, True, False, None),
+        ("chrome+basictext", 2, True, True, None),  # One cookie decrypted: the jar works.
+        ("firefox", 1, True, False, None),
+    ],
+)
+def test_a_jar_with_nothing_usable_is_a_failure(
+    spec: str, cookies: int, valued: bool, warned: bool, failure: CookieFailure | None
+) -> None:
+    assert jar_failure(spec, cookies, valued, warned) == failure
+
+
+def test_undecrypted_cookies_get_the_keyring_hint_even_with_a_keyring_named(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report_failure("chrome+basictext", UNDECRYPTED)
+    said = capsys.readouterr().out
+    assert t("cookies_unreadable", "chrome", t("cookies_none_decrypted")) in said
+    assert t("cookies_keyring_hint", "chrome") in said
+    # A keyring error named by hand still gets none: spec 26's rule.
+    report_failure("chrome+kwallet6", logged_failure("kwallet-query failed with return code 1."))
+    assert t("cookies_keyring_hint", "chrome") not in capsys.readouterr().out

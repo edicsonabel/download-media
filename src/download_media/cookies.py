@@ -16,7 +16,7 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
-from yt_dlp.cookies import CookieLoadError
+from yt_dlp.cookies import CHROMIUM_BASED_BROWSERS, CookieLoadError
 from yt_dlp.utils import DownloadError, remove_terminal_sequences
 
 from .config import BROWSERS
@@ -106,6 +106,7 @@ class CookieFailure:
 
     missing: bool  # No cookie database: the browser isn't installed, or was never opened.
     reason: str  # yt-dlp's cause, first line.
+    undecrypted: bool = False  # The jar loaded, but none of its cookies decrypted to a value.
 
 
 _REASON_LENGTH = 160
@@ -142,6 +143,19 @@ def logged_failure(message: str) -> CookieFailure:
     return CookieFailure(missing=False, reason=_reason(message))
 
 
+def jar_failure(spec: str, cookies: int, valued: bool, warned: bool) -> CookieFailure | None:
+    """A jar that loaded without an error, but holds nothing a site could use."""
+    if valued:
+        return None
+    # Chromium encrypts its cookies: a missing or wrong key leaves them out, or empty. Each one
+    # left out reports a warning, so an empty jar without one is an empty database.
+    if browser_of(spec) in CHROMIUM_BASED_BROWSERS and (cookies or warned):
+        return CookieFailure(missing=False, reason=t("cookies_none_decrypted"), undecrypted=True)
+    if not cookies:
+        return CookieFailure(missing=True, reason="no cookies in the database")
+    return None
+
+
 def secretstorage_hint() -> None:
     warn("  → install python-secretstorage so cookies from Brave/Chrome can be decrypted:")
     warn("      sudo pacman -S python-secretstorage")
@@ -157,5 +171,5 @@ def report_failure(spec: str, failure: CookieFailure) -> None:
     warn(t("cookies_unreadable", browser, failure.reason))
     if "secretstorage" in failure.reason.lower():
         secretstorage_hint()
-    elif uses_keyring(spec):
+    elif failure.undecrypted or uses_keyring(spec):  # A keyring named by hand may be the cause.
         warn(t("cookies_keyring_hint", browser))
