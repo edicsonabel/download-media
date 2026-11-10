@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:07:44-04:00",
+  "updated": "2026-11-10T04:14:42-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2679,9 +2679,9 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
       "worktree": ".worktrees/fix-subs-failures",
@@ -2690,7 +2690,8 @@
         "26980ac",
         "c369973",
         "da03a4a",
-        "88121be"
+        "88121be",
+        "4d4f725"
       ],
       "review": {
         "approved": false,
@@ -2740,6 +2741,13 @@
           "result": "changes_requested",
           "at": "2026-11-10T03:56:16-04:00",
           "note": "Round 1. Gate exit 0 at 88121be, 2417 passed + 8 xfailed. Every failure shape across every mode held; count, cookies retry, containers, default track fine. Mutation 32/34, survivors equivalent. One medium finding (D4 deleting an earlier run's subtitle), prototyped fix: only track paths that didn't exist before the write."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T04:14:42-04:00",
+          "note": "Round 1 fixed in 4d4f725: only subtitle files that weren't on disk before the write join item_subs. Strict xfail flipped; fails without the fix. Gate exit 0 (second run; the first overlapped another gate and was stopped), 2418 passed + 7 xfailed. Unmeasured edge: a subtitle finished from an earlier run's .part is deleted if the video then fails."
         }
       ]
     },
