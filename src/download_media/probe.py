@@ -274,6 +274,14 @@ def _has_thumbnail(info: dict[str, Any]) -> bool:
     return bool(info.get("thumbnails") or info.get("thumbnail"))
 
 
+def _only_storyboards(info: dict[str, Any]) -> bool:
+    # A preview of a video yt-dlp couldn't get, not an image: its format selection fails it.
+    formats = _formats(info)
+    return bool(formats) and all(
+        str(f.get("ext") or "").lower() in MEDIA_EXTENSIONS.storyboards for f in formats
+    )
+
+
 def _classify_single(data: dict[str, Any]) -> ContentKind:
     kind = _media_kind(data)
     if kind is not None:
@@ -291,6 +299,8 @@ class _ProbeYdl(_Ydl):
     """
 
     def process_video_result(self, info_dict: dict[str, Any], download: bool = True) -> Any:
+        if _only_storyboards(info_dict):
+            return super().process_video_result(info_dict, download=download)
         kind = _media_kind(info_dict)
         known = info_dict.get("playlist_index") or _has_thumbnail(info_dict)
         if kind == ContentKind.SINGLE_IMAGE or (kind is None and known):

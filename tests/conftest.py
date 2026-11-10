@@ -638,6 +638,11 @@ class FakeSiteIE(InfoExtractor):
             return self._with_formats("a1", self._storyboard(), audio)
         if page == "storyboard-only":
             return self._with_formats("s1", self._storyboard())
+        if page == "storyboard-carousel":
+            # YouTube's shape when it skipped every stream: only storyboards, and thumbnails.
+            thumbnail = {"url": f"{self.media_url}/tiny.jpg", "width": 64, "height": 64}
+            storyboard = {**self._with_formats("s1", self._storyboard()), "thumbnails": [thumbnail]}
+            return self.playlist_result([storyboard, self._video("v1")], "post", "Post")
         if page == "thumbnail-video":
             return self._with_formats("v1", self._thumbnail_format(), plain_video)
         if page == "thumbnail-audio":

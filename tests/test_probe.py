@@ -1052,6 +1052,34 @@ def test_an_entry_that_really_failed_is_not_handed_back(
     assert [item.supported for item in result.items] == [True, False]
 
 
+@pytest.mark.parametrize(
+    "formats,handed_to_yt_dlp",
+    [
+        ([STORYBOARD], True),
+        ([STORYBOARD, {**STORYBOARD, "format_id": "sb1", "ext": "MHTML"}], True),
+        ([{"vcodec": "none", "acodec": "none", "ext": "jpg", "format_note": "thumbnail"}], False),
+    ],
+    ids=["storyboard", "storyboards", "image-format"],
+)
+def test_a_storyboard_only_result_goes_to_yt_dlp(
+    monkeypatch: pytest.MonkeyPatch, formats: list[dict[str, Any]], handed_to_yt_dlp: bool
+) -> None:
+    from download_media.downloader import _Ydl
+
+    seen: list[dict[str, Any]] = []
+
+    def process(self: Any, info_dict: dict[str, Any], download: bool = True) -> Any:
+        seen.append(info_dict)
+        return None
+
+    monkeypatch.setattr(_Ydl, "process_video_result", process)
+    info = {"id": "s", "formats": formats, "thumbnails": [{"url": "http://x/i.jpg"}]}
+    with _ProbeYdl({"quiet": True}) as ydl:
+        returned = ydl.process_video_result(info, download=False)
+    assert seen == ([info] if handed_to_yt_dlp else [])
+    assert (returned is info) is not handed_to_yt_dlp
+
+
 def test_failures_are_read_at_their_own_position(fake_site: Any) -> None:
     result = probe("https://fake.test/partial-first")
     assert [item.kind for item in result.items] == [ContentKind.UNKNOWN, VIDEO, VIDEO]

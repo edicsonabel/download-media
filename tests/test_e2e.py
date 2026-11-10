@@ -3858,7 +3858,7 @@ def test_split_streams_with_unknown_codecs_are_merged(run: Any, out: Path, answe
     assert streams(out / "Clip.mp4") == {"audio", "video"}
 
 
-@pytest.mark.parametrize("page", ["storyboard-only", "image-format", "ig-image"])
+@pytest.mark.parametrize("page", ["image-format", "ig-image"])
 def test_wizard_on_a_lone_format_without_streams_is_refused_as_an_image(
     run: Any, out: Path, answers: Any, page: str
 ) -> None:
@@ -3868,6 +3868,31 @@ def test_wizard_on_a_lone_format_without_streams_is_refused_as_an_image(
     assert len(prompts) == 1
     assert t("image_only_skipped") in output
     assert t("done") not in output
+    assert names(out) == []
+
+
+STORYBOARD_ONLY = "https://fake.test/storyboard-only"
+NO_FORMAT = "Requested format is not available."
+
+
+def test_wizard_on_a_storyboard_only_video_reports_yt_dlp_s_failure(
+    wizard_on: Any, out: Path
+) -> None:
+    # The manual steps after the failed probe, then the preview.
+    code, output = wizard_on(STORYBOARD_ONLY, *SINGLE_WALK, "")
+    assert code == 1
+    assert t("probe_failed", NO_FORMAT) in output
+    assert t("image_only_skipped") not in output
+    assert t("failed", STORYBOARD_ONLY) in output
+    assert commands(output) == [f"download-media -y -o {out} {STORYBOARD_ONLY}"]
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_direct_run_on_a_storyboard_only_video_still_fails(run: Any, out: Path) -> None:
+    code, output = run("-y", STORYBOARD_ONLY)
+    assert code == 1
+    assert NO_FORMAT.rstrip(".") in output
     assert names(out) == []
 
 
@@ -4436,7 +4461,8 @@ def test_items_yt_dlp_cannot_fetch_are_never_offered_and_never_saved(
     answers(*PICKER_WALK)
     code, output = run("-i", url)
     assert code == 0
-    assert output.count(tag("kind_image")) == 3
+    # The storyboard entry is yt-dlp's failure, shown as [?]: still not offered.
+    assert output.count(tag("kind_image")) == 2
     assert output.count(tag("kind_video")) == 1
     assert names(out) == ["04 - Clip [v1].mp4"]
 
@@ -5098,7 +5124,7 @@ def test_an_empty_entry_is_not_called_an_image(wizard_on: Any, out: Path) -> Non
     assert names(out) == ["01 - Clip [v2].mp4"]
 
 
-@pytest.mark.parametrize("page", ["ig-image", "image-format", "storyboard-only", "thumbnail-image"])
+@pytest.mark.parametrize("page", ["ig-image", "image-format", "thumbnail-image"])
 def test_a_lone_image_is_refused_at_once(wizard_on: Any, out: Path, page: str) -> None:
     code, output = wizard_on(f"https://fake.test/{page}", "")
     assert code == 1
@@ -5107,12 +5133,33 @@ def test_a_lone_image_is_refused_at_once(wizard_on: Any, out: Path, page: str) -
     assert history_rows() == []
 
 
-def test_entries_yt_dlp_cannot_fetch_stay_images_with_no_warning_of_failure(wizard_on: Any) -> None:
+def test_entries_with_nothing_to_fetch_stay_images_and_storyboards_are_failures(
+    wizard_on: Any,
+) -> None:
     code, output = wizard_on("https://fake.test/undownloadable-carousel", *PICKER_WALK)
     assert code == 0
-    assert output.count(tag("kind_image")) == 3
+    assert output.count(tag("kind_image")) == 2
+    assert output.count("[?]") == 1
     assert output.count(tag("kind_video")) == 1
-    assert partly_inspected() not in output
+    assert partly_inspected(NO_FORMAT) in output
+
+
+def test_wizard_marks_a_storyboard_only_entry_as_not_inspected(
+    wizard_on: Any, run: Any, out: Path, again: Path
+) -> None:
+    url = "https://fake.test/storyboard-carousel"
+    code, output = wizard_on(url, *PICKER_WALK)
+    assert code == 0
+    assert partly_inspected(NO_FORMAT) in output
+    assert tag("kind_image") not in output
+    assert output.count("[?]") == 1
+    assert output.count(tag("kind_video")) == 1
+    assert names(out) == ["02 - Clip [v1].mp4"]
+
+    code, output = run("-y", "-p", "-o", str(again), url)
+    assert code == 0
+    assert names(again) == names(out)
+    assert t("partial_result", 1, 2, 0, 1) in output
 
 
 def test_cookies_the_site_rejects_are_still_dropped_by_the_retry(wizard_on: Any, out: Path) -> None:
