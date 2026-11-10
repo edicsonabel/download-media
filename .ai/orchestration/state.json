@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:42:23-04:00",
+  "updated": "2026-11-10T04:46:05-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2679,9 +2679,9 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
       "worktree": ".worktrees/fix-subs-failures",
@@ -2696,7 +2696,12 @@
       ],
       "review": {
         "approved": true,
-        "findings": []
+        "findings": [
+          "minor spec 36 Design 2 out of date after 4d4f725; still draft",
+          "minor i18n subs_empty under -a says 'not embedded' (accurate, approved wording)",
+          "minor downloader.py:659 vs :689 getattr inconsistency (harmless)",
+          "minor resumed .part judgement accepted"
+        ]
       },
       "history": [
         {
@@ -2754,6 +2759,20 @@
           "result": "done",
           "at": "2026-11-10T04:34:14-04:00",
           "note": "Round 1 closed in real runs. Resumed earlier .part finished then deleted with the failed video: judged acceptable (the finished file is this run's; keeping it is the orphan D4 removes), pinned by a test. Seven tests in 1a841c7; mutation 4/4. Gate exit 0, 2425 passed + 7 xfailed."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-10T04:46:05-04:00",
+          "note": "Gate exit 0 at 1a841c7, 2425 passed + 7 xfailed. Real runs en/es (404, cut, one-of-two, empty/junk incl. mkv and -a, failed video, two runs, two-video pages) match disk, streams, history, count, command. Six pins unchanged. Clean merge-tree with main (kind-edges); 847 targeted tests pass on it. Four minors, none blocking; resumed .part judgement agreed."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T04:46:05-04:00",
+          "note": "Merge and push under the overnight delegation. Spec text minors go to the architect at validation."
         }
       ]
     },
