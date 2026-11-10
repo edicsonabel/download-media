@@ -568,18 +568,45 @@ def test_an_image_body_spelled_identity_is_still_held_to_its_length() -> None:
         _drain(body, 4)
 
 
-@pytest.mark.parametrize("outcome", ["loads", "logs an error", "raises"])
+@pytest.mark.parametrize("outcome", ["loads", "logs an error", "warns", "raises"])
 def test_loading_cookies_leaves_report_error_alone(
     monkeypatch: pytest.MonkeyPatch, outcome: str
 ) -> None:
+    from http.cookiejar import Cookie
+
     from yt_dlp.cookies import YoutubeDLCookieJar
 
     from download_media.downloader import CookiesUnavailable, _Ydl, load_browser_cookies
 
     def load(_file: Any, _browser: Any, ydl: Any) -> Any:
+        jar = YoutubeDLCookieJar()
+        # What yt-dlp's cookie logger calls.
         if outcome == "logs an error":
-            ydl.report_error("failed to read from keyring")  # What yt-dlp's cookie logger calls.
-        return YoutubeDLCookieJar()
+            ydl.report_error("failed to read from keyring")
+        elif outcome == "warns":
+            ydl.report_warning("cannot decrypt v11 cookies: no key found")  # And keeps none.
+        else:
+            jar.set_cookie(
+                Cookie(
+                    version=0,
+                    name="s",
+                    value="ok",
+                    port=None,
+                    port_specified=False,
+                    domain="x.test",
+                    domain_specified=True,
+                    domain_initial_dot=False,
+                    path="/",
+                    path_specified=True,
+                    secure=False,
+                    expires=None,
+                    discard=False,
+                    comment=None,
+                    comment_url=None,
+                    rest={},
+                )
+            )
+        return jar
 
     if outcome != "raises":  # isolated_env's home holds no browser: yt-dlp's own failure.
         monkeypatch.setattr(sys.modules["yt_dlp.YoutubeDL"], "load_cookies", load)
@@ -591,6 +618,7 @@ def test_loading_cookies_leaves_report_error_alone(
             with pytest.raises(CookiesUnavailable):
                 load_browser_cookies(ydl, "chrome")
         assert "report_error" not in vars(ydl)
+        assert "report_warning" not in vars(ydl)
 
 
 @pytest.mark.parametrize(
@@ -629,3 +657,23 @@ def test_the_first_error_logged_while_loading_cookies_is_the_reason(
     with _Ydl(params) as ydl, pytest.raises(CookiesUnavailable) as caught:
         load_browser_cookies(ydl, "chrome")
     assert caught.value.failure.reason == "failed to read from keyring"
+
+
+@pytest.mark.parametrize(
+    "raised", [KeyboardInterrupt(), DownloadError("nothing to do with cookies")], ids=repr
+)
+def test_a_load_stopped_halfway_leaves_report_warning_alone(
+    monkeypatch: pytest.MonkeyPatch, raised: BaseException
+) -> None:
+    from download_media.downloader import _Ydl, load_browser_cookies
+
+    def load(_file: Any, _browser: Any, ydl: Any) -> Any:
+        ydl.report_warning("cannot decrypt v11 cookies: no key found")
+        raise raised
+
+    monkeypatch.setattr(sys.modules["yt_dlp.YoutubeDL"], "load_cookies", load)
+    params = {"quiet": True, "ignoreerrors": True, "cookiesfrombrowser": ("chrome",)}
+    with _Ydl(params) as ydl:
+        with pytest.raises(type(raised)):
+            load_browser_cookies(ydl, "chrome")
+        assert "report_warning" not in vars(ydl)

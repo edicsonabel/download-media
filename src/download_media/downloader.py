@@ -38,7 +38,7 @@ from yt_dlp.utils import (
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
-from .cookies import CookieFailure, cookie_failure, logged_failure, ydl_cookies
+from .cookies import CookieFailure, cookie_failure, jar_failure, logged_failure, ydl_cookies
 from .i18n import t
 from .selection import missing_items
 
@@ -326,20 +326,30 @@ def load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
     A keyring error can also end up only logged: always under ignoreerrors, and in any mode when
     a try inside yt-dlp swallows it. Nothing tells the jar it then returns, decrypted with an
     empty password, from a good one, so that's a failure too.
+
+    A load with no error can still hand back a jar where no cookie has a value: none decrypted,
+    or the database is empty. No site can use it, so it's a failure as well.
     """
     if not spec or not ydl.params.get("cookiesfrombrowser"):
         return
     logged: list[str] = []
+    warned: list[str] = []
     report_error = ydl.report_error
+    report_warning = ydl.report_warning
 
     def note(message: Any, *args: Any, **kwargs: Any) -> None:
         logged.append(str(message))
         report_error(message, *args, **kwargs)
 
+    def heed(message: Any, *args: Any, **kwargs: Any) -> None:
+        warned.append(str(message))
+        report_warning(message, *args, **kwargs)
+
     # What yt-dlp's cookie logger calls. On the instance: the preview passes a plain YoutubeDL.
     ydl.report_error = note
+    ydl.report_warning = heed
     try:
-        _ = ydl.cookiejar  # Not cached on failure: every read retries the load.
+        jar = ydl.cookiejar  # Not cached on failure: every read retries the load.
     except (CookieLoadError, DownloadError) as exc:
         failure = cookie_failure(exc)
         if failure is None:
@@ -347,8 +357,12 @@ def load_browser_cookies(ydl: YoutubeDL, spec: str | None) -> None:
         raise CookiesUnavailable(spec, failure) from exc
     finally:
         del ydl.report_error
+        del ydl.report_warning
     if logged:
         raise CookiesUnavailable(spec, logged_failure(logged[0]))
+    failure = jar_failure(spec, len(jar), any(cookie.value for cookie in jar), bool(warned))
+    if failure:
+        raise CookiesUnavailable(spec, failure)
 
 
 def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:

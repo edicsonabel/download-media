@@ -6415,6 +6415,58 @@ def unreadable_chrome() -> None:
     con.close()
 
 
+def chrome_v11(value: bytes, password: bytes) -> None:
+    """A Chrome profile with one v11 cookie s=<value>, encrypted with the key of ``password``."""
+    key = pbkdf2_sha1(password, salt=b"saltysalt", iterations=1, key_length=16)
+    profile = Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "Cookies")
+    con.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('version', '20')")
+    con.execute(
+        "CREATE TABLE cookies (host_key BLOB, name BLOB, value BLOB, encrypted_value BLOB,"
+        " path BLOB, expires_utc INTEGER, is_secure INTEGER)"
+    )
+    encrypted = b"v11" + aes_cbc_encrypt_bytes(value, key, b" " * 16)
+    con.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
+        (b"127.0.0.1", b"s", b"", encrypted, b"/"),
+    )
+    con.commit()
+    con.close()
+
+
+@pytest.fixture
+def empty_chrome() -> None:
+    """A Chrome profile whose cookie database holds no cookie."""
+    profile = Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "Cookies")
+    con.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('version', '20')")
+    con.execute(
+        "CREATE TABLE cookies (host_key BLOB, name BLOB, value BLOB, encrypted_value BLOB,"
+        " path BLOB, expires_utc INTEGER, is_secure INTEGER)"
+    )
+    con.commit()
+    con.close()
+
+
+@pytest.fixture
+def empty_firefox(home: Path) -> None:
+    """A Firefox profile whose cookie database holds no cookie, as one that clears on close."""
+    profile = home / ".mozilla" / "firefox" / "x.default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "cookies.sqlite")
+    con.execute("PRAGMA user_version = 17")
+    con.execute(
+        "CREATE TABLE moz_cookies (host TEXT, name TEXT, value TEXT, path TEXT, expiry INTEGER,"
+        " isSecure INTEGER, originAttributes TEXT)"
+    )
+    con.commit()
+    con.close()
+
+
 def test_a_missing_browser_does_not_stop_a_playlist(direct: Any, out: Path) -> None:
     code, output = direct("-y", "-p", "--cookies", "chrome", pages=("multi.html",))
     assert code == 0
@@ -6852,6 +6904,24 @@ def empty_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
 
         def get_all_items(self) -> list[Any]:
             return []
+
+    stub = types.SimpleNamespace(dbus_init=Collection, get_default_collection=lambda con: con)
+    monkeypatch.setattr(yt_dlp.cookies, "secretstorage", stub)
+
+
+def keyring_says(monkeypatch: pytest.MonkeyPatch, password: bytes) -> None:
+    """A session keyring that answers with ``password`` as Chrome's key, right or wrong."""
+    import yt_dlp.cookies
+
+    item = types.SimpleNamespace(
+        get_label=lambda: "Chrome Safe Storage", get_secret=lambda: password
+    )
+
+    class Collection:
+        def close(self) -> None: ...
+
+        def get_all_items(self) -> list[Any]:
+            return [item]
 
     stub = types.SimpleNamespace(dbus_init=Collection, get_default_collection=lambda con: con)
     monkeypatch.setattr(yt_dlp.cookies, "secretstorage", stub)
@@ -7502,18 +7572,483 @@ def test_a_keyring_error_is_named_before_each_preview(direct: Any, out: Path) ->
 
 
 @pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
-def test_a_keyring_that_answers_and_decrypts_nothing_stays_as_it_was(
+def test_a_keyring_that_answers_and_decrypts_nothing_is_named(
     direct: Any, out: Path, token: str
 ) -> None:
-    # Spec 45, Out: nothing is logged as an error, so there's no failure to name.
+    # Nothing is logged as an error (spec 45, Out), but the jar has nothing to send (spec 67).
     flags = ("-y", "--cookies", "chrome+basictext")
+    code, output = direct(*flags, pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.count(none_decrypted()) == 1
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert no_cookie_sent(token)
+
+
+# Spec 67: cookies that load without an error, but none of them with a value.
+def none_decrypted(browser: str = "chrome") -> str:
+    return t("cookies_unreadable", browser, t("cookies_none_decrypted"))
+
+
+@pytest.fixture(params=["basictext", "wrong-key-short", "wrong-key-long"])
+def undecrypted(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    """A Chrome profile whose one cookie loads and decrypts to nothing; the --cookies value."""
+    if request.param == "basictext":  # A v11 cookie, and no keyring to ask for its key.
+        request.getfixturevalue("unreadable_chrome")
+        return "chrome+basictext"
+    # A wrong key leaves a short value empty, and a long one out of the jar.
+    chrome_v11(b"token" if request.param == "wrong-key-short" else b"t" * 300, b"realpass")
+    keyring_says(monkeypatch, b"wrongpass")
+    return "chrome+gnomekeyring"
+
+
+@pytest.mark.parametrize(
+    ("flags", "page", "saved"),
+    [
+        ((), "poster.html", 1),
+        (("-p",), "multi.html", 4),
+        (("--playlist-items", "1,2"), "multi.html", 2),
+    ],
+    ids=["-y", "-p", "--playlist-items"],
+)
+def test_cookies_that_decrypt_to_nothing_go_on_without_cookies(
+    direct: Any,
+    out: Path,
+    token: str,
+    undecrypted: str,
+    flags: tuple[str, ...],
+    page: str,
+    saved: int,
+) -> None:
+    code, output = direct("-y", *flags, "--cookies", undecrypted, pages=(f"seen/{token}/{page}",))
+    assert code == 0
+    assert len(names(out)) == saved
+    assert output.count(none_decrypted()) == 1
+    lines = output.splitlines()
+    assert lines[lines.index(none_decrypted()) + 1] == keyring_hint()
+    assert not said_partial_result(output)
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert " ".join(flags) in line
+    assert len(history_rows()) == 1
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_undecryptable_cookies_are_named_before_the_preview(direct: Any, out: Path) -> None:
+    code, output = direct("--cookies", "chrome+basictext", pages=("poster.html",), replies=("",))
+    assert code == 0
+    assert output.count(none_decrypted()) == 1
+    assert output.index(none_decrypted()) < output.index(t("preview"))
+    assert f"  {t('p_title')}: poster (1)" in output
+    # yt-dlp's line, which the quiet preview hides: the download doesn't read the browser again.
+    assert "Extracting cookies from chrome" not in output
+    assert output.index(t("done")) < output.index(without_cookies())
+    assert after_done(output) == [without_cookies()]
+    assert names(out) == ["poster (1).mp4"]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_a_preview_cancelled_after_undecryptable_cookies_still_said_it(
+    direct: Any, out: Path
+) -> None:
+    _, output = direct("--cookies", "chrome+basictext", pages=("poster.html",), replies=("n",))
+    assert output.count(none_decrypted()) == 1
+    assert output.index(none_decrypted()) < output.index(t("preview"))
+    assert t("cancelled") in output
+    assert names(out) == []
+    assert commands(output) == []
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_formats_are_listed_after_undecryptable_cookies(direct: Any, token: str) -> None:
+    flags = ("-l", "--cookies", "chrome+basictext")
+    code, output = direct(*flags, pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert output.count(none_decrypted()) == 1
+    assert keyring_hint() in output
+    assert "Available formats" in output
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_the_wizard_names_undecryptable_cookies_at_the_probe(generic: Any, home: Path) -> None:
+    flags = ("-i", "--cookies", "chrome+basictext")
+    code, output = generic("multi.html", *PICKER_WALK, flags=flags)
+    assert code == 0
+    assert output.count(none_decrypted()) == 1
+    assert output.count(tag("kind_video")) == 4  # The picker, from the cookieless probe.
+    assert without_cookies() not in output  # Spec 50 D2.
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert names(home / "Videos") == MULTI
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_undecryptable_cookies_at_the_last_wizard_step_say_so_after_done(generic: Any) -> None:
+    # isolated_env sets no desktop, so yt-dlp picks basictext for a bare chrome.
+    code, output = generic("multi.html", *PICKER_WALK[:-1], CHROME)
+    assert code == 0
+    assert output.count(none_decrypted()) == 1
+    assert keyring_hint() in output
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--playlist-items 1,2,3,4" in line
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["-y", "-p"])
+def test_a_dead_page_after_undecryptable_cookies_is_tried_once(
+    direct: Any, media_url: str, out: Path, token: str, flags: tuple[str, ...]
+) -> None:
+    page = f"seen/{token}/gone.html"  # A 404 that counts its requests.
+    code, output = direct(*flags, "--cookies", "chrome+basictext", pages=(page,))
+    assert code == 1
+    assert output.count(none_decrypted()) == 1
+    assert t("failed", f"{media_url}/{page}") in output
+    assert t("cookies_retry", "chrome+basictext") not in output
+    assert without_cookies() not in output
+    [line] = commands(output)
+    assert "--cookies chrome+basictext" in line
+    assert names(out) == []
+    without = uuid.uuid4().hex
+    code, _ = direct(*flags, pages=(f"seen/{without}/gone.html",))
+    assert code == 1
+    assert [path for path, _ in sent(token)] == [path for path, _ in sent(without)]
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+def test_undecryptable_cookies_are_named_for_each_url(direct: Any, out: Path) -> None:
+    flags = ("-y", "-p", "--cookies", "chrome+basictext")
+    code, output = direct(*flags, pages=("poster.html", "multi.html"))
+    assert code == 0
+    assert len(names(out)) == 5
+    assert output.count(none_decrypted()) == 2
+    assert after_done(output) == [without_cookies()] * 2
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+
+
+@pytest.mark.parametrize("profile", ["empty_chrome", "empty_firefox"])
+def test_an_empty_cookie_database_is_named(
+    direct: Any, out: Path, token: str, request: pytest.FixtureRequest, profile: str
+) -> None:
+    request.getfixturevalue(profile)
+    browser = profile.removeprefix("empty_")
+    code, output = direct("-y", "--cookies", browser, pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.count(no_browser(browser)) == 1
+    assert unreadable(browser) not in output
+    assert keyring_hint(browser) not in output
+    assert after_done(output) == [without_cookies(browser)]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_undecryptable_cookies_in_both_languages(
+    direct: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output = direct("-y", "--cookies", "chrome+basictext", pages=("poster.html",))
+    assert code == 0
+    for block in ("es", "en"):
+        said = i18n._MESSAGES[block]
+        notice = said["cookies_unreadable"].format("chrome", said["cookies_none_decrypted"])
+        assert (notice in output) == (block == lang)
+        assert (said["cookies_keyring_hint"].format("chrome") in output) == (block == lang)
+        assert (said["done_without_cookies"].format("chrome") in output) == (block == lang)
+
+
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["-y", "-p"])
+def test_a_jar_with_one_usable_cookie_keeps_it(
+    direct: Any, out: Path, token: str, flags: tuple[str, ...]
+) -> None:
+    # Spec 67, Out: a v10 cookie decrypts without a keyring, the v11 one doesn't.
+    key = pbkdf2_sha1(b"peanuts", salt=b"saltysalt", iterations=1, key_length=16)
+    chrome_cookie(b"", encrypted=b"v10" + aes_cbc_encrypt_bytes(b"ok", key, b" " * 16))
+    con = sqlite3.connect(
+        Path(os.environ["XDG_CONFIG_HOME"]) / "google-chrome" / "Default" / "Cookies"
+    )
+    con.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, 0, 0)",
+        (b"127.0.0.1", b"s", b"", b"v11" + b"\0" * 16, b"/"),
+    )
+    con.commit()
+    con.close()
+    code, output = direct(
+        *flags, "--cookies", "chrome+basictext", pages=(f"cookie/{token}/poster.html",)
+    )
+    assert code == 0
+    assert len(names(out)) == 1
+    assert unreadable() not in output
+    assert without_cookies() not in output
+    assert sent(token) and all("dm=ok" in cookie for _, cookie in sent(token))
+    [line] = commands(output)
+    assert "--cookies chrome+basictext" in line
+
+
+def test_the_right_key_sends_its_cookie(
+    direct: Any, out: Path, token: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    chrome_v11(b"token", b"realpass")
+    keyring_says(monkeypatch, b"realpass")
+    flags = ("-y", "--cookies", "chrome+gnomekeyring")
     code, output = direct(*flags, pages=(f"seen/{token}/poster.html",))
     assert code == 0
     assert len(names(out)) == 1
     assert unreadable() not in output
     assert without_cookies() not in output
+    assert sent(token) and all(cookie == "s=token" for _, cookie in sent(token))
+    [line] = commands(output)
+    assert "--cookies chrome+gnomekeyring" in line
+
+
+def chromium_rows(folder: str, rows: list[tuple[bytes, bytes, bytes]]) -> None:
+    """A Chromium profile in ``folder`` with (name, plain value, encrypted value) cookies."""
+    profile = Path(os.environ["XDG_CONFIG_HOME"]) / folder / "Default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "Cookies")
+    con.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('version', '20')")
+    con.execute(
+        "CREATE TABLE cookies (host_key BLOB, name BLOB, value BLOB, encrypted_value BLOB,"
+        " path BLOB, expires_utc INTEGER, is_secure INTEGER)"
+    )
+    for name, value, encrypted in rows:
+        # A session cookie (0) and a persistent one, as Chrome counts time (µs since 1601).
+        expires = 0 if value else 13_500_000_000_000_000
+        con.execute(
+            "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, ?, 0)",
+            (b"127.0.0.1", name, value, encrypted, b"/", expires),
+        )
+    con.commit()
+    con.close()
+
+
+def peanuts(value: bytes) -> bytes:
+    """A v10 value: Chromium's fixed key, so no keyring is asked."""
+    key = pbkdf2_sha1(b"peanuts", salt=b"saltysalt", iterations=1, key_length=16)
+    return b"v10" + aes_cbc_encrypt_bytes(value, key, b" " * 16)
+
+
+def firefox_rows(home: Path, rows: list[tuple[str, str]]) -> None:
+    """A Firefox profile with (name, value) cookies for the loopback host."""
+    profile = home / ".mozilla" / "firefox" / "x.default"
+    profile.mkdir(parents=True)
+    con = sqlite3.connect(profile / "cookies.sqlite")
+    con.execute("PRAGMA user_version = 17")
+    con.execute(
+        "CREATE TABLE moz_cookies (host TEXT, name TEXT, value TEXT, path TEXT, expiry INTEGER,"
+        " isSecure INTEGER, originAttributes TEXT)"
+    )
+    for name, value in rows:  # Schema 16 and later count the expiry in milliseconds.
+        con.execute(
+            "INSERT INTO moz_cookies VALUES ('127.0.0.1', ?, ?, '/', 4102444800000, 0, '')",
+            (name, value),
+        )
+    con.commit()
+    con.close()
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize(
+    ("flags", "page"), [(("-P",), "multi.html"), (("-a",), "poster.html")], ids=["-P", "-a"]
+)
+def test_undecryptable_cookies_with_playlists_off_or_audio(
+    direct: Any,
+    pasted: Any,
+    out: Path,
+    again: Path,
+    token: str,
+    flags: tuple[str, ...],
+    page: str,
+) -> None:
+    code, output = direct(
+        "-y", *flags, "--cookies", "chrome+basictext", pages=(f"seen/{token}/{page}",)
+    )
+    assert code == 0
+    assert output.count(none_decrypted()) == 1
+    lines = output.splitlines()
+    assert lines[lines.index(none_decrypted()) + 1] == keyring_hint()
+    assert after_done(output) == [without_cookies()]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(history_rows()) == 1
+    assert no_cookie_sent(token)
+    # The printed command repeats the run: same files, no browser read, nothing to say.
+    code, output = pasted(line, again)
+    assert code == 0
+    assert names(out) == names(again) != []
+    assert none_decrypted() not in output
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["-y", "-p"])
+def test_a_login_wall_after_undecryptable_cookies_suggests_cookies(
+    direct: Any, media_url: str, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = direct(*flags, "--cookies", "chrome+basictext", pages=("status/401",))
+    assert code == 1
+    assert output.count(none_decrypted()) == 1
+    assert t("failed", f"{media_url}/status/401") in output
+    assert GIVE_UP in output
+    assert t("cookies_retry", "chrome+basictext") not in output
+    assert without_cookies() not in output
     [line] = commands(output)
     assert "--cookies chrome+basictext" in line
+    assert names(out) == []
+
+
+def test_undecryptable_cookies_of_another_chromium_browser_are_named(
+    direct: Any, out: Path, token: str
+) -> None:
+    # isolated_env sets no desktop, so yt-dlp picks basictext for a bare brave too.
+    chromium_rows("BraveSoftware/Brave-Browser", [(b"s", b"", b"v11" + b"\0" * 16)])
+    code, output = direct("-y", "--cookies", "brave", pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.count(none_decrypted("brave")) == 1
+    assert keyring_hint("brave") in output
+    assert after_done(output) == [without_cookies("brave")]
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.usefixtures("unreadable_chrome")
+@pytest.mark.parametrize(("cause", "spec", "reason"), KEYRING_CAUSES)
+def test_a_logged_keyring_error_outranks_the_empty_jar_behind_it(
+    direct: Any,
+    out: Path,
+    token: str,
+    request: pytest.FixtureRequest,
+    cause: str,
+    spec: str,
+    reason: str,
+) -> None:
+    # Each cause also leaves the jar empty, with a decryption warning: spec 45's notice wins.
+    request.getfixturevalue(cause)
+    code, output = direct("-y", "--cookies", spec, pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert output.count(t("cookies_unreadable", "chrome", reason)) == 1
+    assert none_decrypted() not in output
+    assert keyring_hint() not in output  # Named by hand: spec 26's rule, not D3's.
+    assert after_done(output) == [without_cookies()]
+    assert no_cookie_sent(token)
+
+
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["-y", "-p"])
+def test_cookies_empty_on_purpose_go_along_with_the_valued_ones(
+    direct: Any, out: Path, token: str, flags: tuple[str, ...]
+) -> None:
+    chromium_rows("google-chrome", [(b"dm", b"", peanuts(b"ok")), (b"e", b"", b"")])
+    code, output = direct(*flags, "--cookies", "chrome", pages=(f"cookie/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert unreadable() not in output
+    assert no_browser() not in output
+    assert without_cookies() not in output
+    cookies = [cookie for _, cookie in sent(token)]
+    assert cookies and all(sorted(cookie.split("; ")) == ["dm=ok", "e="] for cookie in cookies)
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+
+
+@pytest.mark.parametrize(
+    ("rows", "page", "header"),
+    [
+        ([("dm", "ok"), ("e", "")], "cookie", ["dm=ok", "e="]),
+        ([("e", "")], "seen", ["e="]),  # Spec 67, Out: an empty value is the site's own.
+    ],
+    ids=["valued", "only-empty"],
+)
+@pytest.mark.parametrize("flags", [("-y",), ("-y", "-p")], ids=["-y", "-p"])
+def test_firefox_cookies_go_as_they_are(
+    direct: Any,
+    out: Path,
+    home: Path,
+    token: str,
+    rows: list[tuple[str, str]],
+    page: str,
+    header: list[str],
+    flags: tuple[str, ...],
+) -> None:
+    firefox_rows(home, rows)
+    code, output = direct(*flags, "--cookies", "firefox", pages=(f"{page}/{token}/poster.html",))
+    assert code == 0
+    assert len(names(out)) == 1
+    assert unreadable("firefox") not in output
+    assert no_browser("firefox") not in output
+    assert without_cookies("firefox") not in output
+    cookies = [cookie for _, cookie in sent(token)]
+    assert cookies and all(sorted(cookie.split("; ")) == header for cookie in cookies)
+    [line] = commands(output)
+    assert "--cookies firefox" in line
+
+
+@pytest.mark.parametrize(("flags", "warnings"), [(("-l",), 1), (("-y",), 0)], ids=["-l", "-y"])
+def test_a_warning_while_loading_a_working_jar_changes_nothing(
+    direct: Any, token: str, flags: tuple[str, ...], warnings: int
+) -> None:
+    # R9: the v11 cookie warns and stays out, the v10 one works.
+    chromium_rows("google-chrome", [(b"dm", b"", peanuts(b"ok")), (b"s", b"", b"v11" + b"\0" * 16)])
+    code, output = direct(
+        *flags, "--cookies", "chrome+basictext", pages=(f"cookie/{token}/poster.html",)
+    )
+    assert code == 0
+    # yt-dlp's own line, once where it shows warnings (row 66) and never in a quiet download.
+    assert output.count("cannot decrypt v11 cookies: no key found") == warnings
+    assert unreadable() not in output
+    assert keyring_hint() not in output
+    assert sent(token) and all(cookie == "dm=ok" for _, cookie in sent(token))
+
+
+@pytest.mark.usefixtures("empty_chrome")
+def test_an_empty_cookie_database_at_the_wizard_probe(generic: Any, home: Path) -> None:
+    code, output = generic("poster.html", *SINGLE_WALK, flags=("-i", "--cookies", "chrome"))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert keyring_hint() not in output
+    assert without_cookies() not in output  # Spec 50 D2.
+    [line] = commands(output)
+    assert "--cookies" not in shlex.split(line)
+    assert len(names(home / "Videos")) == 1
+
+
+@pytest.mark.usefixtures("empty_chrome")
+def test_formats_are_listed_after_an_empty_cookie_database(direct: Any, token: str) -> None:
+    code, output = direct("-l", "--cookies", "chrome", pages=(f"seen/{token}/poster.html",))
+    assert code == 0
+    assert output.count(no_browser()) == 1
+    assert keyring_hint() not in output
+    assert "Available formats" in output
+    assert no_cookie_sent(token)
+
+
+def test_a_working_jar_picked_at_the_last_wizard_step_is_used(generic: Any, token: str) -> None:
+    chrome_cookie()
+    code, output = generic(f"seen/{token}/multi.html", *PICKER_WALK[:-1], CHROME)
+    assert code == 0
+    assert unreadable() not in output
+    assert no_browser() not in output
+    assert without_cookies() not in output
+    videos = [cookie for path, cookie in sent(token) if path.endswith(".mp4")]
+    assert len(videos) == 4 and all(cookie == "dm=ok" for cookie in videos)
+    [line] = commands(output)
+    assert "--cookies chrome" in line
+    assert "--playlist-items 1,2,3,4" in line
 
 
 @pytest.mark.usefixtures("unreadable_chrome", "kwallet_query_fails")
