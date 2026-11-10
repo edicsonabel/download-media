@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:34:14-04:00",
+  "updated": "2026-11-10T04:42:23-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2923,6 +2923,27 @@
           "result": "approved",
           "at": "2026-11-10T02:25:52-04:00",
           "note": "Spec accepted under the overnight delegation with every recommended option, except one point held for the human: D1 (Enter under -i -p takes the whole list) and D3 (type step defaults to audio on all-audio pages) change what Enter does, and AGENTS.md lists 'alters defaults' as breaking, which needs the human's approval (constraints.md 4). Development waits on that answer; it is fifth in the queue anyway."
+        }
+      ]
+    },
+    "fix/intent-flags": {
+      "type": "fix",
+      "title": "Make -l and bundled or abbreviated flags skip the wizard, and -l list every URL",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/22-intent-flags.md",
+      "branch": "fix/intent-flags",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T04:42:23-04:00",
+          "note": "Next P2 in PLAN.md's order after ig-lone-images (probe-fail-fast waits on ig-lone's line), under the human's overnight delegation. Spec written in parallel."
         }
       ]
     }
