@@ -11529,12 +11529,14 @@ def test_wizard_saves_another_site_s_lone_image(wizard_on: Any, out: Path, page:
     assert t("image_alone_saved", LONE_NAME) in output
 
 
-def test_wizard_in_list_mode_names_a_lone_image(wizard_on: Any, out: Path) -> None:
-    # URL, folder, cookies; then the listing.
-    code, output = wizard_on(LONE_IMAGE, "", "", "", flags=("-l", *WITH_COOKIES))
+def test_wizard_in_list_mode_names_a_lone_image(wizard_on: Any, run: Any, out: Path) -> None:
+    # Listing only asks for the URL.
+    code, output = wizard_on(LONE_IMAGE, "", flags=("-l", *WITH_COOKIES))
     assert code == 0
     assert t("item_image_skipped", "i1") in output
     assert names(out) == []
+    direct = run("-y", "-l", *WITH_COOKIES, LONE_IMAGE)
+    assert (code, output) == (direct[0], f"{t('wizard_title')}\n{direct[1]}")
 
 
 def test_wizard_saves_a_lone_image_among_other_urls(wizard_urls: Any, out: Path) -> None:
