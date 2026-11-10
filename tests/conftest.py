@@ -311,6 +311,11 @@ def _write_generic_pages(root: Path, base: str) -> None:
             '<video src="tiny.mp4"></video>'
         ),
         "audio-no-ext-video": f'<audio src="{NO_EXT_VIDEO}"></audio>',
+        # Under -a, a video without sound fails audio extraction, and ffmpeg can't tag the .oga.
+        "silent-oga-and-m4a": (
+            '<audio src="typed/audio/ogg/rotated-silent.mov/clip.oga"></audio>'
+            '<audio src="a1.m4a"></audio>'
+        ),
     }
     for name, body in pages.items():
         (root / f"{name}.html").write_text(f"<!doctype html><html>{body}</html>", encoding="utf-8")

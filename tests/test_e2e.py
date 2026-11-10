@@ -8530,6 +8530,27 @@ def test_every_item_kept_as_downloaded_is_named_once(
     assert t("done") in output
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="pre-existing, out of fix/container-choice: the metadata step names an item as "
+    "untagged before a later check fails it, the way the container step did (planner row)",
+)
+@pytest.mark.parametrize(
+    "flags", [("-p",), ("--playlist-items", "1,2")], ids=["-p", "--playlist-items"]
+)
+def test_an_item_that_failed_is_not_named_as_untagged(
+    generic: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    # The first item fails audio extraction, then reaches the metadata step all the same.
+    mode = ("-y", "-a", *flags, "-o", str(out))
+    code, output = generic("silent-oga-and-m4a.html", flags=mode)
+    failed = "01 - silent-oga-and-m4a (1) [silent-oga-and-m4a-1].oga"
+    assert code == 0
+    assert "02 - silent-oga-and-m4a (2) [silent-oga-and-m4a-2].mp3" in names(out)
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert t("untagged", failed) not in output
+
+
 @pytest.mark.parametrize(
     ("flags", "saved"),
     [
