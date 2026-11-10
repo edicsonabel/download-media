@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T23:43:18-04:00",
+  "updated": "2026-11-09T23:58:25-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2234,7 +2234,9 @@
         "3a7fdd7",
         "ed681ad",
         "55f001a",
-        "857efbf"
+        "857efbf",
+        "f0b5bd4",
+        "a2dbda3"
       ],
       "review": {
         "approved": false,
@@ -2320,6 +2322,13 @@
           "result": "changes_requested",
           "at": "2026-11-09T23:43:18-04:00",
           "note": "Round 2 (after round 1 and the human-requested QA minor). Gate exit 0 at 857efbf, 2172 passed + 8 xfailed. Mutation 9/9. Wizard None-path test added in es and en. One major regression from 3a7fdd7 (rotated videos), one minor (developer's open note reproduced). 'couldn't be converted' slightly off on the None path (no conversion tried)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-09T23:58:25-04:00",
+          "note": "Round 2 fixed: f0b5bd4 reads ffprobe csv rows by first field past side data (rotation, stereo3d, HDR, timecode, TS measured); a2dbda3 names only saved items in not_converted. 6 xfails flipped; 10 side-data cases fail without f0b5bd4. Gate exit 0 at a2dbda3, 2186 passed + 2 xfailed. Planner: test helper streams() still splits ffprobe csv by whitespace."
         }
       ]
     },
