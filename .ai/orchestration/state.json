@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T00:33:25-04:00",
+  "updated": "2026-11-10T00:39:18-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2400,14 +2400,15 @@
     "fix/cookies-undecrypted": {
       "type": "fix",
       "title": "Say so when the browser's cookies load but none decrypt",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/67-cookies-undecrypted.md",
       "branch": "fix/cookies-undecrypted",
       "worktree": ".worktrees/fix-cookies-undecrypted",
       "commits": [
-        "24354d6"
+        "24354d6",
+        "feb1576"
       ],
       "review": null,
       "history": [
@@ -2431,6 +2432,13 @@
           "result": "approved",
           "at": "2026-11-10T00:02:18-04:00",
           "note": "Spec approved under the human's overnight delegation, every recommended option (D1 jar rule, D2 empty database gets cookies_no_browser, D3 keyring hint even with a named keyring, D4 reuse cookies_unreadable with a new reason key, D5 same outcome as specs 26/45/50). Not breaking; one new message key. 0.4.0 review list: five behaviour changes in the spec's SemVer section. Development starts in its own worktree now; it touches only load_browser_cookies, merges after container-choice."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T00:39:18-04:00",
+          "note": "feb1576: jar_failure (D1, D2), undecrypted flag, keyring hint with a named keyring (D3), cookies_none_decrypted es/en (D4). Gate exit 0, 2120 passed + 2 xfailed es/en, 98.89%. Reverting src fails 24 tests plus a collection error. Hand runs R1, R2, R6, R8-R11 match the spec. Only the two named flips. Process: the suggested pgrep wait pattern matches its own shell; use '^(bash|timeout [0-9]+) .*scripts/pre-release[.]sh'."
         }
       ]
     },
