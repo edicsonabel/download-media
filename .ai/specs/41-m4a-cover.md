@@ -1,6 +1,6 @@
 # 41 — Keep the cover image in `-a -f m4a`
 
-Status: draft
+Status: done
 Item: `fix/m4a-cover`
 
 > **For the 0.4.0 review list:** D1 to D4 are recommendations, made for approval under the human's overnight delegation. The fix changes published behaviour in four ways, none of them breaking by `AGENTS.md`'s list. They are listed under "Behaviour changes for the 0.4.0 review" at the end.
@@ -41,7 +41,7 @@ All results come from runs. "Swap" means the design below (two lines moved) appl
 
 | `-f`  | mutagen | `main` `a30d433`                                                                                                                                                           | Swap                                                                  |
 | ----- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| mp3   | no      | cover (mjpeg, `attached_pic=1`), tags `title`, `comment`, `purl`, ID3v2.4 + ID3v1                                                                                             | same cover and tags, **ID3v2.3** + ID3v1 (D3)                         |
+| mp3   | no      | cover (mjpeg, `attached_pic=1`), tags `title`, `comment`, `purl`, ID3v2.4 + ID3v1                                                                                             | same cover and frames, **ID3v2.3** + ID3v1; the date keeps only the year (D3) |
 | mp3   | yes     | same as without; mp3 embeds through ffmpeg (`embedthumbnail.py:90`)                                                                                                           | same as without                                                       |
 | m4a   | no      | **no cover**, `Done.`, no warning                                                                                                                                             | cover, written as a real `covr` atom (read back with mutagen); `title` and `comment` (the URL) kept |
 | m4a   | yes     | **no cover**: mutagen writes `covr`, then `-vn` drops it. `Done.`, no warning                                                                                                | cover (`covr`), tags kept                                             |
@@ -177,11 +177,16 @@ The comment wording is the developer's call, as long as it says why. Spec 30's c
 
 **Recommended: A.** It keeps this item to one change and leaves the remaining gaps to row 43, where they are listed.
 
-**D3: mp3 tags change from ID3v2.4 to ID3v2.3.** The mp3 cover step writes `-id3v2_version 3 -write_id3v1 1` (`embedthumbnail.py:91-93`), and it now runs last. Today the metadata step rewrites the file afterwards with ffmpeg's default, v2.4. The frames are the same (`title`, `comment`, `purl` and the picture), and the ID3v1 tag was already there.
+**D3: mp3 tags change from ID3v2.4 to ID3v2.3.** The mp3 cover step writes `-id3v2_version 3 -write_id3v1 1` (`embedthumbnail.py:91-93`), and it now runs last. Before the fix, the metadata step rewrote the file afterwards with ffmpeg's default, v2.4. `title`, `comment`, `purl` and the picture are the same, and the ID3v1 tag was already there. Two things do change, and this text first said "the frames are the same", which was wrong (found by QA, measured again at validation):
+
+- **The date loses its month and day.** v2.4 has `TDRC=20261110`; v2.3 has `TYER=2026`. ffmpeg's v2.3 writer keeps only the year.
+- **Text encoding.** v2.4 frames are UTF-8 (encoding byte 3). v2.3 frames are Latin-1 (byte 0) when the text is ASCII, and UTF-16 with a BOM (byte 1) when it isn't. Both decode to the same text.
+
+This is exactly what yt-dlp's own CLI writes: `yt-dlp -x --audio-format mp3 --embed-metadata --embed-thumbnail` on the same page, with the date supplied through `--parse-metadata`, gives the same ID3v2.3 header, the same frames (`TYER=2026` included) and an ID3v1 tag (Validation).
 
 | Option | Trade-off |
 | ------ | --------- |
-| **A. Accept v2.3** | It's what yt-dlp's CLI produces, and v2.3 is the version more players and file managers read |
+| **A. Accept v2.3** | It's what yt-dlp's CLI produces, and v2.3 is the version more players and file managers read. The cost is the date's month and day |
 | B. Force v2.4 through `postprocessor_args` for `EmbedThumbnail` | Overrides yt-dlp's choice to keep a version nobody asked for |
 
 **Recommended: A.** It's on the 0.4.0 review list as an on-disk change, though not a breaking one: `AGENTS.md`'s breaking list covers the tool's own paths and state, not media tags.
@@ -201,7 +206,7 @@ The comment wording is the developer's call, as long as it says why. Spec 30's c
 | Case | Expected |
 | ---- | -------- |
 | `-y -a -f m4a`, single URL with a thumbnail | `.m4a` with an attached picture (`covr`), tags kept, `Done.`, no warning |
-| `-y -a` (mp3) | Unchanged cover and tags; ID3v2.3 (D3) |
+| `-y -a` (mp3) | Unchanged cover and frames; ID3v2.3, so the date keeps only the year (D3) |
 | `-y -a -f opus`, no `mutagen` | Unchanged: no cover, `no_cover` warning |
 | `-y -a -f opus`, `mutagen` | Cover and tags, no `untagged` warning |
 | `-y -a -f wav` | Unchanged: no thumbnail written, no cover, no warning |
@@ -222,19 +227,49 @@ The comment wording is the developer's call, as long as it says why. Spec 30's c
 
 Each one names its test. **[fix]** tests fail on `main` and pass with the fix. Revert the two-line move and run them to prove it. **[pin]** tests pass on both sides.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `tests/test_e2e.py::test_a_working_cover_is_still_embedded` (`mp3`, `m4a`): drop the mp3-only condition and its comment. For both formats, the saved file holds its audio and exactly one stream with `disposition:attached_pic=1`, `cover_leftovers(out) == []`, and no `no_cover` warning. Add a helper next to `streams()` that counts attached pictures with ffprobe
-- [ ] **[fix]** `tests/test_e2e.py::test_m4a_holding_video_keeps_its_cover_not_its_video`: new page `audio-video-m4a` in `conftest.py` (`<audio src="clip.m4a">` plus `og_image`), `-y -a -f m4a`: exit 0, one `.m4a`, exactly one video stream and it is the attached picture, an audio stream, no image left
-- [ ] **[fix]** `tests/test_e2e.py::test_m4a_cover_survives_a_rerun`: `-y -a -f m4a` on `audio.html` twice into the same folder: one file, exactly one attached picture, `_source_url(path)` is the page URL
-- [ ] **[pin]** `tests/test_e2e.py::test_a_failed_metadata_step_leaves_no_cover` (single, `-p`): monkeypatch `_TagSource.run` to raise `PostProcessingError`, `-y -a -f m4a` on `audio.html`: exit 1, `t("failed", url)` in the output, `cover_leftovers(out)` holds no image
-- [ ] **[pin]** `tests/test_downloader.py::test_audio_mode_tags_before_the_cover`: with `_Ydl.download` patched to record `[pp.pp_key() for pp in self._pps["post_process"]]` and return 0, `download()` under `-a` (mp3, m4a, opus) gives `ExtractAudio`, `Metadata`, `EmbedThumbnail` in that order, and under `-a -f wav` gives no `EmbedThumbnail`. In video mode, no `EmbedThumbnail`, and `Metadata` keeps its place after spec 30's container step (`VideoRemuxer` or `VideoConvertor`)
-- [ ] **[pin]** unchanged and still passing: `test_opus_without_mutagen_is_saved_without_a_cover`, `test_mp3_whose_thumbnail_is_renamed_to_webp_leaves_no_image`, `test_video_with_an_og_image_leaves_no_image`, `test_yt_dlp_strips_video_from_m4a_so_reading_it_as_audio_loses_nothing`, `test_audio_extraction`, and spec 30's container tests
-- [ ] **Measured once by the test-engineer, not a test (D4):** with `mutagen` on `PYTHONPATH` only (`pip install --target <scratch>/mutagen mutagen`), `-y -a -f m4a` and `-y -a -f opus` on a loopback copy of `audio.html` both end with an attached picture. The opus file has `title` and `purl` stream tags and gets no `untagged` warning. The command and the ffprobe output go in the report
-- [ ] On disk, per run above: the file count matches the output, and no `.cover.*`, `.png` or `.temp.*` is left
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** `tests/test_e2e.py::test_a_working_cover_is_still_embedded` (`mp3`, `m4a`): drop the mp3-only condition and its comment. For both formats, the saved file holds its audio and exactly one stream with `disposition:attached_pic=1`, `cover_leftovers(out) == []`, and no `no_cover` warning. Add a helper next to `streams()` that counts attached pictures with ffprobe
+- [x] **[fix]** `tests/test_e2e.py::test_m4a_holding_video_keeps_its_cover_not_its_video`: new page `audio-video-m4a` in `conftest.py` (`<audio src="clip.m4a">` plus `og_image`), `-y -a -f m4a`: exit 0, one `.m4a`, exactly one video stream and it is the attached picture, an audio stream, no image left
+- [x] **[fix]** `tests/test_e2e.py::test_m4a_cover_survives_a_rerun`: `-y -a -f m4a` on `audio.html` twice into the same folder: one file, exactly one attached picture, `_source_url(path)` is the page URL
+- [x] **[pin]** `tests/test_e2e.py::test_a_failed_metadata_step_leaves_no_cover` (single, `-p`): monkeypatch `_TagSource.run` to raise `PostProcessingError`, `-y -a -f m4a` on `audio.html`: exit 1, `t("failed", url)` in the output, `cover_leftovers(out)` holds no image
+- [x] **[pin]** `tests/test_downloader.py::test_audio_mode_tags_before_the_cover`: with `_Ydl.download` patched to record `[pp.pp_key() for pp in self._pps["post_process"]]` and return 0, `download()` under `-a` (mp3, m4a, opus) gives `ExtractAudio`, `Metadata`, `EmbedThumbnail` in that order, and under `-a -f wav` gives no `EmbedThumbnail`. In video mode, no `EmbedThumbnail`, and `Metadata` keeps its place after spec 30's container step (`VideoRemuxer` or `VideoConvertor`)
+- [x] **[pin]** unchanged and still passing: `test_opus_without_mutagen_is_saved_without_a_cover`, `test_mp3_whose_thumbnail_is_renamed_to_webp_leaves_no_image`, `test_video_with_an_og_image_leaves_no_image`, `test_yt_dlp_strips_video_from_m4a_so_reading_it_as_audio_loses_nothing`, `test_audio_extraction`, and spec 30's container tests
+- [x] **Measured once by the test-engineer, not a test (D4):** with `mutagen` on `PYTHONPATH` only (`pip install --target <scratch>/mutagen mutagen`), `-y -a -f m4a` and `-y -a -f opus` on a loopback copy of `audio.html` both end with an attached picture. The opus file has `title` and `purl` stream tags and gets no `untagged` warning. The command and the ffprobe output go in the report
+- [x] On disk, per run above: the file count matches the output, and no `.cover.*`, `.png` or `.temp.*` is left
 
 ## Live check
 
 Not needed. The change is the order of two yt-dlp post-processors that run after the download. The loopback runs use the real yt-dlp, the real ffmpeg and yt-dlp's real generic extractor, a real JPEG and a real WebP thumbnail, with and without `mutagen`. The site only decides which thumbnail arrives, and that comes before the changed code.
+
+## Validation
+
+On `main` at `c8b9f89` (merge `2dc4607`, then `.ai/` commits only: `git diff --stat 2dc4607 HEAD -- src tests` is empty), yt-dlp 2026.10.26, ffmpeg n9.0.2, no `mutagen` or AtomicParsley. GitHub CI on `0c76bcd` hadn't finished: two attempts stopped at "Install ffmpeg" after 5 minutes, before any test, and a third was pending.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on the merge `2dc4607`, with spec 30 and spec 67 already on `main`: `All checks passed.`, 2297 passed, 9 deselected and 4 xfailed in `es` and in `en`. No file outside `.ai/` has changed since.
+- **Criteria tests:** a `pytest -k` selection of every test the criteria name, `[fix]` and `[pin]`, ran on `main`: 26 passed. The revert proof (the `[fix]` tests failing without the two-line move) and the 9/9 mutation run are the test-engineer's. The D4 `mutagen` runs are the test-engineer's too; `mutagen` was not installed here.
+- **Reproduction:** the Problem's environment, with `main`'s real console script (`.venv/bin/download-media`) under `env -i`: `PATH=/usr/bin:/bin`, a fresh `HOME` and `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME` in the scratchpad, `LANG=en_US.UTF-8`, absolute `-o`, no cookies. A scratch `http.server` on `127.0.0.1:18947` served the fixture's media, built with the fixture's ffmpeg commands, and the pages `audio.html`, `audio-video-m4a.html` and a video page with an absolute `og:image`. "Before" is a `git archive` of `2dc4607^1` in the scratchpad, run through `download_media.cli:main` with the same Python and environment. Streams were read with ffprobe, ID3 frames from the file's bytes. Everything was deleted afterwards.
+
+| Run | Before (`2dc4607^1`) | `main` |
+| --- | -------------------- | ------ |
+| `-y -a -f m4a`, `audio.html` | `[EmbedThumbnail]` then `[Metadata]`, `Done.`, exit 0; aac only, no cover: the bug reproduces | `[Metadata]` then `[EmbedThumbnail]`, `Done.`, no warning, exit 0; one file: aac and mjpeg `attached_pic=1`, `title`, `date=20261110`, `comment`=URL |
+| same, run again into the same folder | — | `has already been downloaded`, `Done.`, exit 0; still one file, one attached picture, `comment`=URL |
+| `-y -a` (mp3) | ID3v2.4 + ID3v1, cover, `TIT2`, `TDRC=20261110`, `TXXX` `comment` and `purl`, all UTF-8 | ID3v2.3 + ID3v1, cover, `TIT2`, **`TYER=2026`**, `TXXX` `comment` and `purl`, Latin-1; a rerun leaves one file and one picture |
+| `-y -a -f opus` | — | `audio (1).opus: saved without a cover image.`, `Done.`, exit 0; opus, no cover, stream tags `title`, `date`, `purl`, `comment` |
+| `-y -a -f wav` | — | no thumbnail written, `[Metadata]` only, `Done.`, exit 0; one `.wav`, tags kept, no cover, no warning |
+| `-y -a -f m4a`, `audio-video-m4a.html` (h264 + aac source) | — | `Done.`, exit 0; one `.m4a`: aac and one mjpeg `attached_pic=1`, the h264 is gone |
+| `-y`, video page with `og:image` | `[Metadata]` only; `video (1).mp4`, h264 + aac, no attached picture | identical: same step lines, streams and tags |
+| `-y --video-format mkv`, same page | `[VideoRemuxer]`, `[Metadata]`; `video (1).mkv`, h264 + aac | identical |
+
+Every run left exactly the file the output named: no `.cover.*`, `.png`, `.temp.*` or source `.m4a`.
+
+- **D3, measured:** `yt-dlp --ignore-config --no-cookies -x --audio-format mp3 --embed-metadata --embed-thumbnail --parse-metadata "%(epoch>%Y%m%d)s:%(meta_date)s"` on the same page prints `[Metadata]` then `[EmbedThumbnail]` and writes ID3v2.3 + ID3v1 with the same frames as `main`, `TYER=2026` included. The encoding: `ffmpeg -metadata title=canción` on that mp3 with `-id3v2_version 3` writes `TIT2` as UTF-16 with a BOM (byte 1); with `-id3v2_version 4`, as UTF-8 (byte 3).
+- **Cases, tests only:** wizard, confirmed direct mode, `-p`, carousels, the failed metadata step (single, `-p`, carousel), `es` and `en`, webm video. Each is one of the test-engineer's tests (`test_wizard_m4a_keeps_its_cover`, `test_confirmed_direct_m4a_keeps_its_cover`, `test_every_carousel_item_keeps_its_own_cover_in_m4a`, `test_a_failed_metadata_step_on_a_carousel_leaves_no_cover`, `test_a_kept_m4a_cover_warns_in_neither_language`, `test_video_mode_in_every_container_gets_no_cover`, and others), all passing in the gate.
+- **Scope:** `0446988..2dc4607` touches exactly the four files in the Files table. The `src/` change is the two-line move and the two comments. No `i18n.py`, README, `AGENTS.md`, `pyproject.toml`, `PKGBUILD` or version change.
+
+### What changed after approval
+
+- **Code:** nothing beyond Design: the move and the comments, as written.
+- **Spec text:** D3 said the frames were the same. QA found the date and encoding differences, and they were measured again above. D3, the mp3 rows in Findings and Cases, behaviour change 2 and the release note now say so.
 
 ## Open decisions
 
@@ -243,10 +278,10 @@ None blocking. D1 to D4 carry recommendations for approval under the delegation.
 ## Behaviour changes for the 0.4.0 review
 
 1. `-a -f m4a` now keeps the cover. The `.m4a` gains an attached picture stored as a `covr` atom, which ffprobe shows as a video stream with `attached_pic=1`. A script that treats "has a video stream" as "is a video" sees a difference. A source `.m4a` holding a real video still comes out as audio plus cover (D1).
-2. `-a` mp3 tags change from ID3v2.4 to ID3v2.3. The frames are the same (D3).
+2. `-a` mp3 tags change from ID3v2.4 to ID3v2.3, which is what yt-dlp's own CLI writes. The date loses its month and day (`TDRC=20261110` becomes `TYER=2026`), and text frames are Latin-1, or UTF-16 when they hold non-ASCII, instead of UTF-8. Title, comment, source URL and cover are the same (D3).
 3. On a machine with `python-mutagen`, `-a -f opus` now writes its tags next to the cover, and the `… couldn't write its metadata …` warning no longer appears for it. Row 25 still applies to opus reruns, for another reason (ogg keeps the tags on the stream). This also changes row 48's case: with `mutagen`, opus now gets both cover and tags.
 4. The console shows `[Metadata]` before `[EmbedThumbnail]`.
 
 No flag, default, path, exit code or message changes. No new message, so the bump is set by the other 0.4.0 rows.
 
-Release note, for `.ai/releases/0.4.0.md`: "`-a -f m4a` now keeps the cover image. It used to be embedded and then lost when the tags were written, and the run still said `Done.`. With `python-mutagen` installed, `-f opus` also keeps its title and source URL next to the cover."
+Release note, for `.ai/releases/0.4.0.md`: "`-a -f m4a` now keeps the cover image. It used to be embedded and then lost when the tags were written, and the run still said `Done.`. With `python-mutagen` installed, `-f opus` also keeps its title and source URL next to the cover. mp3 files now carry ID3v2.3 tags, as yt-dlp's own command writes them, so their date keeps only the year."
