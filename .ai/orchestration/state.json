@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T07:37:47-04:00",
+  "updated": "2026-11-10T07:52:45-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3189,13 +3189,15 @@
     "fix/failure-leftovers": {
       "type": "fix",
       "title": "Remove what a failed or interrupted download leaves",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/46-failure-leftovers.md",
       "branch": "fix/failure-leftovers",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-failure-leftovers",
+      "commits": [
+        "1a4e349"
+      ],
       "review": null,
       "history": [
         {
@@ -3204,6 +3206,20 @@
           "result": "approved",
           "at": "2026-11-10T07:37:47-04:00",
           "note": "Under the human's overnight delegation. Row 46 gathered several leftovers tonight, one where a failure reads as success on rerun (strict xfail test_a_rerun_does_not_take_a_failed_item_as_saved). Needs no human decision; spec written while ig-lone-images is in QA."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T07:52:45-04:00",
+          "note": "Spec 1a4e349, PLAN row 46 to spec, scoped to what a failed item leaves on disk (Ctrl-C and full-disk leftovers back to the planner). Reproduced R1-R11 on f0c99a8, incl. the strict-xfail rerun reading as success and copies piling up on reruns and cookie retries. D1 ignoreerrors 'only_download' under -p/--playlist-items (yt-dlp CLI default); D2 delete a failed item's file only when __real_download; D3-D6. Prototype clean; 6 existing tests pin leftovers. No live check."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T07:52:45-04:00",
+          "note": "Spec approved under the overnight delegation, every recommended option. Not breaking. Three review items (failed body deleted in every mode; -p ERROR line becomes 'Postprocessing: ...' once per failed item; reruns refetch instead of piling copies). Test-engineer must confirm a post-processing failure under 'only_download' never aborts the rest of a playlist. Development starts now; merges after ig-lone-images."
         }
       ]
     }
