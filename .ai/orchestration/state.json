@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T05:03:23-04:00",
+  "updated": "2026-11-10T05:11:12-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2971,14 +2971,16 @@
     "fix/intent-flags": {
       "type": "fix",
       "title": "Make -l and bundled or abbreviated flags skip the wizard, and -l list every URL",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/22-intent-flags.md",
       "branch": "fix/intent-flags",
       "worktree": ".worktrees/fix-intent-flags",
       "commits": [
-        "0d1af00"
+        "0d1af00",
+        "f02d63b",
+        "7b9720a"
       ],
       "review": null,
       "history": [
@@ -3002,6 +3004,13 @@
           "result": "approved",
           "at": "2026-11-10T04:54:46-04:00",
           "note": "Spec approved under the overnight delegation, every recommended option. Not breaking. For the human's review: -l on a login wall loses the wizard's cookie offer (gets the --cookies hint, as -y -l always has); '-- -a' now goes to the wizard. Development starts now in parallel with ig-lone-images (no overlapping cli.py lines; one shared test at test_e2e.py:10469 that whichever lands second deletes)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T05:11:12-04:00",
+          "note": "f02d63b intent detection by a sentinel-namespace parse; 7b9720a -l as intent flag, every URL listed, ask_urls, AGENTS.md. Gate exit 0 at 7b9720a, 2565 passed + 11 xfailed. Reverting cli.py and wizard.py fails 36 [fix] tests. Console runs match. Shared IMAGE parameter with ig-lone-images: whichever lands second updates it."
         }
       ]
     }
