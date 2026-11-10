@@ -6384,6 +6384,32 @@ def test_list_formats_ignores_the_playlist_flags(wizard_urls: Any) -> None:
         assert (code, output, asked) == plain
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="pre-existing: with stdout redirected, print() lines lag behind yt-dlp's, which "
+    "writes to sys.stdout.buffer; a URL's failed line lands after the next URL's output",
+)
+@pytest.mark.parametrize("flags", [["-l"], ["-y"]], ids=["-l", "-y"])
+def test_a_failed_line_stays_before_the_next_url_when_stdout_is_a_file(
+    media_url: str, tmp_path: Path, flags: list[str]
+) -> None:
+    dead, alive = f"{media_url}/status/404", f"{media_url}/tiny.mp4"
+    env = {**os.environ, "HOME": str(tmp_path), "LANG": "en_US.UTF-8"}
+    program = "import sys; from download_media.cli import main; sys.exit(main())"
+    done = subprocess.run(
+        [sys.executable, "-c", program, *flags, "-o", str(tmp_path / "out"), dead, alive],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 1, done.stderr
+    failed = done.stdout.index(f"Download failed: {dead}")
+    assert failed < done.stdout.index(f"Extracting URL: {alive}")
+
+
 def test_interactive_bundle_opens_the_wizard_with_audio_preset(
     wizard_urls: Any, home: Path
 ) -> None:
