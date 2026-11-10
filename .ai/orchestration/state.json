@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:22:40-04:00",
+  "updated": "2026-11-10T02:25:52-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2749,12 +2749,14 @@
       "type": "fix",
       "title": "Make the picker and its report say what they do",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "awaiting_human",
+      "next_agent": "human",
       "doc": ".ai/specs/31-picker-honesty.md",
       "branch": "fix/picker-honesty",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "2415598"
+      ],
       "review": null,
       "history": [
         {
@@ -2763,6 +2765,20 @@
           "result": "approved",
           "at": "2026-11-10T02:10:16-04:00",
           "note": "Next P2 in PLAN.md's order, under the human's overnight delegation. Spec written while the queue waits on cancel-exits."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T02:25:52-04:00",
+          "note": "Spec 2415598, PLAN row 31 to spec. Reproduced on 0c76bcd: -i -P saves the whole playlist (probe always noplaylist False) while -y -P saves the video; -i -p prompt/count/command don't say -p; all-audio pages default to video and land in ~/Videos; -a counts images as without media; unsupported_count dead. D1-D5, three new messages. Live check recommended, probe-only. Planner: wizard without -P on a video in a playlist offers the whole list; row 46 leftover jpg under -a -p."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T02:25:52-04:00",
+          "note": "Spec accepted under the overnight delegation with every recommended option, except one point held for the human: D1 (Enter under -i -p takes the whole list) and D3 (type step defaults to audio on all-audio pages) change what Enter does, and AGENTS.md lists 'alters defaults' as breaking, which needs the human's approval (constraints.md 4). Development waits on that answer; it is fifth in the queue anyway."
         }
       ]
     }
