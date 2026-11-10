@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:10:16-04:00",
+  "updated": "2026-11-10T02:15:01-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2379,9 +2379,9 @@
     "fix/m4a-cover": {
       "type": "fix",
       "title": "Stop -a -f m4a losing its cover image",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/41-m4a-cover.md",
       "branch": "fix/m4a-cover",
       "worktree": ".worktrees/fix-m4a-cover",
@@ -2389,7 +2389,8 @@
         "9f32301",
         "91dca9b",
         "4ecd8fe",
-        "3dbd07b"
+        "3dbd07b",
+        "2dc4607"
       ],
       "review": {
         "approved": true,
@@ -2461,6 +2462,13 @@
           "result": "done",
           "at": "2026-11-10T02:03:59-04:00",
           "note": "QA minor 2 closed in 3dbd07b (comment only). No other comment described the old order. ruff and test_downloader.py pass."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-10T02:15:01-04:00",
+          "note": "Merged as 2dc4607, no conflicts. Gate exit 0 on the merged tree (container-choice + cookies-undecrypted + m4a-cover), 2297 passed + 4 xfailed es/en. Undo: git revert -m 1 2dc4607. Pushed by the orchestrator under the delegation."
         }
       ]
     },
