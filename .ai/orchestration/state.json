@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T00:31:42-04:00",
+  "updated": "2026-11-10T00:33:25-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2238,13 +2238,12 @@
         "f0b5bd4",
         "a2dbda3",
         "e903168",
-        "95533c9"
+        "95533c9",
+        "77a8689"
       ],
       "review": {
         "approved": true,
-        "findings": [
-          "minor tests/test_e2e.py test_an_item_that_failed_is_not_named_as_untagged: reason says pre-existing on main, but with the rotated fixture it passes on main; an unrotated silent video fails on both"
-        ]
+        "findings": []
       },
       "history": [
         {
@@ -2351,6 +2350,13 @@
           "result": "approved",
           "at": "2026-11-10T00:31:42-04:00",
           "note": "Merge under the human's earlier approval (fix minor 1, then merge and push) and the overnight delegation. First the test-engineer moves the out-of-scope xfail to an unrotated silent video (tests only); the tech-lead's gate on the merged tree covers it."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T00:33:25-04:00",
+          "note": "QA minor closed in 77a8689: the out-of-scope xfail now uses an unrotated silent.mov and fails on the untagged assertion on both the branch and main's source. Targeted tests and ruff pass; full gate left to the tech-lead."
         }
       ]
     },
