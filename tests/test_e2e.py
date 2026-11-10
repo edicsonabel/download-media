@@ -6193,6 +6193,227 @@ def test_bundled_and_abbreviated_flags_skip_the_wizard(
         assert saved == [Path("Videos/Clip.mp4")]
 
 
+# Spec 22, attacked: -l with every count of URLs, failures, cookies, prompts and languages.
+TABLE = "Available formats for"
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_list_formats_lists_both_sides_of_a_failure_in_the_middle(
+    wizard_urls: Any, extracted: list[str], home: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output, asked = wizard_urls(["-l", VIDEO, PRIVATE, VIDEO_B])
+    assert asked == 0
+    assert code == 1
+    assert extracted == [VIDEO, PRIVATE, VIDEO_B]
+    assert output.count(TABLE) == 2
+    first, failed, last = (output.find(s) for s in ("for v1", t("failed", PRIVATE), "for v2"))
+    assert -1 < first < failed < last
+    assert t("equiv_cmd") not in output
+    assert commands(output) == []
+    assert history_rows() == []
+    assert [p for p in home.rglob("*") if p.is_file()] == []
+
+
+def test_list_formats_goes_on_after_an_extractor_bug(
+    wizard_urls: Any, extracted: list[str]
+) -> None:
+    code, output, _ = wizard_urls(["-l", CRASH, VIDEO])
+    assert code == 1
+    assert t("unexpected_bug", CRASH_BUG) in output
+    assert t("failed", CRASH) in output
+    assert extracted == [CRASH, VIDEO]
+    assert output.count(TABLE) == 1
+
+
+def test_list_formats_with_one_url_writes_no_history_and_prints_no_command(
+    wizard_urls: Any, home: Path
+) -> None:
+    code, output, asked = wizard_urls(["-l", VIDEO])
+    assert (code, asked) == (0, 0)
+    assert output.count(TABLE) == 1
+    assert commands(output) == []
+    assert history_rows() == []
+
+
+def test_ctrl_c_while_listing_stops_before_the_later_urls(
+    wizard_urls: Any, extracted: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recording = FakeSiteIE._real_extract
+
+    def interrupted(self: FakeSiteIE, url: str) -> dict[str, Any]:
+        if url == VIDEO_B:
+            extracted.append(url)
+            raise KeyboardInterrupt
+        return recording(self, url)
+
+    monkeypatch.setattr(FakeSiteIE, "_real_extract", interrupted)
+    code, output, _ = wizard_urls(["-l", VIDEO, VIDEO_B, CAROUSEL])
+    assert code == cli.EXIT_INTERRUPTED
+    assert extracted == [VIDEO, VIDEO_B]
+    assert output.count(TABLE) == 1
+    assert t("cancelled") in output.splitlines()
+    assert "Traceback" not in output
+    assert commands(output) == []
+
+
+def test_interactive_list_formats_takes_several_urls_at_one_prompt(
+    wizard_urls: Any, extracted: list[str]
+) -> None:
+    code, output, asked = wizard_urls(["-i", "-l", VIDEO], f"{VIDEO_B} {CAROUSEL}")
+    assert (code, asked) == (0, 1)
+    assert extracted == [VIDEO_B, CAROUSEL]
+    assert TABLE + " v1" in output
+    assert t("type_video") not in output
+    assert t("ask_cookies") not in output
+
+
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_cancelling_the_second_url_prompt_lists_nothing(
+    wizard_urls: Any, extracted: list[str], reply: Any
+) -> None:
+    code, output, asked = wizard_urls(["-i", "-l", VIDEO, VIDEO_B], "", reply)
+    assert (code, asked) == (1, 2)
+    assert t("cancelled") in output
+    assert extracted == []
+    assert TABLE not in output
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_interactive_list_formats_counts_the_urls_in_either_language(
+    wizard_urls: Any, extracted: list[str], monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    code, output, asked = wizard_urls(["-i", "-l", VIDEO, VIDEO_B, CAROUSEL], "", "", "")
+    assert (code, asked) == (0, 3)
+    for k in (1, 2, 3):
+        assert f"{t('wizard_title')} ({k}/3)" in output
+    assert extracted == [VIDEO, VIDEO_B, CAROUSEL]
+
+
+def test_list_formats_with_an_empty_url_answer_stops(
+    fake_site: list[Any], answers: Any, capfd: pytest.CaptureFixture[str]
+) -> None:
+    prompts = answers("")
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["-l"])
+    assert exc.value.code == 1
+    assert len(prompts) == 1
+    output = "".join(capfd.readouterr())
+    assert t("empty_url") in output
+    assert TABLE not in output
+
+
+@pytest.mark.parametrize(("replies", "listed"), [(("",), VIDEO), (("n", VIDEO_B), VIDEO_B)])
+def test_list_formats_without_a_url_offers_the_clipboard(
+    wizard_urls: Any,
+    extracted: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    replies: tuple[str, ...],
+    listed: str,
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: VIDEO)
+    code, output, asked = wizard_urls(["-l"], *replies)
+    assert (code, asked) == (0, len(replies))
+    assert t("from_clipboard") in output
+    assert extracted == [listed]
+
+
+def test_yes_list_formats_without_a_url_uses_the_clipboard_without_asking(
+    wizard_urls: Any, extracted: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "read_clipboard", lambda: VIDEO)
+    code, output, asked = wizard_urls(["-y", "-l"])
+    assert (code, asked) == (0, 0)
+    assert t("from_clipboard") in output
+    assert extracted == [VIDEO]
+
+
+def test_yes_list_formats_without_a_url_or_clipboard_is_missing_a_url(
+    fake_site: list[Any], answers: Any, capfd: pytest.CaptureFixture[str], monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(cli, "read_clipboard", lambda: None)
+    answers()
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["-y", "-l"])
+    assert exc.value.code == 1
+    assert t("url_required") in "".join(capfd.readouterr())
+
+
+def test_list_formats_uses_the_cookies_for_every_url(
+    wizard_urls: Any, fake_site: list[Any], extracted: list[str]
+) -> None:
+    code, output, asked = wizard_urls(["-l", "--cookies", "firefox", GATED, GATED])
+    assert (code, asked) == (0, 0)
+    assert extracted == [GATED, GATED]
+    assert output.count(TABLE) == 2
+    assert fake_site and all(used and used[0] == "firefox" for used in fake_site)
+
+
+def test_list_formats_without_the_browser_lists_every_url_without_cookies(
+    direct: Any, media_url: str
+) -> None:
+    code, output = direct("-l", "--cookies", "chrome", pages=("poster.html", "webm.html"))
+    assert code == 0
+    assert no_browser() in output
+    assert output.count("Available formats") == 2
+    assert t("failed", f"{media_url}/webm.html") not in output
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_list_formats_on_a_login_wall_in_the_middle_lists_the_rest(
+    wizard_urls: Any, extracted: list[str], monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    code, output, asked = wizard_urls(["-l", VIDEO, GATED, VIDEO_B])
+    assert (code, asked) == (1, 0)
+    assert extracted == [VIDEO, GATED, VIDEO_B]
+    assert t("failed", GATED) in output
+    assert "--cookies" in output  # The hint; English-only until row 02.
+    assert t("ask_cookies") not in output
+    assert t("auth_needed_pre") not in output
+    assert output.count(TABLE) == 2
+
+
+def test_list_formats_ignores_the_playlist_flags(wizard_urls: Any) -> None:
+    plain = wizard_urls(["-y", "-l", CAROUSEL])
+    for flags in (["--playlist-items", "1"], ["-P"], ["-p"]):
+        code, output, asked = wizard_urls([*flags, "-l", CAROUSEL])
+        assert (code, output, asked) == plain
+
+
+def test_interactive_bundle_opens_the_wizard_with_audio_preset(
+    wizard_urls: Any, home: Path
+) -> None:
+    # URL, type, format, folder, cookies: audio preset from the bundle.
+    code, output, asked = wizard_urls(["-ia", VIDEO], "", "", "", "", "")
+    assert (code, asked) == (0, 5)
+    assert t("wizard_title") in output
+    saved = [p.relative_to(home) for p in home.rglob("*") if p.is_file()]
+    assert len(saved) == 1 and saved[0].parent == Path("Music") and saved[0].suffix == ".mp3"
+
+
+@pytest.mark.parametrize(
+    ("flags", "printed"),
+    [(["-q720"], "-q 720"), (["--qual=720"], "-q 720"), (["--aud"], "-a"), (["-af", "opus"], "-a")],
+)
+def test_a_bundled_or_abbreviated_run_prints_the_canonical_command(
+    wizard_urls: Any, home: Path, pasted: Any, flags: list[str], printed: str
+) -> None:
+    code, output, asked = wizard_urls([*flags, VIDEO], "")
+    assert (code, asked) == (0, 1)
+    (line,) = commands(output)
+    assert f"download-media -y {printed}" in line
+    assert len(history_rows()) == 1
+    for name in home.rglob("*"):
+        if name.is_file():
+            name.unlink()
+    assert pasted(line)[0] == 0
+    assert len(history_rows()) == 2
+
+
 # Several URLs, attacked: nothing a walk chose reaches the next one (spec 19, D3).
 def test_cookies_chosen_in_one_walk_are_not_the_next_walk_s_default(
     wizard_urls: Any, out: Path
