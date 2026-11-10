@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:06:10-04:00",
+  "updated": "2026-11-10T02:10:04-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2699,12 +2699,14 @@
       "type": "feature",
       "title": "Save a lone Instagram image post when cookies are given",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "approved",
+      "next_agent": "developer",
       "doc": ".ai/specs/61-ig-lone-images.md",
       "branch": "feature/ig-lone-images",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "f2cb5e7"
+      ],
       "review": null,
       "history": [
         {
@@ -2713,6 +2715,20 @@
           "result": "approved",
           "at": "2026-11-10T01:51:12-04:00",
           "note": "First P2 feature in PLAN.md's order, under the human's overnight delegation ('haz lo que más puedas de las features'). Spec written in parallel; development waits its turn."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T02:10:04-04:00",
+          "note": "Spec f2cb5e7, PLAN row 61 to spec. Reproduced with yt-dlp's real InstagramIE on canned answers and on fake_site: logged in, every direct mode fails and the wizard refuses; logged out, the wizard walks the manual flow to failure with no cookies hint. Prototype saved 'Video by someone [C0abcDEFghi].jpg'. D1-D7; three new messages. Live check needs DM_LIVE_IG_IMAGE and the human's cookies (morning). Planner: D5 likely closes row 63; row 38's line set; carousel broken-video risk row; row 64 wording."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T02:10:04-04:00",
+          "note": "Spec approved under the human's overnight delegation, every recommended option. Flagged first for the human: D1 saves any site's lone no-formats result with a thumbnail as an image, with a notice; extractors that give up on a video without raising (banbye, ebay) then save the thumbnail with exit 0 instead of failing. The notice keeps it honest, but the human should confirm. Also D2 (lone images always named with [id]), D5 (preview through _Ydl; may close row 63), D6 (reverses one row of spec 18's table: 'There is no video in this post' counts as a cookies case). Development after cancel-exits, subs-failures and kind-edges merge."
         }
       ]
     }
