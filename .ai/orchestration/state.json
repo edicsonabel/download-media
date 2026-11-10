@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T07:52:45-04:00",
+  "updated": "2026-11-10T08:08:20-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3189,14 +3189,15 @@
     "fix/failure-leftovers": {
       "type": "fix",
       "title": "Remove what a failed or interrupted download leaves",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/46-failure-leftovers.md",
       "branch": "fix/failure-leftovers",
       "worktree": ".worktrees/fix-failure-leftovers",
       "commits": [
-        "1a4e349"
+        "1a4e349",
+        "e829fbd"
       ],
       "review": null,
       "history": [
@@ -3220,6 +3221,13 @@
           "result": "approved",
           "at": "2026-11-10T07:52:45-04:00",
           "note": "Spec approved under the overnight delegation, every recommended option. Not breaking. Three review items (failed body deleted in every mode; -p ERROR line becomes 'Postprocessing: ...' once per failed item; reruns refetch instead of piling copies). Test-engineer must confirm a post-processing failure under 'only_download' never aborts the rest of a playlist. Development starts now; merges after ig-lone-images."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T08:08:20-04:00",
+          "note": "e829fbd: ignoreerrors 'only_download' under -p/--playlist-items; _Ydl.drop_media deletes a failed item's file only when __real_download, on failed count or DownloadError (not KeyboardInterrupt). A failed step ends only its item; counts, warnings, cookie fallback unchanged. Strict xfail flipped; six pinning tests updated. Reverting fails 25/29; each half alone and guard mutants caught. Gate exit 0, 2942 passed + 13 xfailed. Planner: repeated_errors likely dead under -p; two stale test comments."
         }
       ]
     }
