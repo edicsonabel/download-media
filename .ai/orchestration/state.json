@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T06:22:17-04:00",
+  "updated": "2026-11-10T06:22:40-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2983,9 +2983,9 @@
     "fix/intent-flags": {
       "type": "fix",
       "title": "Make -l and bundled or abbreviated flags skip the wizard, and -l list every URL",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/22-intent-flags.md",
       "branch": "fix/intent-flags",
       "worktree": ".worktrees/fix-intent-flags",
@@ -2999,7 +2999,11 @@
       ],
       "review": {
         "approved": true,
-        "findings": []
+        "findings": [
+          "minor cli.py:511 stdout ordering with a file/pipe (pre-existing, strict xfail)",
+          "minor equivalent.py never emits -- (pre-existing, strict xfail)",
+          "minor wizard.py:516 -l with no URL prints the wizard title (accepted under D3)"
+        ]
       },
       "history": [
         {
@@ -3036,6 +3040,20 @@
           "result": "done",
           "at": "2026-11-10T05:59:04-04:00",
           "note": "No bugs. Every intent flag in every argparse spelling generated from the parser; bundles with -i/-y; main parse unchanged (ambiguous --play still exits 2). -l paths, ask_urls, cookies, login wall, Ctrl-C. 189 new tests fail on the old src. Mutation 27/27. Gate exit 0 at cc29c90, 2898 passed + 15 xfailed. No 3.10 interpreter locally; argparse source read for 3.13/3.14. Planner (strict xfails): stdout ordering with a file/pipe; equivalent command never emits -- for a URL starting with -."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-10T06:22:40-04:00",
+          "note": "Gate exit 0 at cc29c90, 2898 passed + 15 xfailed. Code matches the design; docs and commits fine. Real runs en/es as specified. No textual conflicts with main, ig-lone-images or untagged-per-item; on the three-way merged tree ig-lone's test_wizard_in_list_mode_names_a_lone_image fails (feeds three replies; -i -l now asks only the URL); with one reply it passes. Whichever lands second cuts it."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T06:22:40-04:00",
+          "note": "Merge and push under the overnight delegation. intent-flags lands first; ig-lone-images will merge main into its branch and cut that test before its QA."
         }
       ]
     },
