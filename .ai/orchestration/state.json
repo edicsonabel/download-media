@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:46:13-04:00",
+  "updated": "2026-11-10T02:50:57-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2663,12 +2663,12 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "planning",
-      "status": "approved",
+      "stage": "development",
+      "status": "in_progress",
       "next_agent": "developer",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
-      "worktree": null,
+      "worktree": ".worktrees/fix-subs-failures",
       "commits": [
         "1ddf169"
       ],
@@ -2694,18 +2694,25 @@
           "result": "approved",
           "at": "2026-11-10T01:22:39-04:00",
           "note": "Spec approved under the human's overnight delegation, every recommended option (D1 ignoreerrors only around subtitle writing, D2 subs_failed warning, D3 ffprobe packet count leaves empty subtitles out of the embed with subs_empty, D4 delete a failed item's subtitle files, D5 README). Not breaking; two new messages. 0.4.0 review list: five changes in the spec. Development waits until m4a-cover, cookies-undecrypted and cancel-exits merge (it touches lines next to all three)."
+        },
+        {
+          "stage": "development",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T02:50:57-04:00",
+          "note": "Development starts from main 5b41234 (cancel-exits merged; its gate still running, base kept if it passes)."
         }
       ]
     },
     "fix/kind-edges": {
       "type": "fix",
       "title": "Close the remaining media-kind edge cases",
-      "stage": "planning",
-      "status": "approved",
+      "stage": "development",
+      "status": "in_progress",
       "next_agent": "developer",
       "doc": ".ai/specs/37-kind-edges.md",
       "branch": "fix/kind-edges",
-      "worktree": null,
+      "worktree": ".worktrees/fix-kind-edges",
       "commits": [
         "5123f99"
       ],
@@ -2731,6 +2738,13 @@
           "result": "approved",
           "at": "2026-11-10T01:50:52-04:00",
           "note": "Spec approved under the human's overnight delegation, every recommended option (D1 A pass storyboard-only to yt-dlp, D2 A any-case extensions with .M4A as a possible video container, D3 A extend spec 27's type step to HTML5MediaEmbed formats with a video extension and no codec). Flagged for the human: D2 reverses spec 27's f2ceff7 for .M4A (real uppercase .M4A audio needs '2' for mp3); D3 narrows by extractor_key, which spec 27 D1 C had rejected as the sole test. Wizard-only changes, four review items. Development after cancel-exits merges (shared refusal-test parameter lists)."
+        },
+        {
+          "stage": "development",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T02:50:57-04:00",
+          "note": "Development starts from main 5b41234 (cancel-exits merged; its gate still running, base kept if it passes)."
         }
       ]
     },
