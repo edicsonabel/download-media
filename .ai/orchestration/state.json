@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:54:46-04:00",
+  "updated": "2026-11-10T04:56:51-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2679,9 +2679,9 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
       "worktree": ".worktrees/fix-subs-failures",
@@ -2692,7 +2692,8 @@
         "da03a4a",
         "88121be",
         "4d4f725",
-        "1a841c7"
+        "1a841c7",
+        "e447bea"
       ],
       "review": {
         "approved": true,
@@ -2773,6 +2774,13 @@
           "result": "approved",
           "at": "2026-11-10T04:46:05-04:00",
           "note": "Merge and push under the overnight delegation. Spec text minors go to the architect at validation."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-10T04:56:51-04:00",
+          "note": "Merged as e447bea, no conflicts (tree identical to QA's merge-tree). Gate exit 0 (first with kind-edges + this item), 2526 passed + 11 xfailed. Undo: git revert -m 1 e447bea. Pushed by the orchestrator under the delegation."
         }
       ]
     },
