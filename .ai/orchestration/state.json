@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:22:39-04:00",
+  "updated": "2026-11-10T01:28:06-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2431,9 +2431,9 @@
     "fix/cookies-undecrypted": {
       "type": "fix",
       "title": "Say so when the browser's cookies load but none decrypt",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/67-cookies-undecrypted.md",
       "branch": "fix/cookies-undecrypted",
       "worktree": ".worktrees/fix-cookies-undecrypted",
@@ -2481,6 +2481,20 @@
           "result": "done",
           "at": "2026-11-10T01:16:51-04:00",
           "note": "No bugs. 33 tests in d01cbcf (7 new-behaviour tests fail on main's src). Mutation 17/17. Gate exit 0 at d01cbcf, 2153 passed + 2 xfailed. Hand runs in every mode match. Planner: a Chromium jar of only empty-on-purpose cookies reads 'none could be decrypted' (wording nit); expired-only jar counts as working (spec 18 path); load_browser_cookies deletes pre-set report hooks (no caller)."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-10T01:28:06-04:00",
+          "note": "No findings. Gate exit 0 at d01cbcf, 2153 passed + 2 xfailed es/en. Trial merge with main (container-choice) clean; lint, types and 705 targeted tests pass on it. Real runs R1-R15 and more in en and es match output, Cookie header, disk, history, command. Working profiles identical to main."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T01:28:06-04:00",
+          "note": "Merge and push under the human's overnight delegation. Tech-lead launched once the planner's PLAN.md commit lands, so the merge runs on a clean main."
         }
       ]
     },
