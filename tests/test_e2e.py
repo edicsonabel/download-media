@@ -8473,11 +8473,6 @@ def test_a_rotated_video_ffmpeg_cannot_tag_is_a_success(
     assert len(history_rows()) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="an item the metadata step fails stays named as not converted",
-)
 @pytest.mark.parametrize(
     "flags", [("-p",), ("--playlist-items", "1,2")], ids=["-p", "--playlist-items"]
 )
