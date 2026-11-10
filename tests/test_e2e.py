@@ -5474,6 +5474,14 @@ DIRECT_OUTCOMES: dict[str, dict[str, tuple[int, list[str]]]] = {
         "-a": (0, ["Clip [v2].mp3"]),
         "-l": (0, []),
     },
+    # A lone image is saved, named by its id; -a skips it, -l names it (spec 61).
+    "thumbnail-image": {
+        "": (0, ["Clip [i1].jpg"]),
+        "-p": (0, ["Clip [i1].jpg"]),
+        "-P": (0, ["Clip [i1].jpg"]),
+        "-a": (1, []),
+        "-l": (0, []),
+    },
 }
 
 
@@ -11045,4 +11053,111 @@ def test_a_failed_video_in_single_mode_still_stops_the_list(run: Any, out: Path)
     code, output = run("-y", "-s", url)
     assert code == 1
     assert t("failed", url) in output
+    assert names(out) == []
+
+
+# A lone image post, saved through the thumbnail writer like a carousel's images (spec 61).
+LONE_IMAGE = "https://fake.test/ig-lone-image"
+LONE_IMAGE_B = "https://fake.test/ig-lone-image-b"
+LONE_BROKEN = "https://fake.test/ig-lone-broken"
+LONE_NAME = "Clip [i1].jpg"
+WITH_COOKIES = ("--cookies", "firefox")
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [(), ("-P",), ("-p",), ("--playlist-items", "1"), ("--video-format", "mkv")],
+    ids=["single", "no-playlist", "playlist", "items", "mkv"],
+)
+def test_a_lone_image_with_cookies_is_saved_in_every_direct_mode(
+    run: Any, out: Path, tiny_jpg: bytes, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, *WITH_COOKIES, LONE_IMAGE)
+    assert code == 0
+    assert names(out) == [LONE_NAME]
+    assert (out / LONE_NAME).read_bytes() == tiny_jpg
+    assert t("done") in output
+    assert t("image_alone_saved", LONE_NAME) in output
+    assert t("cookies_retry", "firefox") not in output
+    assert t("items_not_found", "", "").split("(")[0] not in output
+    assert not said_partial_result(output)
+    assert "No video formats found" not in output
+    assert [row.split("\t")[1] for row in history_rows()] == ["video"]
+    [line] = commands(output)
+    assert "--cookies firefox" in line
+
+
+@pytest.mark.parametrize("flags", [("-s",), ("--video-format", "webm")], ids=["subs", "webm"])
+def test_a_lone_image_is_left_alone_by_the_container_and_subtitle_steps(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, *WITH_COOKIES, LONE_IMAGE)
+    assert code == 0
+    assert names(out) == [LONE_NAME]
+    assert t("image_alone_saved", LONE_NAME) in output
+    assert (t("subs_none", "es,en") in output) == ("-s" in flags)
+
+
+def test_a_lone_image_rerun_adds_nothing(run: Any, out: Path) -> None:
+    code, _ = run("-y", *WITH_COOKIES, LONE_IMAGE)
+    assert code == 0
+    before = (out / LONE_NAME).stat().st_mtime_ns
+    for flags in [(), ("-p",)]:
+        code, output = run("-y", *flags, *WITH_COOKIES, LONE_IMAGE)
+        assert code == 0
+        assert names(out) == [LONE_NAME]
+        assert (out / LONE_NAME).stat().st_mtime_ns == before
+        assert "thumbnail is already present" in output
+        assert t("image_alone_saved", LONE_NAME) in output
+        assert t("done") in output
+
+
+@pytest.mark.parametrize("flags", [("-a",), ("-a", "-p")], ids=["single", "playlist"])
+def test_audio_mode_skips_a_lone_image(run: Any, out: Path, flags: tuple[str, ...]) -> None:
+    code, output = run("-y", *flags, *WITH_COOKIES, LONE_IMAGE)
+    assert code == 1
+    assert t("item_image_skipped", "i1") in output
+    assert t("no_supported_items") in output
+    assert t("image_alone_saved", LONE_NAME) not in output
+    assert names(out) == []
+    assert history_rows() == []
+    assert len(commands(output)) == 1
+
+
+def test_list_mode_names_a_lone_image(run: Any, out: Path) -> None:
+    code, output = run("-y", "-l", *WITH_COOKIES, LONE_IMAGE)
+    assert code == 0
+    assert t("item_image_skipped", "i1") in output
+    assert "No video formats found" not in output
+    assert names(out) == []
+
+
+def test_lone_images_are_named_by_their_id(run: Any, out: Path, again: Path) -> None:
+    code, _ = run("-y", "https://fake.test/ig-image", LONE_IMAGE_B)
+    assert code == 0
+    assert names(out) == ["Clip [i1].jpg", "Clip [i9].jpg"]
+    code, _ = run("-y", "-o", str(again), VIDEO, "https://fake.test/ig-image")
+    assert code == 0
+    assert names(again) == ["Clip [i1].jpg", "Clip.mp4"]
+
+
+@pytest.mark.parametrize("flags", [(), ("-p",)], ids=["single", "playlist"])
+@WITH_AND_WITHOUT_COOKIES
+def test_a_lone_image_that_cannot_be_fetched_fails(
+    run: Any, out: Path, flags: tuple[str, ...], cookies: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, *cookies, LONE_BROKEN)
+    assert code == 1
+    assert t("image_not_saved", "i1") in output
+    assert t("failed", LONE_BROKEN) in output
+    assert t("done") not in output
+    assert (t("cookies_retry", "firefox") in output) == bool(cookies)
+    assert names(out) == []
+
+
+@pytest.mark.parametrize("page", ["image", "no-url-format", "drm", "upcoming", "no-video-post"])
+def test_lone_results_with_nothing_to_save_still_fail(run: Any, out: Path, page: str) -> None:
+    code, output = run("-y", f"https://fake.test/{page}")
+    assert code == 1
+    assert t("done") not in output
     assert names(out) == []

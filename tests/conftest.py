@@ -597,6 +597,17 @@ class FakeSiteIE(InfoExtractor):
             return self._url_only("p1", "tiny.jpg", "jpg")
         if page == "ig-image":
             return self._instagram_image("i1")
+        if page == "ig-lone-image":
+            # instagram.py's two paths for a post holding one image: logged out, it raises
+            # unless ignore_no_formats_error is set; logged in, the image comes back.
+            if not self._downloader.cookies_used:
+                self.raise_no_formats("There is no video in this post", expected=True)
+            return self._instagram_image("i1")
+        if page == "ig-lone-image-b":
+            return self._instagram_image("i9")
+        if page == "ig-lone-broken":
+            broken = {"url": f"{self.media_url}/status/404/i1.jpg", "width": 64, "height": 64}
+            return {**self._instagram_image("i1"), "thumbnails": [broken]}
         if page == "ig-video":
             return self._instagram_video("v1")
         if page == "ig-carousel":

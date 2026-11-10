@@ -413,6 +413,8 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         warn(t("not_converted", name, effective.video_format))
     for name in result.no_cover:
         warn(t("no_cover", name))
+    for name in result.lone_images:
+        warn(t("image_alone_saved", name))
     if result.subs_missing:
         warn(t("subs_none", effective.sub_langs))
     ok(t("done"))
