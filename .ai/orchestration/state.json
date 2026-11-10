@@ -2788,7 +2788,7 @@
           "agent": "architect",
           "result": "validated",
           "at": "2026-11-10T05:03:23-04:00",
-          "note": "Criteria hold: 121 criteria tests pass; console runs (404, cut under -p, junk .vtt in mp4/mkv/-a, failed video single and -p, two runs keeping the earlier subtitle) in en/es match. Spec done, Design 2 fixed to 4d4f725, .part judgement recorded, QA minors noted; PLAN row 36 done, review items 38-42. CI on e54e5c2 pending at validation. Worktree and branch removed."
+          "note": "Criteria hold: 121 criteria tests pass; console runs (404, cut under -p, junk .vtt in mp4/mkv/-a, failed video single and -p, two runs keeping the earlier subtitle) in en/es match. Spec done, Design 2 fixed to 4d4f725, .part judgement recorded, QA minors noted; PLAN row 36 done, review items 38-42. CI on e54e5c2 pending at validation. Worktree and branch removed. CI run 42786634528 on e54e5c2 succeeded (attempt 1)."
         }
       ]
     },
