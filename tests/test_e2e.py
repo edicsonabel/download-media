@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -35,7 +36,17 @@ from download_media.downloader import (
 from download_media.i18n import t
 from download_media.probe import ContentKind, Probe
 
-from .conftest import FLAKY_SEEN, GATE_REQUESTS, GEO_BLOCK, HTTP_404, JUNK, NO_EXT_VIDEO, FakeSiteIE
+from .conftest import (
+    FLAKY_SEEN,
+    GATE_REQUESTS,
+    GEO_BLOCK,
+    HTTP_404,
+    JUNK,
+    NO_EXT_VIDEO,
+    OGA_VIDEO,
+    WEBA,
+    FakeSiteIE,
+)
 
 CAROUSEL = "https://fake.test/carousel"
 LIST_URL = "https://fake.test/carousel?list=1"  # Looks multi-entry, so direct mode asks.
@@ -2024,9 +2035,10 @@ def test_listing_formats_alone_walks_the_wizard_instead_of_refusing(
 @pytest.mark.parametrize(
     ("page", "saved"),
     [
-        ("webm.html", "webm (1).webm"),
+        # The default container is mp4 (spec 30).
+        ("webm.html", "webm (1).mp4"),
         ("hls.html", "hls (1).mp4"),
-        ("tiny.webm", "tiny.webm"),
+        ("tiny.webm", "tiny.mp4"),
     ],
 )
 def test_wizard_reads_webm_and_hls_without_codec_info_as_video(
@@ -2153,12 +2165,13 @@ def test_wizard_on_audio_with_a_relative_og_image_saves_it_without_a_cover(
 @pytest.mark.parametrize(
     ("page", "saved"),
     [
-        ("video-ogg.html", "video-ogg (1).ogg"),
-        ("video-ogg-codecs.html", "video-ogg-codecs (1).ogv"),
-        ("og-video-ogg.html", "video.ogg"),
-        ("clip.asf", "clip.asf"),
-        ("video-m4b.html", "video-m4b (1).m4b"),
-        ("video-wma.html", "video-wma (1).wma"),
+        # In the default container, mp4 (spec 30).
+        ("video-ogg.html", "video-ogg (1).mp4"),
+        ("video-ogg-codecs.html", "video-ogg-codecs (1).mp4"),
+        ("og-video-ogg.html", "video.mp4"),
+        ("clip.asf", "clip.mp4"),
+        ("video-m4b.html", "video-m4b (1).mp4"),
+        ("video-wma.html", "video-wma (1).mp4"),
     ],
 )
 def test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio(
@@ -2174,16 +2187,17 @@ def test_wizard_keeps_the_video_in_a_container_yt_dlp_lists_as_audio(
 
 
 @pytest.mark.parametrize(
-    ("page", "saved"), [("video-ogx.html", "video-ogx (1).ogx"), ("theora.ogx", "theora.ogx")]
+    ("page", "saved"), [("video-ogx.html", "video-ogx (1).mp4"), ("theora.ogx", "theora.mp4")]
 )
-def test_wizard_keeps_an_ogx_and_reports_it_untagged(
+def test_wizard_converts_an_ogx_video_and_tags_it(
     generic: Any, media_url: str, home: Path, page: str, saved: str
 ) -> None:
-    # ffmpeg has no muxer for .ogx, so yt-dlp's metadata step fails after the download.
+    # ffmpeg has no muxer for .ogx; the container step turns it into an mp4 it can tag.
     code, output = generic(page, *SINGLE_WALK)
     assert code == 0
     assert detected("kind_video") in output
-    assert t("untagged", saved) in output
+    assert untagged_warnings(output) == 0
+    assert _source_url(home / "Videos" / saved) == f"{media_url}/{page}"
     assert t("done") in output
     assert t("failed", f"{media_url}/{page}") not in output
     assert names(home / "Music") == []
@@ -2208,14 +2222,12 @@ def said_partial_result(output: str) -> bool:
 @pytest.mark.parametrize(
     ("page", "kinds"),
     [
-        ("theora.ogx", {"audio", "video"}),
-        ("typed/audio/webm/audio.webm/clip.weba", {"audio"}),
+        (WEBA, {"audio"}),
         ("typed/audio/mp4/tiny.m4a/clip.m4r", {"audio"}),
         ("typed/audio/mp4/tiny.m4a/clip.f4a", {"audio"}),
         # ffmpeg's muxer can't take the streams, and leaves an empty temp file.
         ("typed/audio/x-wav/tiny.mp4/clip.wav", {"audio", "video"}),
-        ("typed/audio/ogg/tiny.mp4/clip.oga", {"audio", "video"}),
-        (NO_EXT_VIDEO, {"audio", "video"}),
+        (OGA_VIDEO, {"audio", "video"}),
     ],
 )
 def test_a_saved_file_ffmpeg_cannot_tag_is_a_success(
@@ -2233,6 +2245,23 @@ def test_a_saved_file_ffmpeg_cannot_tag_is_a_success(
     assert len(history_rows()) == 1
 
 
+@pytest.mark.parametrize("page", ["theora.ogx", NO_EXT_VIDEO])
+def test_a_video_ffmpeg_cannot_tag_is_converted_and_tagged(
+    generic: Any, media_url: str, out: Path, page: str
+) -> None:
+    # Spec 29's untagged files, until spec 30 put them in an mp4.
+    code, output = generic(page, flags=("-y", "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".mp4")
+    assert streams(out / saved) == {"audio", "video"}
+    assert _source_url(out / saved) == f"{media_url}/{page}"
+    assert untagged_warnings(output) == 0
+    assert t("done") in output
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
+
+
 def test_a_body_that_is_not_media_is_still_a_failure(
     generic: Any, media_url: str, out: Path
 ) -> None:
@@ -2246,13 +2275,13 @@ def test_a_body_that_is_not_media_is_still_a_failure(
 def test_playlist_with_an_untaggable_item_saves_both_and_counts_each_once(
     generic: Any, out: Path
 ) -> None:
-    code, output = generic("ogx-and-mp4.html", flags=("-y", "-p", "-o", str(out)))
+    code, output = generic("oga-and-mp4.html", flags=("-y", "-p", "-o", str(out)))
     assert code == 0
     saved = names(out)
     assert len(saved) == 2
     assert all("video" in streams(out / name) for name in saved)
-    [ogx] = [name for name in saved if name.endswith(".ogx")]
-    assert t("untagged", ogx) in output
+    [oga] = [name for name in saved if name.endswith(".oga")]
+    assert t("untagged", oga) in output
     assert untagged_warnings(output) == 1
     assert not said_partial_result(output)
     assert step_leftovers(out) == []
@@ -2306,7 +2335,7 @@ def test_playlist_where_no_item_is_media_is_a_failure(
 
 
 def test_single_mode_goes_on_past_an_untaggable_item(generic: Any, out: Path) -> None:
-    code, output = generic("ogx-and-mp4.html", flags=("-y", "-o", str(out)))
+    code, output = generic("oga-and-mp4.html", flags=("-y", "-o", str(out)))
     assert code == 0
     assert len(names(out)) == 2
     assert untagged_warnings(output) == 1
@@ -2341,30 +2370,30 @@ def test_a_taggable_file_still_gets_its_source_url(generic: Any, media_url: str,
 def test_an_untaggable_file_with_cookies_is_not_downloaded_again(
     run: Any, out: Path, fake_site: list[Any]
 ) -> None:
-    code, output = run("-y", "--cookies", "brave", "https://fake.test/ogx")
+    code, output = run("-y", "--cookies", "brave", "https://fake.test/weba")
     assert code == 0
-    assert names(out) == ["Clip.ogx"]
+    assert names(out) == ["Clip.weba"]
     assert t("cookies_retry", "brave") not in output
-    assert t("untagged", "Clip.ogx") in output
+    assert t("untagged", "Clip.weba") in output
     assert fake_site == [("brave",)]
 
 
 def test_an_untaggable_file_with_chapters_leaves_no_chapters_file(run: Any, out: Path) -> None:
-    code, output = run("-y", "https://fake.test/ogx-chapters")
+    code, output = run("-y", "https://fake.test/weba-chapters")
     assert code == 0
     assert step_leftovers(out) == []
-    assert names(out) == ["Clip.ogx"]
-    assert t("untagged", "Clip.ogx") in output
+    assert names(out) == ["Clip.weba"]
+    assert t("untagged", "Clip.weba") in output
 
 
-@pytest.mark.parametrize("own", ["Clip.meta", "Clip.temp.ogx"])
+@pytest.mark.parametrize("own", ["Clip.meta", "Clip.temp.weba"])
 def test_an_untaggable_file_leaves_the_users_own_files_alone(run: Any, out: Path, own: str) -> None:
-    # No chapters, so yt-dlp writes no .meta; ffmpeg has no .ogx muxer, so it opens no temp file.
+    # No chapters, so yt-dlp writes no .meta; ffmpeg has no .weba muxer, so it opens no temp file.
     out.mkdir(parents=True)
     (out / own).write_text("mine", encoding="utf-8")
-    code, output = run("-y", "https://fake.test/ogx")
+    code, output = run("-y", "https://fake.test/weba")
     assert code == 0
-    assert t("untagged", "Clip.ogx") in output
+    assert t("untagged", "Clip.weba") in output
     assert (out / own).read_text(encoding="utf-8") == "mine"
 
 
@@ -2374,29 +2403,29 @@ def test_an_untaggable_file_in_a_relative_folder_starting_with_a_dash(
     work = tmp_path / "work"
     work.mkdir()
     monkeypatch.chdir(work)
-    code, output = generic("theora.ogx", flags=("-y", "--output=-clips"))
-    assert names(work / "-clips") == ["theora.ogx"]
+    code, output = generic(WEBA, flags=("-y", "--output=-clips"))
+    assert names(work / "-clips") == ["clip.weba"]
     assert code == 0
-    assert t("untagged", "theora.ogx") in output
+    assert t("untagged", "clip.weba") in output
 
 
 def test_untaggable_subtitled_file_warns_twice_and_keeps_both_files(run: Any, out: Path) -> None:
     # yt-dlp only embeds subtitles in mp4, webm, mkv and mov: spec 21's warning still follows.
-    code, output = run("-y", "-s", "https://fake.test/ogx-subs")
+    code, output = run("-y", "-s", "https://fake.test/weba-subs")
     assert code == 0
-    assert names(out) == ["Clip.en.vtt", "Clip.ogx"]
-    assert t("untagged", "Clip.ogx") in output
-    assert t("subs_not_embedded", "Clip.ogx") in output
+    assert names(out) == ["Clip.en.vtt", "Clip.weba"]
+    assert t("untagged", "Clip.weba") in output
+    assert t("subs_not_embedded", "Clip.weba") in output
     assert t("done") in output
     assert step_leftovers(out) == []
 
 
 def test_playlist_items_on_the_untaggable_item_alone(generic: Any, out: Path) -> None:
     flags = ("-y", "--playlist-items", "1", "-o", str(out))
-    code, output = generic("ogx-and-mp4.html", flags=flags)
+    code, output = generic("oga-and-mp4.html", flags=flags)
     assert code == 0
     [saved] = names(out)
-    assert saved.endswith(".ogx")
+    assert saved.endswith(".oga")
     assert t("untagged", saved) in output
     assert untagged_warnings(output) == 1
     assert not said_partial_result(output)
@@ -2411,11 +2440,11 @@ def several(media_url: str, out: Path, capfd: pytest.CaptureFixture[str], *pages
 def test_several_urls_with_one_untaggable_all_count_as_done(
     media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    code, output = several(media_url, out, capfd, "theora.ogx", "tiny.mp4")
+    code, output = several(media_url, out, capfd, WEBA, "tiny.mp4")
     assert code == 0
-    assert names(out) == ["theora.ogx", "tiny.mp4"]
+    assert names(out) == ["clip.weba", "tiny.mp4"]
     # The whole line: the warning names the file, not its path.
-    assert t("untagged", "theora.ogx") in output.splitlines()
+    assert t("untagged", "clip.weba") in output.splitlines()
     assert untagged_warnings(output) == 1
     # Both files go through yt-dlp's step, under its own tag.
     assert output.count("[Metadata] Adding metadata") == 2
@@ -2426,13 +2455,13 @@ def test_several_urls_with_one_untaggable_all_count_as_done(
 def test_several_urls_an_untaggable_one_and_a_broken_one(
     media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    code, output = several(media_url, out, capfd, "theora.ogx", JUNK)
+    code, output = several(media_url, out, capfd, WEBA, JUNK)
     assert code == 1
-    assert t("untagged", "theora.ogx") in output
+    assert t("untagged", "clip.weba") in output
     assert untagged_warnings(output) == 1
     assert output.count(t("done")) == 1
     assert t("failed", f"{media_url}/{JUNK}") in output
-    assert t("failed", f"{media_url}/theora.ogx") not in output
+    assert t("failed", f"{media_url}/{WEBA}") not in output
     assert len(history_rows()) == 1
 
 
@@ -2442,9 +2471,9 @@ def test_untagged_and_broken_in_both_languages(
 ) -> None:
     monkeypatch.setattr(i18n, "LANG", lang)
     said = i18n._MESSAGES[lang]
-    code, output = generic("theora.ogx", flags=("-y", "-o", str(out)))
+    code, output = generic(WEBA, flags=("-y", "-o", str(out)))
     assert code == 0
-    assert said["untagged"].format("theora.ogx") in output
+    assert said["untagged"].format("clip.weba") in output
     other = i18n._MESSAGES["en" if lang == "es" else "es"]["untagged"]
     assert other.split("{}")[1][:20] not in output
     assert said["done"] in output
@@ -2918,18 +2947,20 @@ def test_rerun_of_an_untaggable_file_under_p_counts_each_run_once(
 @pytest.mark.parametrize(
     ("page", "saved"),
     [
-        ("video-tag-audio-ogg.html", "video-tag-audio-ogg (1).ogg"),
-        ("video-tag-audio-m4b.html", "video-tag-audio-m4b (1).m4b"),
+        ("video-tag-audio-ogg.html", "video-tag-audio-ogg (1).mp4"),
+        ("video-tag-audio-m4b.html", "video-tag-audio-m4b (1).mp4"),
     ],
 )
-def test_wizard_keeps_audio_in_such_a_container_raw_when_nothing_says_it_is_audio(
+def test_wizard_keeps_audio_in_such_a_container_when_nothing_says_it_is_audio(
     generic: Any, home: Path, page: str, saved: str
 ) -> None:
+    # Read as video, so it goes into the chosen container (spec 30): an audio-only mp4.
     code, output = generic(page, *SINGLE_WALK)
     assert code == 0
     assert detected("kind_video") in output
     assert names(home / "Music") == []
     assert names(home / "Videos") == [saved]
+    assert streams(home / "Videos" / saved) == {"audio"}
 
 
 def test_wizard_can_still_choose_audio_for_such_a_container(generic: Any, home: Path) -> None:
@@ -2959,7 +2990,7 @@ def test_wizard_tells_ogg_video_from_ogg_audio_on_one_page_and_repeats_it(
     assert code == 0
     assert tag("kind_video") in output
     assert tag("kind_audio") in output
-    saved = "01 - ogg-video-and-audio (1) [ogg-video-and-audio-1].ogg"
+    saved = "01 - ogg-video-and-audio (1) [ogg-video-and-audio-1].mp4"
     assert names(home / "Videos") == [saved]
     assert names(home / "Music") == []
     assert "video" in streams(home / "Videos" / saved)
@@ -6063,10 +6094,8 @@ def test_each_container_takes_the_formats_it_can_hold(
             ["Clip.en.vtt", "Clip.es.srt", "Clip.webm"],
             [("webvtt", "eng")],
         ),
-        # Outside yt-dlp's SUPPORTED_EXTS: nothing is embedded, nothing is tried.
-        ((), "subs-flv", ["Clip.en.vtt", "Clip.flv"], []),
     ],
-    ids=["ass-webm", "srt-next-to-vtt-webm", "flv"],
+    ids=["ass-webm", "srt-next-to-vtt-webm"],
 )
 def test_a_container_that_cannot_hold_every_file_warns(
     run: Any, out: Path, flags: tuple[str, ...], page: str, saved: list[str], kept: list[Any]
@@ -8187,3 +8216,813 @@ def test_unexpected_errors_in_both_languages(
     code, output = run("-y", "-l", CRASH)
     assert code == 1
     assert said["unexpected_bug"].format(CRASH_BUG) in output
+
+
+# Spec 30: the container choice holds on single-format sources.
+
+
+def codecs(path: Path) -> dict[str, str]:
+    """The codec of the first video and audio stream ffprobe finds in ``path``, by type."""
+    probe = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name"]
+    out = subprocess.run([*probe, "-of", "json", str(path)], capture_output=True, text=True)
+    found: dict[str, str] = {}
+    for stream in json.loads(out.stdout or "{}").get("streams", []):
+        found.setdefault(stream.get("codec_type"), stream.get("codec_name"))
+    return {kind: name for kind, name in found.items() if kind in ("video", "audio")}
+
+
+def container_steps(output: str) -> int:
+    return output.count("[VideoConvertor]") + output.count("[VideoRemuxer]")
+
+
+@pytest.mark.parametrize("page", ["webm.html", "tiny.webm", "video-ogg.html", "tiny.flv"])
+def test_the_default_mp4_converts_a_single_format_source(
+    generic: Any, out: Path, page: str
+) -> None:
+    code, output = generic(page, flags=("-y", "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".mp4")
+    assert codecs(out / saved) == {"video": "h264", "audio": "aac"}
+    assert "Converting video" in output
+    assert t("done") in output
+
+
+def test_wizard_summary_matches_the_saved_container(generic: Any, home: Path, out: Path) -> None:
+    label = wizard._summary_label("container")
+    code, output = generic("webm.html", *SINGLE_WALK)
+    assert code == 0
+    assert f"{label}: mp4" in output
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".mp4")
+
+    code, output = generic(
+        "tiny.mp4", *SINGLE_WALK, flags=("-i", "--video-format", "mkv", "-o", str(out))
+    )
+    assert code == 0
+    assert f"{label}: mkv" in output
+    assert names(out) == ["tiny.mkv"]
+
+
+@pytest.mark.parametrize(
+    ("page", "source"),
+    [
+        ("tiny.mp4", "tiny.mp4"),
+        ("webm.html", "tiny.webm"),
+        ("video-ogg.html", "theora.ogg"),
+        ("tiny.flv", "tiny.flv"),
+    ],
+    ids=["tiny.mp4", "webm.html", "theora.ogg", "tiny.flv"],
+)
+def test_mkv_remuxes_without_re_encoding(
+    generic: Any, media_url: str, out: Path, tmp_path: Path, page: str, source: str
+) -> None:
+    code, output = generic(page, flags=("-y", "--video-format", "mkv", "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".mkv")
+    with urllib.request.urlopen(f"{media_url}/{source}") as response:
+        (tmp_path / source).write_bytes(response.read())
+    assert codecs(out / saved) == codecs(tmp_path / source)
+    assert "Remuxing video" in output
+    assert "Converting video" not in output
+
+
+def test_webm_re_encodes_what_it_cannot_hold(generic: Any, out: Path) -> None:
+    code, output = generic("tiny.mp4", flags=("-y", "--video-format", "webm", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["tiny.webm"]
+    found = codecs(out / "tiny.webm")
+    assert found["video"] in {"vp8", "vp9", "av1"}
+    assert found["audio"] in {"vorbis", "opus"}
+    assert t("done") in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "url", "saved", "streams_in"),
+    [
+        ((), "tiny.mp4", "tiny.mp4", {"video": "h264", "audio": "aac"}),
+        (("--video-format", "webm"), "tiny.webm", "tiny.webm", {"video": "vp8", "audio": "vorbis"}),
+        (("--video-format", "mkv"), "merged", "Clip.mkv", {"video": "h264", "audio": "aac"}),
+    ],
+    ids=["mp4-tiny.mp4", "webm-tiny.webm", "mkv-merged"],
+)
+def test_a_file_already_in_the_container_is_left_alone(
+    request: pytest.FixtureRequest,
+    out: Path,
+    flags: tuple[str, ...],
+    url: str,
+    saved: str,
+    streams_in: dict[str, str],
+) -> None:
+    # fake_site replaces yt-dlp's extractors, so each source asks for its own fixture.
+    if url == "merged":
+        run = request.getfixturevalue("run")
+        code, output = run("-y", *flags, f"https://fake.test/{url}")
+    else:
+        generic = request.getfixturevalue("generic")
+        code, output = generic(url, flags=("-y", *flags, "-o", str(out)))
+    assert code == 0
+    assert names(out) == [saved]
+    assert container_steps(output) == 0
+    assert codecs(out / saved) == streams_in
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_a_video_that_cannot_be_converted_is_kept(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output = run("-y", "https://fake.test/attached")
+    assert code == 0
+    assert names(out) == ["Clip.mkv"]
+    assert codecs(out / "Clip.mkv") == {"video": "h264", "audio": "aac"}
+    assert output.count(t("not_converted", "Clip.mkv", "mp4")) == 1
+    assert t("done") in output
+    assert t("failed", "https://fake.test/attached") not in output
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
+
+
+def _broken_ffprobe(fault: str) -> Callable[..., Any]:
+    """subprocess.run, with every ffprobe call failing the way ``fault`` names."""
+    real = subprocess.run
+
+    def fake(cmd: Any, *args: Any, **kwargs: Any) -> Any:
+        if not (isinstance(cmd, list) and cmd and cmd[0] == "ffprobe"):
+            return real(cmd, *args, **kwargs)
+        if fault == "timeout":
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout") or 15)
+        if fault == "missing":
+            raise FileNotFoundError(2, "No such file or directory", "ffprobe")
+        if fault == "fails":
+            return subprocess.CompletedProcess(cmd, 1, "", "ffprobe: something went wrong\n")
+        return subprocess.CompletedProcess(cmd, 0, "not what ffprobe prints\n", "")
+
+    return fake
+
+
+@pytest.mark.parametrize("fault", ["timeout", "missing", "fails", "unparsable"])
+def test_a_video_ffprobe_cannot_read_is_kept_and_named(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    # Only ffprobe breaks: yt-dlp runs its own processes, and ffmpeg stays real.
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe(fault))
+        code, output = run("-y", "https://fake.test/single-webm")
+    assert code == 0
+    assert names(out) == ["Clip.webm"]
+    assert codecs(out / "Clip.webm") == {"video": "vp8", "audio": "vorbis"}
+    assert container_steps(output) == 0
+    assert output.count(t("not_converted", "Clip.webm", "mp4")) == 1
+    assert t("done") in output
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
+
+
+def test_a_junk_body_ffprobe_cannot_read_is_not_converted(
+    generic: Any, media_url: str, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A conversion would turn the text body into a .mkv holding a subtitle track.
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("missing"))
+        code, output = generic(JUNK, flags=("-y", "--video-format", "mkv", "-o", str(out)))
+    assert code == 1
+    assert t("failed", f"{media_url}/{JUNK}") in output
+    assert names(out) == ["junk.mp4"]
+    assert container_steps(output) == 0
+    assert history_rows() == []
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_wizard_names_a_video_ffprobe_cannot_read(
+    generic: Any, home: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    said = i18n._MESSAGES[lang]
+    other = i18n._MESSAGES["en" if lang == "es" else "es"]
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("timeout"))
+        code, output = generic("webm.html", *SINGLE_WALK)
+    assert code == 0
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".webm")
+    assert output.count(said["not_converted"].format(saved, "mp4")) == 1
+    assert other["not_converted"].split("{}")[1] not in output
+    assert said["done"] in output
+    assert container_steps(output) == 0
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize(
+    ("page", "flags", "saved"),
+    [
+        ("rotated.mov", (), "rotated.mp4"),
+        ("rotated.mp4", ("--video-format", "mkv"), "rotated.mkv"),
+    ],
+    ids=["mov-default", "mp4-to-mkv"],
+)
+def test_a_rotated_video_is_converted(
+    generic: Any, out: Path, page: str, flags: tuple[str, ...], saved: str
+) -> None:
+    # A phone video carries a display matrix; ffmpeg converts it like any other video.
+    code, output = generic(page, flags=("-y", *flags, "-o", str(out)))
+    assert code == 0
+    assert t("done") in output
+    assert t("not_converted", page, saved.rsplit(".")[-1]) not in output
+    assert names(out) == [saved]
+    assert codecs(out / saved) == {"video": "h264", "audio": "aac"}
+
+
+@pytest.mark.parametrize(
+    ("page", "kinds"),
+    [
+        ("rotated-silent.mov", {"video": "h264"}),
+        ("stereo.mkv", {"video": "h264", "audio": "aac"}),
+    ],
+    ids=["rotated-no-audio", "stereo-3d"],
+)
+def test_a_video_with_side_data_is_converted(
+    generic: Any, out: Path, page: str, kinds: dict[str, str]
+) -> None:
+    # Side data on the only stream left nothing for the old reading to fall back on.
+    code, output = generic(page, flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert t("done") in output
+    assert t("not_converted", page, "mp4") not in output
+    [saved] = names(out)
+    assert saved.endswith(".mp4")
+    assert codecs(out / saved) == kinds
+
+
+@pytest.mark.parametrize("folder", ["single", "playlist"])
+def test_a_rotated_video_ffmpeg_cannot_tag_is_a_success(
+    generic: Any, media_url: str, out: Path, folder: str
+) -> None:
+    # The metadata step asks ffprobe too, when ffmpeg can't tag the file.
+    page = "typed/audio/ogg/rotated.mp4/clip.oga"
+    flags = ("-y", "-o", str(out), *(("-p",) if folder == "playlist" else ()))
+    code, output = generic(page, flags=flags)
+    assert code == 0
+    assert names(out) == ["clip.oga"]
+    assert codecs(out / "clip.oga") == {"video": "h264", "audio": "aac"}
+    assert output.count(t("untagged", "clip.oga")) == 1
+    assert t("failed", f"{media_url}/{page}") not in output
+    assert not said_partial_result(output)
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize(
+    "flags", [("-p",), ("--playlist-items", "1,2")], ids=["-p", "--playlist-items"]
+)
+def test_an_item_that_failed_is_not_named_as_not_converted(
+    generic: Any, out: Path, monkeypatch: pytest.MonkeyPatch, flags: tuple[str, ...]
+) -> None:
+    # The junk item fails and the mp4 is saved: the warnings are only for what was saved.
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("missing"))
+        mode = ("-y", *flags, "--video-format", "mkv", "-o", str(out))
+        code, output = generic("junk-and-mp4.html", flags=mode)
+    junk, video = (f"0{n} - junk-and-mp4 ({n}) [junk-and-mp4-{n}].mp4" for n in (1, 2))
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert output.count(t("not_converted", video, "mkv")) == 1
+    assert t("done") in output
+    assert t("not_converted", junk, "mkv") not in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "replies", "prefix"),
+    [
+        (("-y",), (), ""),
+        (("-y", "-p"), (), "0{} - "),
+        (("-y", "--playlist-items", "1,2"), (), "0{} - "),
+        ((), PICKER_WALK, "0{} - "),
+    ],
+    ids=["single", "-p", "--playlist-items", "wizard"],
+)
+def test_every_item_kept_as_downloaded_is_named_once(
+    generic: Any,
+    home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    prefix: str,
+) -> None:
+    # Each item notes its own name: one that took the last item's, or kept the earlier
+    # ones, would drop a name or say one twice.
+    folder = home / "Videos"
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("missing"))
+        code, output = generic("webm-and-attached.html", *replies, flags=flags)
+    kept = [
+        f"{prefix.format(n)}webm-and-attached ({n}) [webm-and-attached-{n}].{ext}"
+        for n, ext in ((1, "webm"), (2, "mkv"))
+    ]
+    assert code == 0
+    assert names(folder) == kept
+    for name in kept:
+        assert output.count(t("not_converted", name, "mp4")) == 1
+    assert output.count(t("not_converted", "", "")[:4]) == 2
+    assert not said_partial_result(output)
+    assert container_steps(output) == 0
+    assert t("done") in output
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="pre-existing, out of fix/container-choice: the metadata step names an item as "
+    "untagged before a later check fails it, the way the container step did (planner row)",
+)
+@pytest.mark.parametrize(
+    "flags", [("-p",), ("--playlist-items", "1,2")], ids=["-p", "--playlist-items"]
+)
+def test_an_item_that_failed_is_not_named_as_untagged(
+    generic: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    # The first item fails audio extraction, then reaches the metadata step all the same.
+    mode = ("-y", "-a", *flags, "-o", str(out))
+    code, output = generic("silent-oga-and-m4a.html", flags=mode)
+    failed = "01 - silent-oga-and-m4a (1) [silent-oga-and-m4a-1].oga"
+    assert code == 0
+    assert "02 - silent-oga-and-m4a (2) [silent-oga-and-m4a-2].mp3" in names(out)
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert t("untagged", failed) not in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "saved"),
+    [
+        ((), ["Clip [v1].mp4", "Clip [x1].mkv"]),
+        (("-p",), ["01 - Clip [x1].mkv", "02 - Clip [v1].mp4"]),
+    ],
+    ids=["single", "p"],
+)
+def test_a_failed_conversion_does_not_stop_a_carousel(
+    run: Any, out: Path, flags: tuple[str, ...], saved: list[str]
+) -> None:
+    code, output = run("-y", *flags, "https://fake.test/attached-carousel")
+    assert code == 0
+    assert names(out) == saved
+    kept = next(name for name in saved if name.endswith(".mkv"))
+    assert output.count(t("not_converted", kept, "mp4")) == 1
+    assert never_said("partial_result", output)
+    assert t("done") in output
+
+
+@pytest.mark.parametrize("container", ["mkv", "webm"])
+def test_a_junk_body_still_fails_when_converted(
+    generic: Any, media_url: str, out: Path, container: str
+) -> None:
+    # ffmpeg reads this text body as a WebVTT track, which mkv and webm would both take.
+    code, output = generic(JUNK, flags=("-y", "--video-format", container, "-o", str(out)))
+    assert code == 1
+    assert t("failed", f"{media_url}/{JUNK}") in output
+    assert names(out) == ["junk.mp4"]  # The body itself stays, as without a conversion.
+    assert container_steps(output) == 0
+    assert never_said("not_converted", output)
+    assert history_rows() == []
+
+
+def test_a_rerun_after_a_conversion_downloads_nothing(generic: Any, out: Path) -> None:
+    code, output = generic("webm.html", flags=("-y", "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".mp4")
+    code, output = generic("webm.html", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert names(out) == [saved]
+    assert "has already been downloaded" in output
+    assert "Converting video" not in output
+
+
+def test_same_title_videos_both_survive_the_conversion(run: Any, out: Path) -> None:
+    code, _ = run("-y", "https://fake.test/single-webm")
+    assert code == 0
+    code, _ = run("-y", "https://fake.test/single-webm-b")
+    assert code == 0
+    assert names(out) == ["Clip [single-webm-b].mp4", "Clip.mp4"]
+    assert _source_url(out / "Clip.mp4") == "https://fake.test/single-webm"
+    assert _source_url(out / "Clip [single-webm-b].mp4") == "https://fake.test/single-webm-b"
+
+
+def test_an_image_named_like_a_converted_video_is_still_saved(
+    generic: Any, media_url: str, out: Path
+) -> None:
+    # yt-dlp's final_ext makes it look for tiny.mp4 first, for the image too.
+    code, _ = generic("tiny.mp4", flags=("-y", "-o", str(out)))
+    assert code == 0
+    code, output = generic("tiny.jpg", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert "has already been downloaded" not in output
+    [image] = [name for name in names(out) if name.endswith(".jpg")]
+    assert streams(out / image) == {"video"}
+    assert _source_url(out / "tiny.mp4") == f"{media_url}/tiny.mp4"
+
+
+def test_images_and_audio_keep_their_extension_in_video_mode(
+    generic: Any, request: pytest.FixtureRequest, out: Path, tmp_path: Path
+) -> None:
+    code, output = generic("jpg-alone.html", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["jpg-alone (1).jpg"]
+    gifs = tmp_path / "gifs"
+    code, output = generic("tiny.gif", flags=("-y", "-o", str(gifs)))
+    assert code == 0
+    assert names(gifs) == ["tiny.gif"]
+    assert container_steps(output) == 0
+    # After the generic pages: fake_site replaces yt-dlp's extractors.
+    run = request.getfixturevalue("run")
+    query = tmp_path / "query"
+    code, output = run("-y", "-p", "-o", str(query), "https://fake.test/query-carousel")
+    assert code == 0
+    assert [name for name in names(query) if name.endswith(".m4a")] == ["01 - Clip [a1].m4a"]
+    assert [name for name in names(query) if name.endswith(".jpg")] == ["02 - Clip [p1].jpg"]
+    carousel = tmp_path / "carousel"
+    code, output = run("-y", "-p", "-o", str(carousel), IG_CAROUSEL)
+    assert code == 0
+    assert names(carousel) == IG_NUMBERED
+
+
+def test_webm_prefers_a_webm_format(run: Any, out: Path) -> None:
+    code, output = run("-y", "--video-format", "webm", "https://fake.test/mp4-or-webm")
+    assert code == 0
+    assert names(out) == ["Clip.webm"]
+    assert "Downloading 1 format(s): w" in output
+    assert "Converting video" not in output
+
+
+def test_webm_on_merged_h264_streams(run: Any, out: Path) -> None:
+    code, output = run("-y", "--video-format", "webm", "https://fake.test/merged")
+    assert code == 0
+    assert names(out) == ["Clip.webm"]
+    found = codecs(out / "Clip.webm")
+    assert found["video"] in {"vp8", "vp9", "av1"}
+    assert found["audio"] in {"vorbis", "opus"}
+    assert t("done") in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "saved"), [((), "Clip.mp4"), (("--video-format", "mkv"), "Clip.mkv")]
+)
+def test_merges_into_mp4_and_mkv_are_unchanged(
+    run: Any, out: Path, flags: tuple[str, ...], saved: str
+) -> None:
+    code, output = run("-y", *flags, "https://fake.test/merged")
+    assert code == 0
+    assert names(out) == [saved]
+    assert codecs(out / saved) == {"video": "h264", "audio": "aac"}
+    assert container_steps(output) == 0
+
+
+def test_subtitles_embed_in_the_converted_file(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-flv")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    assert never_said("subs_not_embedded", output)
+    assert t("done") in output
+
+
+# Spec 30, past the developer's cases: reruns, the other modes, and the step's own lines.
+
+
+@pytest.mark.parametrize(
+    ("page", "flags", "line"),
+    [
+        ("webm.html", (), "[VideoConvertor] Converting video from webm to mp4; Destination: "),
+        (
+            "tiny.mp4",
+            ("--video-format", "mkv"),
+            "[VideoRemuxer] Remuxing video from mp4 to mkv; Destination: ",
+        ),
+    ],
+    ids=["recode", "remux"],
+)
+def test_the_container_step_speaks_as_yt_dlp(
+    generic: Any, out: Path, page: str, flags: tuple[str, ...], line: str
+) -> None:
+    # D6: yt-dlp's own lines, under its own tags, are all the user sees of the step.
+    code, output = generic(page, flags=("-y", *flags, "-o", str(out)))
+    assert code == 0
+    assert output.count(line) == 1
+    assert "Deleting original file" in output
+    assert len(names(out)) == 1
+
+
+@pytest.mark.parametrize(
+    ("page", "container"), [("webm.html", "mkv"), ("tiny.mp4", "webm"), ("theora.ogx", "mp4")]
+)
+def test_a_rerun_in_each_container_downloads_nothing(
+    generic: Any, out: Path, page: str, container: str
+) -> None:
+    flags = ("-y", "--video-format", container, "-o", str(out))
+    code, _ = generic(page, flags=flags)
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(f".{container}")
+    first = codecs(out / saved)
+    code, output = generic(page, flags=flags)
+    assert code == 0
+    assert names(out) == [saved]
+    assert "has already been downloaded" in output
+    assert container_steps(output) == 0
+    # The metadata step tags the file again, as on any rerun: same streams, not same bytes.
+    assert codecs(out / saved) == first
+    assert len(history_rows()) == 2
+
+
+def test_a_rerun_of_a_merge_into_webm_downloads_nothing(run: Any, out: Path) -> None:
+    # D5's merge goes through mkv, so yt-dlp has to find the .webm by final_ext.
+    code, _ = run("-y", "--video-format", "webm", "https://fake.test/merged")
+    assert code == 0
+    assert names(out) == ["Clip.webm"]
+    code, output = run("-y", "--video-format", "webm", "https://fake.test/merged")
+    assert code == 0
+    assert names(out) == ["Clip.webm"]
+    assert "has already been downloaded" in output
+    assert container_steps(output) == 0
+
+
+def test_a_rerun_under_p_downloads_nothing_and_warns_again(generic: Any, out: Path) -> None:
+    flags = ("-y", "-p", "-o", str(out))
+    code, _ = generic("webm-and-attached.html", flags=flags)
+    assert code == 0
+    saved = names(out)
+    assert [name.rsplit(".", 1)[1] for name in saved] == ["mp4", "mkv"]
+    code, output = generic("webm-and-attached.html", flags=flags)
+    assert code == 0
+    assert names(out) == saved
+    assert output.count("has already been downloaded") == 2
+    assert "Converting video from webm" not in output
+    # The item ffmpeg can't convert is tried again, and fails the same way.
+    assert output.count(t("not_converted", saved[1], "mp4")) == 1
+    assert not said_partial_result(output)
+    assert step_leftovers(out) == []
+
+
+def test_a_rerun_after_a_failed_conversion_keeps_one_file(run: Any, out: Path) -> None:
+    for _ in range(2):
+        code, output = run("-y", "https://fake.test/attached")
+        assert code == 0
+        assert names(out) == ["Clip.mkv"]
+        assert output.count(t("not_converted", "Clip.mkv", "mp4")) == 1
+        assert t("done") in output
+    assert "has already been downloaded" in output
+    assert len(history_rows()) == 2
+
+
+def test_a_failed_conversion_under_playlist_items(run: Any, out: Path) -> None:
+    code, output = run("-y", "--playlist-items", "1", "https://fake.test/attached-carousel")
+    assert code == 0
+    assert names(out) == ["01 - Clip [x1].mkv"]
+    assert output.count(t("not_converted", "01 - Clip [x1].mkv", "mp4")) == 1
+    assert not said_partial_result(output)
+    assert t("done") in output
+
+
+def test_several_urls_one_not_converted_and_one_broken(
+    media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    code, output = several(media_url, out, capfd, "attached.mkv", JUNK, "webm.html")
+    assert code == 1
+    assert names(out) == ["attached.mkv", "junk.mp4", "webm (1).mp4"]
+    # The whole line: the warning names the file, not its path.
+    assert t("not_converted", "attached.mkv", "mp4") in output.splitlines()
+    assert output.count(t("not_converted", "", "")[:4]) == 1
+    assert output.count(t("done")) == 2
+    assert t("failed", f"{media_url}/{JUNK}") in output
+    assert t("failed", f"{media_url}/attached.mkv") not in output
+    assert len(history_rows()) == 2
+
+
+@pytest.mark.parametrize("container", ["mkv", "webm"])
+def test_audio_mode_ignores_the_container(generic: Any, out: Path, container: str) -> None:
+    code, output = generic(
+        "webm.html", flags=("-y", "-a", "--video-format", container, "-o", str(out))
+    )
+    assert code == 0
+    assert names(out) == ["webm (1).mp3"]
+    assert container_steps(output) == 0
+
+
+def test_listing_formats_converts_nothing(generic: Any, home: Path) -> None:
+    code, output = generic("webm.html", flags=("-l", "--video-format", "mkv"))
+    assert code == 0
+    assert container_steps(output) == 0
+    assert list(home.rglob("*.webm")) == list(home.rglob("*.mkv")) == []
+
+
+def test_audio_named_like_a_converted_video_is_still_saved(
+    generic: Any, media_url: str, out: Path
+) -> None:
+    # The step skips a .weba, but yt-dlp still looks for tiny.mp4 first (final_ext).
+    weba = "typed/audio/webm/audio.webm/tiny.weba"
+    code, _ = generic("tiny.webm", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["tiny.mp4"]
+    code, output = generic(weba, flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert "has already been downloaded" not in output
+    [audio] = [name for name in names(out) if name.endswith(".weba")]
+    assert streams(out / audio) == {"audio"}
+    assert _source_url(out / "tiny.mp4") == f"{media_url}/tiny.webm"
+    assert len(names(out)) == 2
+
+
+def test_a_merge_in_another_container_keeps_the_earlier_file(run: Any, out: Path) -> None:
+    code, _ = run("-y", "https://fake.test/merged")
+    assert code == 0
+    before = (out / "Clip.mp4").read_bytes()
+    code, _ = run("-y", "--video-format", "webm", "https://fake.test/merged")
+    assert code == 0
+    assert names(out) == ["Clip.mp4", "Clip.webm"]
+    assert (out / "Clip.mp4").read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("page", "first", "second", "container"),
+    [
+        ("tiny.mp4", (), ("--video-format", "webm"), "webm"),
+        # A .webm saved as is: what main left behind for every single-format webm.
+        ("webm.html", ("--video-format", "webm"), (), "mp4"),
+    ],
+    ids=["mp4-then-webm", "webm-then-mp4"],
+)
+def test_another_container_keeps_the_file_an_earlier_run_saved(
+    generic: Any,
+    out: Path,
+    page: str,
+    first: tuple[str, ...],
+    second: tuple[str, ...],
+    container: str,
+) -> None:
+    code, _ = generic(page, flags=("-y", *first, "-o", str(out)))
+    assert code == 0
+    [earlier] = names(out)
+    before = codecs(out / earlier)
+    code, _ = generic(page, flags=("-y", *second, "-o", str(out)))
+    assert code == 0
+    assert (out / earlier).exists()
+    assert codecs(out / earlier) == before
+    assert any(name.endswith(f".{container}") for name in names(out))
+    # Run again in the same container: the converted file is the one already downloaded.
+    kept = names(out)
+    code, output = generic(page, flags=("-y", *second, "-o", str(out)))
+    assert code == 0
+    assert "has already been downloaded" in output
+    assert "Converting video" not in output
+    assert names(out) == kept
+
+
+@pytest.mark.parametrize(
+    "mode", [("-p",), ("--playlist-items", "1,2")], ids=["p", "playlist-items"]
+)
+def test_another_container_keeps_the_items_an_earlier_run_saved(
+    run: Any, out: Path, mode: tuple[str, ...]
+) -> None:
+    url = "https://fake.test/attached-carousel"
+    code, _ = run("-y", *mode, url)
+    assert code == 0
+    # The .mkv couldn't go into mp4, and the .mp4 already was one: both as served.
+    earlier = names(out)
+    assert earlier == ["01 - Clip [x1].mkv", "02 - Clip [v1].mp4"]
+    before = {name: codecs(out / name) for name in earlier}
+    code, output = run("-y", *mode, "--video-format", "webm", url)
+    assert code == 0
+    assert output.count("has already been downloaded") == 2
+    assert {name: codecs(out / name) for name in earlier} == before
+    assert sorted(set(names(out)) - set(earlier)) == ["01 - Clip [x1].webm", "02 - Clip [v1].webm"]
+
+
+# Spec 30, round 2: what the container step deletes when yt-dlp reuses a file.
+
+
+def video_format(output: str) -> str:
+    """The --video-format of the one equivalent command a run printed (mp4 when left out)."""
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert "-y" in argv
+    return argv[argv.index("--video-format") + 1] if "--video-format" in argv else "mp4"
+
+
+def test_a_third_container_keeps_both_earlier_files(generic: Any, out: Path) -> None:
+    containers = ["mp4", "webm", "mkv"]
+    for container in containers:
+        code, output = generic(
+            "tiny.mp4", flags=("-y", "--video-format", container, "-o", str(out))
+        )
+        assert code == 0
+        assert t("done") in output
+        assert "Deleting original file" not in output
+        assert video_format(output) == container
+    assert names(out) == ["tiny.mkv", "tiny.mp4", "tiny.webm"]
+    assert codecs(out / "tiny.mp4") == codecs(out / "tiny.mkv") == {"video": "h264", "audio": "aac"}
+    assert codecs(out / "tiny.webm")["video"] in {"vp8", "vp9", "av1"}
+    # Each container again: its own file is the one already downloaded, and nothing converts.
+    for container in containers:
+        code, output = generic(
+            "tiny.mp4", flags=("-y", "--video-format", container, "-o", str(out))
+        )
+        assert code == 0
+        assert "has already been downloaded" in output
+        assert container_steps(output) == 0
+        assert t("done") in output
+    assert names(out) == ["tiny.mkv", "tiny.mp4", "tiny.webm"]
+    assert len(history_rows()) == 6
+
+
+def test_a_failed_conversion_leaves_an_earlier_file_whole(run: Any, out: Path) -> None:
+    url = "https://fake.test/attached"
+    code, _ = run("-y", "--video-format", "mkv", url)
+    assert code == 0
+    assert names(out) == ["Clip.mkv"]
+    assert streams(out / "Clip.mkv") == {"video", "audio", "attachment"}
+    code, output = run("-y", url)
+    assert code == 0
+    assert "has already been downloaded" in output
+    assert output.count(t("not_converted", "Clip.mkv", "mp4")) == 1
+    assert t("done") in output
+    assert names(out) == ["Clip.mkv"]
+    assert streams(out / "Clip.mkv") == {"video", "audio", "attachment"}
+    assert step_leftovers(out) == []
+    # Into a container that takes it, the earlier file stays next to the conversion.
+    code, output = run("-y", "--video-format", "webm", url)
+    assert code == 0
+    assert never_said("not_converted", output)
+    assert names(out) == ["Clip.mkv", "Clip.webm"]
+    assert streams(out / "Clip.mkv") == {"video", "audio", "attachment"}
+    assert len(history_rows()) == 3
+
+
+@pytest.mark.parametrize(
+    "left", [["Clip.fv.mp4"], ["Clip.fa.mp4", "Clip.fv.mp4"]], ids=["video-stream", "both-streams"]
+)
+def test_a_merge_that_reuses_a_stream_file_is_replaced_by_its_conversion(
+    run: Any, media_url: str, out: Path, left: list[str]
+) -> None:
+    # yt-dlp counts the merge as this run's download, even when it reused every stream.
+    out.mkdir(parents=True)
+    with urllib.request.urlopen(f"{media_url}/tiny.mp4") as response:
+        body = response.read()
+    for name in left:
+        (out / name).write_bytes(body)
+    code, output = run("-y", "--video-format", "webm", "https://fake.test/merged")
+    assert code == 0
+    assert output.count("has already been downloaded") == len(left)
+    assert names(out) == ["Clip.webm"]
+    found = codecs(out / "Clip.webm")
+    assert found["video"] in {"vp8", "vp9", "av1"}
+    assert found["audio"] in {"vorbis", "opus"}
+    assert t("done") in output
+
+
+def test_a_resumed_download_is_replaced_by_its_conversion(
+    generic: Any, media_url: str, out: Path
+) -> None:
+    out.mkdir(parents=True)
+    with urllib.request.urlopen(f"{media_url}/tiny.webm") as response:
+        body = response.read()
+    (out / "tiny.webm.part").write_bytes(body[: len(body) // 2])
+    code, output = generic("tiny.webm", flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["tiny.mp4"]
+    assert codecs(out / "tiny.mp4") == {"video": "h264", "audio": "aac"}
+    assert "Deleting original file" in output
+    assert t("done") in output
+
+
+def test_several_urls_into_a_folder_with_earlier_files(
+    media_url: str, out: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    code, _ = several(media_url, out, capfd, "tiny.mp4", "webm.html")
+    assert code == 0
+    assert names(out) == ["tiny.mp4", "webm (1).mp4"]
+    urls = [f"{media_url}/tiny.mp4", f"{media_url}/webm.html"]
+    code = cli.main(["-y", "--video-format", "mkv", "-o", str(out), *urls])
+    captured = capfd.readouterr()
+    output = captured.out + captured.err
+    assert code == 0
+    assert output.count(t("done")) == 2
+    # tiny.mp4 is reused and kept. The page's .webm went into its mp4, so it comes again,
+    # and only that fresh download gives way to its conversion.
+    assert output.count("has already been downloaded") == 1
+    assert output.count("Deleting original file") == 1
+    assert names(out) == ["tiny.mkv", "tiny.mp4", "webm (1).mkv", "webm (1).mp4"]
+    assert video_format(output) == "mkv"
+    assert len(history_rows()) == 4
+
+
+def test_wizard_into_a_folder_with_an_earlier_file(generic: Any, out: Path) -> None:
+    code, _ = generic("tiny.mp4", flags=("-y", "-o", str(out)))
+    assert code == 0
+    flags = ("-i", "--video-format", "webm", "-o", str(out))
+    code, output = generic("tiny.mp4", *SINGLE_WALK, flags=flags)
+    assert code == 0
+    assert f"{wizard._summary_label('container')}: webm" in output
+    assert "has already been downloaded" in output
+    assert names(out) == ["tiny.mp4", "tiny.webm"]
+    assert codecs(out / "tiny.mp4") == {"video": "h264", "audio": "aac"}
+    assert video_format(output) == "webm"
+    assert len(history_rows()) == 2

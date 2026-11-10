@@ -61,6 +61,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
             "{}: guardado, pero ffmpeg no pudo escribir sus metadatos, así que al repetir la "
             "descarga no se reconocerá y puede guardarse otra copia."
         ),
+        "not_converted": "{}: no se pudo convertir a {}; se conserva tal como se descargó.",
         "no_cover": "{}: guardado sin imagen de portada.",
         "failed": "Falló la descarga: {}",
         "output_unusable": "No se puede guardar en {}: {}. Elige otra carpeta con -o.",
@@ -161,6 +162,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
             "{}: saved, but ffmpeg couldn't write its metadata, so a rerun won't recognize it "
             "and may save another copy."
         ),
+        "not_converted": "{}: couldn't be converted to {}; it's kept as downloaded.",
         "no_cover": "{}: saved without a cover image.",
         "failed": "Download failed: {}",
         "output_unusable": "Can't save to {}: {}. Choose another folder with -o.",

@@ -391,6 +391,8 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         warn(t("subs_not_embedded", name))
     for name in result.untagged:
         warn(t("untagged", name))
+    for name in result.not_converted:
+        warn(t("not_converted", name, effective.video_format))
     for name in result.no_cover:
         warn(t("no_cover", name))
     if result.subs_missing:

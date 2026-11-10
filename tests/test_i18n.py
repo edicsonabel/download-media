@@ -34,3 +34,11 @@ def test_carousel_image_messages() -> None:
             _MESSAGES[lang]
         )
         assert not {"ig_image_warning", "ask_selection_default_videos"} & set(_MESSAGES[lang])
+
+
+def test_not_converted_names_the_file_and_the_container() -> None:
+    # Spec 30 D3: the user learns which file stayed as it was, and what it didn't become.
+    for lang in ("es", "en"):
+        said = _MESSAGES[lang]["not_converted"].format("Clip.mkv", "webm")
+        assert "Clip.mkv" in said
+        assert "webm" in said
