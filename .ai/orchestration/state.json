@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:06:03-04:00",
+  "updated": "2026-11-10T01:06:22-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2510,6 +2510,27 @@
           "result": "done",
           "at": "2026-11-10T00:46:00-04:00",
           "note": "Four commits: D1-D3 entry() and interrupted line; D4/D5 exit 1 (52 cases in 23 functions flip 0 to 1, named in 67d5e21); D6 messages; README/AGENTS docs. Gate exit 0 at 86a9e76, 2096 passed + 2 xfailed. Revert proofs per commit. Console: Ctrl-C at prompt and mid-download, es and en, no traceback, returncode -2. AGENTS.md stack line updated to cli:entry. Planner: row 46 to Ctrl-C leftovers; 0.4.0 review items."
+        }
+      ]
+    },
+    "fix/subs-failures": {
+      "type": "fix",
+      "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/36-subs-failures.md",
+      "branch": "fix/subs-failures",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T01:06:22-04:00",
+          "note": "Next P2 in PLAN.md's order after cancel-exits, under the human's overnight delegation. Spec written in parallel."
         }
       ]
     }
