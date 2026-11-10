@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T23:09:24-04:00",
+  "updated": "2026-11-09T23:25:56-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2230,7 +2230,8 @@
         "c6ed880",
         "29e4302",
         "597d135",
-        "4360f86"
+        "4360f86",
+        "3a7fdd7"
       ],
       "review": {
         "approved": true,
@@ -2303,6 +2304,13 @@
           "result": "approved",
           "at": "2026-11-09T23:09:24-04:00",
           "note": "Human: fix QA minor 1 first (ffprobe failure must not skip the conversion silently; warn with the existing not_converted), then merge and push. Minors 2 and 3 go to the planner or stay. Departures accepted, including 'tiny [tiny].jpg'."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-09T23:25:56-04:00",
+          "note": "QA minor 1 fixed in 3a7fdd7: _has_media_streams returns None when ffprobe can't answer; the step warns not_converted straight away (no conversion, nothing deleted). Junk body still fails. 4 e2e cases fail without it. Gate exit 0, 2169 passed + 2 xfailed. Developer soft-reset an unreviewed, unpushed 683ce45 into 3a7fdd7. Open question: under -p a junk item ffprobe can't read stays in not_converted after failing."
         }
       ]
     }
