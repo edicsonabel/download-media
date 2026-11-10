@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T00:53:45-04:00",
+  "updated": "2026-11-10T01:06:03-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2371,14 +2371,15 @@
     "fix/m4a-cover": {
       "type": "fix",
       "title": "Stop -a -f m4a losing its cover image",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/41-m4a-cover.md",
       "branch": "fix/m4a-cover",
       "worktree": ".worktrees/fix-m4a-cover",
       "commits": [
-        "9f32301"
+        "9f32301",
+        "91dca9b"
       ],
       "review": null,
       "history": [
@@ -2409,6 +2410,13 @@
           "result": "approved",
           "at": "2026-11-10T00:53:45-04:00",
           "note": "container-choice merged (09075a2); development starts from main with spec 30's code in place."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T01:06:03-04:00",
+          "note": "91dca9b: _TagSource before _EmbedCover. Gate exit 0, 2205 passed + 4 xfailed. 3 e2e and 3 order cases fail without it. Real runs: m4a keeps cover and tags, rerun one cover, mp3 ID3v2.3, m4a holding video keeps cover only, video mkv/mp4 unchanged. Mutagen runs left to the test-engineer (spec D4)."
         }
       ]
     },
