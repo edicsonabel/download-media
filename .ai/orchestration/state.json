@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T23:58:25-04:00",
+  "updated": "2026-11-10T00:02:18-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2372,13 +2372,15 @@
     "fix/cookies-undecrypted": {
       "type": "fix",
       "title": "Say so when the browser's cookies load but none decrypt",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/67-cookies-undecrypted.md",
       "branch": "fix/cookies-undecrypted",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-cookies-undecrypted",
+      "commits": [
+        "24354d6"
+      ],
       "review": null,
       "history": [
         {
@@ -2387,6 +2389,41 @@
           "result": "approved",
           "at": "2026-11-09T23:40:00-04:00",
           "note": "Next P2 in PLAN.md's order, under the human's overnight delegation. Spec written in parallel; development waits its turn."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T00:02:18-04:00",
+          "note": "Spec 24354d6, PLAN row 67 to spec. Reproduced on c6e306c in every mode (R1-R15). Rule: after a load with no error, a jar with no cookie value is a cookie failure; yt-dlp's count and warnings can't settle it. Wrong-key junk values on large profiles (~0.3-0.8% per short cookie) out of scope; upstream unpad_pkcs7. Prototype 31 lines, 2 expected flips. D1-D5. Planner: upstream issue for row 64; partial decryption stays silent; hint lists +basictext after a failed +basictext."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T00:02:18-04:00",
+          "note": "Spec approved under the human's overnight delegation, every recommended option (D1 jar rule, D2 empty database gets cookies_no_browser, D3 keyring hint even with a named keyring, D4 reuse cookies_unreadable with a new reason key, D5 same outcome as specs 26/45/50). Not breaking; one new message key. 0.4.0 review list: five behaviour changes in the spec's SemVer section. Development starts in its own worktree now; it touches only load_browser_cookies, merges after container-choice."
+        }
+      ]
+    },
+    "fix/cancel-exits": {
+      "type": "fix",
+      "title": "Catch Ctrl-C and settle cancel and refusal exit codes and wording",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/23-cancel-exits.md",
+      "branch": "fix/cancel-exits",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T00:02:18-04:00",
+          "note": "Next P2 in PLAN.md's order, under the human's overnight delegation. Spec written in parallel."
         }
       ]
     }
