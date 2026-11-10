@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T08:08:20-04:00",
+  "updated": "2026-11-10T08:37:14-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3189,17 +3189,23 @@
     "fix/failure-leftovers": {
       "type": "fix",
       "title": "Remove what a failed or interrupted download leaves",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/46-failure-leftovers.md",
       "branch": "fix/failure-leftovers",
       "worktree": ".worktrees/fix-failure-leftovers",
       "commits": [
         "1a4e349",
-        "e829fbd"
+        "e829fbd",
+        "e9b7044"
       ],
-      "review": null,
+      "review": {
+        "approved": false,
+        "findings": [
+          "medium downloader.py drop_media + build_ydl_opts (-a sets no final_ext): a failed -a rerun deletes the .mp3 an earlier run saved (extraction overwrites it; __real_download covers only the source). Strict xfail test_a_failed_rerun_keeps_the_audio_an_earlier_run_saved[single|-p] (failure injected in _TagSource)"
+        ]
+      },
       "history": [
         {
           "stage": "planning",
@@ -3228,6 +3234,13 @@
           "result": "done",
           "at": "2026-11-10T08:08:20-04:00",
           "note": "e829fbd: ignoreerrors 'only_download' under -p/--playlist-items; _Ydl.drop_media deletes a failed item's file only when __real_download, on failed count or DownloadError (not KeyboardInterrupt). A failed step ends only its item; counts, warnings, cookie fallback unchanged. Strict xfail flipped; six pinning tests updated. Reverting fails 25/29; each half alone and guard mutants caught. Gate exit 0, 2942 passed + 13 xfailed. Planner: repeated_errors likely dead under -p; two stale test comments."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-10T08:37:14-04:00",
+          "note": "Round 1. Gate exit 0 at e9b7044, 2958 passed + 15 xfailed. Many guards held (earlier files byte for byte, container step, merges, Ctrl-C, unexpected errors, multi-URL, wizard, counts and warnings). Mutation 9/9. One medium finding, reachable today only via an injected _TagSource failure, but breaks 'never delete an earlier run's file'. Four stale comments reworded."
         }
       ]
     }
