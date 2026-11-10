@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:24:17-04:00",
+  "updated": "2026-11-10T04:32:02-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2754,19 +2754,20 @@
     "fix/kind-edges": {
       "type": "fix",
       "title": "Close the remaining media-kind edge cases",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/37-kind-edges.md",
       "branch": "fix/kind-edges",
-      "worktree": ".worktrees/fix-kind-edges",
+      "worktree": null,
       "commits": [
         "5123f99",
         "1f852cc",
         "ae4adf9",
         "ec60e65",
         "ad5a4fe",
-        "8930354"
+        "8930354",
+        "16d88f6"
       ],
       "review": {
         "approved": true,
@@ -2835,6 +2836,13 @@
           "result": "merged",
           "at": "2026-11-10T04:24:17-04:00",
           "note": "Merged as 8930354, clean. Gate exit 0, 2440 passed + 11 xfailed es/en. Undo: git revert -m 1 8930354. Pushed by the orchestrator under the delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T04:32:02-04:00",
+          "note": "Criteria hold on main: 208 criteria tests pass; R1 (storyboard stub, en/es), R2 (uppercase extensions), R3 (video declared in <audio>) reproduced fixed with the real console script; -y unchanged. Spec done with deviations and xfails recorded; PLAN row 37 done; review items 34-37 with the three human flags. CI on e26115d pending at validation. Worktree and branch removed."
         }
       ]
     },
