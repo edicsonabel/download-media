@@ -3000,7 +3000,7 @@
           "agent": "architect",
           "result": "validated",
           "at": "2026-11-10T09:03:26-04:00",
-          "note": "Criteria hold: 544 targeted tests pass; real InstagramIE on canned answers: logged-in saves one 96x120 jpg in -y/-p/mkv/preview, rerun no copy, -a exit 1, -l exit 0, logged-out hint, wizard flows. D1 cost measured: an extractor returning an upcoming stream with no formats and a thumbnail (no raise) now saves Stream [s1].jpg, exit 0. Carousel preview shows title/channel, no ERROR: row 63 recommended closed. Spec done; live check command written for the human; PLAN row 61 done, review items 50-56 with D1 first. Worktree and branch removed. CI on b385d4c pending at validation."
+          "note": "Criteria hold: 544 targeted tests pass; real InstagramIE on canned answers: logged-in saves one 96x120 jpg in -y/-p/mkv/preview, rerun no copy, -a exit 1, -l exit 0, logged-out hint, wizard flows. D1 cost measured: an extractor returning an upcoming stream with no formats and a thumbnail (no raise) now saves Stream [s1].jpg, exit 0. Carousel preview shows title/channel, no ERROR: row 63 recommended closed. Spec done; live check command written for the human; PLAN row 61 done, review items 50-56 with D1 first. Worktree and branch removed. CI on b385d4c pending at validation. CI run 42819751344 on b385d4c succeeded (attempt 1)."
         }
       ]
     },
