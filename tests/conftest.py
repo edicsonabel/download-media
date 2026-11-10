@@ -334,6 +334,11 @@ def _write_generic_pages(root: Path, base: str) -> None:
         # ffmpeg can't write tags to an .oga holding a video, and can't read a text body at all.
         # The container step skips the .oga: yt-dlp lists it as audio.
         "oga-and-mp4": f'<video src="{OGA_VIDEO}"></video><video src="tiny.mp4"></video>',
+        # Two untaggable items that save, around one that fails.
+        "oga-junk-oga": (
+            f'<video src="{OGA_VIDEO}"></video><video src="{JUNK}"></video>'
+            '<video src="typed/audio/ogg/tiny.mp4/clip-2.oga"></video>'
+        ),
         # A video the container step converts, and one ffmpeg can't put in an mp4.
         "webm-and-attached": '<video src="tiny.webm"></video><video src="attached.mkv"></video>',
         "junk-and-mp4": f'<video src="{JUNK}"></video><video src="tiny.mp4"></video>',
@@ -1113,6 +1118,20 @@ class FakeSiteIE(InfoExtractor):
         if page == "subs-junk-ttml-carousel":  # As subs-junk-carousel, plus a TTML track.
             tracks = self._tracks(en="en.vtt", es="en.ttml")
             entries = [{**self._video("s1", path=JUNK), "subtitles": tracks}, self._video("s2")]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-ttml-first-carousel":  # Item 1's TTML can't be embedded, item 2 plain.
+            # Their own ids, so a run after subs-junk-ttml-carousel doesn't take its files.
+            entries = [{**self._video("t1"), "subtitles": self._tracks(en="en.ttml")}]
+            return self.playlist_result([*entries, self._video("t2")], "post", "Post")
+        if page == "subs-ttml-around-junk-carousel":  # TTML on all three; item 2 a junk body.
+            ttml = {"subtitles": self._tracks(en="en.ttml")}
+            # Two tracks: ffprobe reads one subtitle stream in the junk, fewer than its files.
+            junk = {"subtitles": self._tracks(en="en.vtt", es="en.ttml")}
+            entries = [
+                {**self._video("s1"), **ttml},
+                {**self._video("s2", path=JUNK), **junk},
+                {**self._video("s3"), **ttml},
+            ]
             return self.playlist_result(entries, "post", "Post")
         if page == "subs-garbage-carousel":  # Item 1's subtitle holds no text, item 2's does.
             entries = [

@@ -28,6 +28,7 @@ from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
 from download_media.cookies import CookieFailure, ydl_cookies
 from download_media.downloader import (
     CookiesUnavailable,
+    _EmbedSubtitles,
     _source_url,
     _TagSource,
     _Ydl,
@@ -9887,6 +9888,194 @@ def test_subs_none_counts_only_saved_items(run: Any, out: Path, flags: tuple[str
     assert t("partial_result", 1, 2, 0, 1) in output
     assert output.count(t("subs_none", "es,en")) == 1
     assert [name for name in names(out) if ".vtt" in name] == []
+
+
+def said_in_order(output: str, *lines: str) -> bool:
+    """Whether each line shows up exactly once, in this order."""
+    if any(output.count(line) != 1 for line in lines):
+        return False
+    return [output.index(line) for line in lines] == sorted(output.index(line) for line in lines)
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+@pytest.mark.parametrize(
+    "flags", [("-p",), ("--playlist-items", "1-3")], ids=["-p", "--playlist-items"]
+)
+def test_untagged_names_each_saved_item_once_around_a_failed_one(
+    generic: Any, out: Path, monkeypatch: pytest.MonkeyPatch, flags: tuple[str, ...], lang: str
+) -> None:
+    # Each saved item adds its own name: one that replaced the earlier names, or kept the
+    # failed item's, would drop a name or add one.
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output = generic("oga-junk-oga.html", flags=("-y", *flags, "-o", str(out)))
+    first, junk, last = (f"0{n} - oga-junk-oga ({n}) [oga-junk-oga-{n}]" for n in (1, 2, 3))
+    assert code == 0
+    assert t("partial_result", 2, 3, 0, 1) in output
+    assert said_in_order(output, t("untagged", f"{first}.oga"), t("untagged", f"{last}.oga"))
+    assert untagged_warnings(output) == 2
+    assert t("untagged", f"{junk}.mp4") not in output
+    # The count line's two saved items are the two files named.
+    assert [name for name in names(out) if name.endswith(".oga")] == [f"{first}.oga", f"{last}.oga"]
+    assert t("done") in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "ext"),
+    [
+        (("-p",), "mp4"),
+        (("--playlist-items", "1-3"), "mp4"),
+        (("-p", "--video-format", "mkv"), "mkv"),
+        (("-p", "--video-format", "webm"), "webm"),
+    ],
+    ids=["-p", "--playlist-items", "mkv", "webm"],
+)
+def test_not_embedded_names_each_saved_item_once_around_a_failed_one(
+    run: Any, out: Path, flags: tuple[str, ...], ext: str
+) -> None:
+    # Every item has a TTML track ffmpeg can't read; item 2's body is junk, so it fails.
+    code, output = run("-y", "-s", *flags, "https://fake.test/subs-ttml-around-junk-carousel")
+    first, junk, last = (f"0{n} - Clip [s{n}]" for n in (1, 2, 3))
+    assert code == 0
+    assert t("partial_result", 2, 3, 0, 1) in output
+    lines = (t("subs_not_embedded", f"{first}.{ext}"), t("subs_not_embedded", f"{last}.{ext}"))
+    assert said_in_order(output, *lines)
+    assert output.count(t("subs_not_embedded", "")) == 2
+    assert t("subs_not_embedded", f"{junk}.mp4") not in output
+    # The saved items kept their tracks as files, as the line says; the failed one's are gone.
+    assert [n for n in names(out) if ".ttml" in n] == [f"{first}.en.ttml", f"{last}.en.ttml"]
+    assert [n for n in names(out) if ".vtt" in n] == []
+    assert never_said("subs_none", output)
+
+
+@pytest.mark.parametrize("retry", ["saves", "fails"])
+def test_an_untagged_name_belongs_to_the_last_try_of_its_item(
+    generic: Any, out: Path, monkeypatch: pytest.MonkeyPatch, retry: str
+) -> None:
+    # The metadata step notes item 1 as untagged, then the item raises: ReExtractInfo runs it
+    # again, and any other exception fails it before the post hooks. A name from an earlier
+    # try, or from a failed item, must not reach the next item's post hook.
+    tag = _TagSource.run
+    tries: list[str] = []
+
+    def step(self: Any, info: dict[str, Any]) -> Any:
+        result = tag(self, info)
+        if info.get("id") == "oga-and-mp4-1":
+            tries.append("1")
+            if len(tries) == 1:
+                raise ReExtractInfo("the stream needs to be re-extracted", expected=True)
+            if retry == "fails":
+                raise KeyError("streams")
+        return result
+
+    monkeypatch.setattr(_TagSource, "run", step)
+    code, output = generic("oga-and-mp4.html", flags=("-y", "-p", "-o", str(out)))
+    oga = "01 - oga-and-mp4 (1) [oga-and-mp4-1].oga"
+    assert code == 0
+    assert tries == ["1", "1"]
+    assert t("done") in output
+    if retry == "saves":
+        assert output.count(t("untagged", oga)) == 1
+        assert untagged_warnings(output) == 1
+        assert not said_partial_result(output)
+    else:
+        assert t("partial_result", 1, 2, 0, 1) in output
+        assert never_said("untagged", output)
+
+
+@pytest.mark.parametrize("retry", ["saves", "fails"])
+def test_a_not_embedded_name_and_a_subtitle_belong_to_the_last_try_of_their_item(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, retry: str
+) -> None:
+    # As above, on the embed step: item 1 got a subtitle file it couldn't embed, item 2 none.
+    embed = _EmbedSubtitles.run
+    tries: list[str] = []
+
+    def step(self: Any, info: dict[str, Any]) -> Any:
+        result = embed(self, info)
+        if info.get("id") == "t1":
+            tries.append("t1")
+            if len(tries) == 1:
+                raise ReExtractInfo("the stream needs to be re-extracted", expected=True)
+            if retry == "fails":
+                raise KeyError("streams")
+        return result
+
+    monkeypatch.setattr(_EmbedSubtitles, "run", step)
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-ttml-first-carousel")
+    assert code == 0
+    assert tries == ["t1", "t1"]
+    assert t("done") in output
+    if retry == "saves":
+        assert output.count(t("subs_not_embedded", "01 - Clip [t1].mp4")) == 1
+        assert output.count(t("subs_not_embedded", "")) == 1
+        assert never_said("subs_none", output)
+        assert not said_partial_result(output)
+    else:
+        assert t("partial_result", 1, 2, 0, 1) in output
+        assert never_said("subs_not_embedded", output)
+        # Item 2, the one saved, got no subtitle: item 1's must not count for it.
+        assert output.count(t("subs_none", "es,en")) == 1
+        assert [name for name in names(out) if ".ttml" in name] == []
+
+
+def test_wizard_names_only_saved_items(run: Any, out: Path, answers: Any) -> None:
+    prompts = answers(*PICKER_WALK)
+    code, output = run("-i", "-s", "https://fake.test/subs-junk-ttml-carousel")
+    assert len(prompts) == len(PICKER_WALK)
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert never_said("subs_not_embedded", output)
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert "02 - Clip [s2].mp4" in names(out)
+
+
+def test_each_url_names_only_its_own_saved_items(run: Any, out: Path) -> None:
+    # One result per URL: the first URL's failed item, and its subtitle, stay out of the
+    # second's lines, and the second's name stays out of the first's.
+    first, second = "subs-junk-ttml-carousel", "subs-ttml-first-carousel"
+    code, output = run("-y", "-p", "-s", *(f"https://fake.test/{page}" for page in (first, second)))
+    assert code == 0
+    assert output.count(t("partial_result", 1, 2, 0, 1)) == 1
+    [line] = [line for line in output.splitlines() if t("subs_not_embedded", "") in line]
+    assert t("subs_not_embedded", "01 - Clip [t1].mp4") in line
+    # Said for the first URL only, and before the second one's line.
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert output.index(t("subs_none", "es,en")) < output.index(line)
+
+
+@pytest.mark.parametrize(
+    ("flags", "page"),
+    [(("-p",), "subs-junk"), (("--playlist-items", "1"), "subs-junk-ttml-carousel")],
+    ids=["-p", "--playlist-items"],
+)
+def test_a_list_where_every_item_failed_names_nothing(
+    run: Any, out: Path, flags: tuple[str, ...], page: str
+) -> None:
+    # The failed item noted a subtitle, and a track it couldn't embed: no result, no lines.
+    url = f"https://fake.test/{page}"
+    code, output = run("-y", "-s", *flags, url)
+    assert code == 1
+    assert t("failed", url) in output
+    for key in ("subs_none", "subs_not_embedded", "untagged", "partial_result", "done"):
+        assert never_said(key, output)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="pre-existing, out of fix/untagged-per-item: the embed step rewrites a failed "
+    "item's junk body into an mp4 holding only a subtitle stream, and a rerun finds it "
+    "already downloaded, tags it and counts it as saved (planner row, with row 46)",
+)
+@pytest.mark.parametrize("subs", [("-s",), ()], ids=["-s", "no-subs"])
+def test_a_rerun_does_not_take_a_failed_item_as_saved(
+    run: Any, out: Path, subs: tuple[str, ...]
+) -> None:
+    url = "https://fake.test/subs-junk-carousel"
+    code, output = run("-y", "-p", "-s", url)
+    assert t("partial_result", 1, 2, 0, 1) in output
+    code, output = run("-y", "-p", *subs, url)
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
 
 
 @pytest.mark.parametrize(
