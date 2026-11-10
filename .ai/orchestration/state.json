@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T23:25:56-04:00",
+  "updated": "2026-11-09T23:26:53-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2311,6 +2311,27 @@
           "result": "done",
           "at": "2026-11-09T23:25:56-04:00",
           "note": "QA minor 1 fixed in 3a7fdd7: _has_media_streams returns None when ffprobe can't answer; the step warns not_converted straight away (no conversion, nothing deleted). Junk body still fails. 4 e2e cases fail without it. Gate exit 0, 2169 passed + 2 xfailed. Developer soft-reset an unreviewed, unpushed 683ce45 into 3a7fdd7. Open question: under -p a junk item ffprobe can't read stays in not_converted after failing."
+        }
+      ]
+    },
+    "fix/m4a-cover": {
+      "type": "fix",
+      "title": "Stop -a -f m4a losing its cover image",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/41-m4a-cover.md",
+      "branch": "fix/m4a-cover",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-09T23:26:53-04:00",
+          "note": "Next P2 in PLAN.md's order, started under the human's overnight delegation: 'Voy a dormir, sigue trabajando y haz lo que más puedas de las features'. Spec written while container-choice finishes; development starts after container-choice merges, since both touch downloader.py's post-processors."
         }
       ]
     }
