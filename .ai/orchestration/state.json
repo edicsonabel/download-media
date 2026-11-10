@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:56:02-04:00",
+  "updated": "2026-11-10T02:00:12-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2379,9 +2379,9 @@
     "fix/m4a-cover": {
       "type": "fix",
       "title": "Stop -a -f m4a losing its cover image",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/41-m4a-cover.md",
       "branch": "fix/m4a-cover",
       "worktree": ".worktrees/fix-m4a-cover",
@@ -2392,7 +2392,10 @@
       ],
       "review": {
         "approved": true,
-        "findings": []
+        "findings": [
+          "minor spec 41 D3: mp3 date goes from TDRC=20261110 (v2.4) to TYER=2026 (v2.3), losing month and day; text Latin-1/UTF-16 instead of UTF-8; review-list wording must say so",
+          "minor tests/test_downloader.py:507 stale comment on step order"
+        ]
       },
       "history": [
         {
@@ -2436,6 +2439,20 @@
           "result": "done",
           "at": "2026-11-10T01:33:51-04:00",
           "note": "No bugs. D4 mutagen runs match the spec table cell for cell (mutagen in a scratch --target, deleted). 16 tests in 4ecd8fe, all m4a cases fail without the fix. Mutation 9/9. Gate exit 0 at 4ecd8fe, 2227 passed + 4 xfailed. Planner (rows 43/48): with mutagen, opus with a broken thumbnail is silent on main too, and now keeps the junk as a picture block."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-10T02:00:12-04:00",
+          "note": "Gate exit 0 at 4ecd8fe, 2227 passed + 4 xfailed. Clean merge-tree with main (cookies-undecrypted). Revert fails 11 fix tests. Real runs es/en across formats, thumbnails, reruns, RSS carousel -p, wizard, video modes: 72 files match. Two minors."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T02:00:12-04:00",
+          "note": "Merge under the delegation. D3's date loss accepted for now (it is what yt-dlp's CLI writes; keeping v2.4 would mean re-implementing the cover step), flagged at the top of spec 41's review items for the human; the architect corrects the wording at validation. Test-engineer fixes the stale comment first (tests only)."
         }
       ]
     },
