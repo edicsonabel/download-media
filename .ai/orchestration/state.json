@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:50:52-04:00",
+  "updated": "2026-11-10T01:51:12-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2650,6 +2650,27 @@
           "result": "approved",
           "at": "2026-11-10T01:50:52-04:00",
           "note": "Spec approved under the human's overnight delegation, every recommended option (D1 A pass storyboard-only to yt-dlp, D2 A any-case extensions with .M4A as a possible video container, D3 A extend spec 27's type step to HTML5MediaEmbed formats with a video extension and no codec). Flagged for the human: D2 reverses spec 27's f2ceff7 for .M4A (real uppercase .M4A audio needs '2' for mp3); D3 narrows by extractor_key, which spec 27 D1 C had rejected as the sole test. Wizard-only changes, four review items. Development after cancel-exits merges (shared refusal-test parameter lists)."
+        }
+      ]
+    },
+    "feature/ig-lone-images": {
+      "type": "feature",
+      "title": "Save a lone Instagram image post when cookies are given",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/61-ig-lone-images.md",
+      "branch": "feature/ig-lone-images",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T01:51:12-04:00",
+          "note": "First P2 feature in PLAN.md's order, under the human's overnight delegation ('haz lo que más puedas de las features'). Spec written in parallel; development waits its turn."
         }
       ]
     }
