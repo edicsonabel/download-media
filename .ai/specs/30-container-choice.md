@@ -1,9 +1,9 @@
 # 30 — Make the container choice hold on single-format sources
 
-Status: draft
+Status: done
 Item: `fix/container-choice`
 
-> **For the human: D1 is the remux-or-recode call this row has waited on.** The recommendation is C: yt-dlp's remux for mkv, yt-dlp's recode for mp4 and webm, each applied only to what the tool calls video. It rests on measurements, not on reading: every option below was run on loopback with the real yt-dlp and ffmpeg, and on one real page. D2 to D7 follow from it. **Published behaviour changes** (see SemVer): the default mp4 now re-encodes a single-format `.webm`, `.ogv`, `.flv`, `.ogx` and other non-mp4 videos to H.264/AAC, which costs time and a little quality, and `--video-format mkv` and `webm` now always give that extension. No flag, default value or path changes, so it isn't breaking by `AGENTS.md`'s list, but D7 asks you to confirm that reading. It doesn't hold up 0.4.0.
+> **Approved by the human:** D1 C, D2 B, D3 A, D4 A, D5 A, D6 A, D7 A. yt-dlp's remux for mkv and its recode for mp4 and webm, each applied only to what the tool calls video; not breaking. **For the 0.4.0 review list** (see SemVer): the default mp4 now re-encodes a single-format `.webm`, `.ogv`, `.flv`, `.ogx` and other non-mp4 videos to H.264/AAC, which costs time and a little quality, and `--video-format mkv` and `webm` now always give that extension. Review added behaviour the Design didn't have; see Validation, "What changed after approval".
 
 ## Problem
 
@@ -221,6 +221,8 @@ Written for the recommended option of each decision.
    - Both take the container as yt-dlp's `preferedformat` and a `not_converted: list[str]`. Their `run`: return `[], info` untouched, and silently, when `not _converts(info)` or when the file is already in the container. yt-dlp's own skip prints `[VideoConvertor] Not converting media file "…"; already is in target format mp4`, measured on every merged mp4: that would add a line to nearly every default download. Otherwise note the target path (`replace_extension(filepath, target, ext)` with `target` from `resolve_mapping`) and whether it existed, and call yt-dlp's `run`. On `PostProcessingError`: remove the target if this step created it, then do what `_TagSource` does (`downloader.py:560-571`): if `_has_media_streams(info["filepath"])` is false, re-raise (a junk body is still a failed download); otherwise append the file's name to `not_converted` and return `[], info`.
    - Keep yt-dlp's `run`, its mapping and its conversion messages (`Converting video …`, `Remuxing video …`, `Deleting original file …`). Nothing re-implements the ffmpeg call.
 
+   Amended in development and review: the ffprobe check runs **before** converting, not only after a failure (ffmpeg reads a text body as a subtitle track and converts it into a file that passes for saved). ffprobe unable to answer keeps the file and names it in `not_converted`. Names go on the current item and count only if it's saved. The original is deleted only when this run downloaded it (`__real_download`). See Validation, "What changed after approval".
+
 3. **`download()`** adds the step in video mode, right after `ydl.add_post_hook(keep)` and before `_EmbedCover` and `_TagSource` (`downloader.py:665-669`), so the file is tagged and gets its subtitles in its final container: `ydl.add_post_processor(_RemuxTo(...) if fmt == "mkv" else _RecodeTo(...), when="post_process")`. `DownloadResult` gains `not_converted: tuple[str, ...] = ()`.
 
 4. **`build_ydl_opts`, video branch:**
@@ -229,6 +231,8 @@ Written for the recommended option of each decision.
    - `postprocessors` stays `[]`: the step needs `not_converted`, so `download()` adds it, as it adds `_TagSource`.
 
 5. **`_AvoidNameClash`** takes the container as well (for example `_AvoidNameClash(final_ext, container=...)`), and checks `path.with_suffix(f".{container}")` when there's no audio `final_ext` and `_converts(info)`. Otherwise a second video with the same title overwrites the first (Findings). Pass `opts.video_format`, never `merge_output_format`: under D5 that is `webm/mkv`, and a prototype that read it ended every `-s --video-format webm` run in `ValueError: Invalid name 'Clip.webm/mkv'` from `with_suffix`.
+
+   Amended in development: the container's name is checked for **every** item, not only for what `_converts`, because yt-dlp's `final_ext` looks for it on every item too. An image saved after a same-named video gets its id (`tiny [tiny].jpg`) instead of being taken as already downloaded.
 
 ### `cli.py`, `i18n.py`
 
@@ -287,27 +291,27 @@ Every **[fix]** test fails on `main` (shown by reverting the fix, `constraints.m
 
 Fixtures: `media_url` gains `attached.mkv` (`tiny.mp4` stream-copied with `-attach` of a small text file, `mimetype=text/plain`; no new encoder). `FakeSiteIE` gains `single-webm` and `single-webm-b` (one `tiny.webm` format each, same title, different pages), `attached` (one `attached.mkv` format), `attached-carousel` (`attached` plus a `tiny.mp4` video) and `mp4-or-webm` (an mp4 and a webm format, no codecs). The existing `merged`, `webm.html`, `tiny.webm`, `theora.ogg`, `tiny.flv`, `jpg-alone.html`, `tiny.gif` and `ig-carousel` are reused.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `test_e2e.py::test_the_default_mp4_converts_a_single_format_source[webm.html|tiny.webm|video-ogg.html|tiny.flv]`: `-y`, exactly one file, `.mp4`, video `h264` and audio `aac`, no source file left, `Done.`, exit 0
-- [ ] **[fix]** `test_e2e.py::test_wizard_summary_matches_the_saved_container`: the wizard on `webm.html` with `SINGLE_WALK` shows `Container: mp4` and saves one `.mp4`; with `-i --video-format mkv` on `tiny.mp4`, `Container: mkv` and one `.mkv`
-- [ ] **[fix]** `test_e2e.py::test_mkv_remuxes_without_re_encoding[tiny.mp4|webm.html|theora.ogg|tiny.flv]`: `-y --video-format mkv`, one `.mkv` whose codec names equal the source's, `Remuxing video` in the output, no `Converting video`
-- [ ] **[fix]** `test_e2e.py::test_webm_re_encodes_what_it_cannot_hold`: `-y --video-format webm` on `tiny.mp4`, one `.webm`, video in `{vp8, vp9, av1}`, audio in `{vorbis, opus}`
-- [ ] **[pin]** `test_e2e.py::test_a_file_already_in_the_container_is_left_alone[mp4-tiny.mp4|webm-tiny.webm|mkv-merged]`: no `[VideoConvertor]` or `[VideoRemuxer]` line at all, codecs unchanged
-- [ ] **[fix]** `test_e2e.py::test_a_video_that_cannot_be_converted_is_kept[es|en]`: `-y` on `fake.test/attached`: `Clip.mkv` kept, no `.mp4` left, `t("not_converted", "Clip.mkv", "mp4")` once, `Done.`, exit 0, one history row
-- [ ] **[fix]** `test_e2e.py::test_a_failed_conversion_does_not_stop_a_carousel[single|p]`: `-y` and `-y -p` on `attached-carousel`: both items saved, the warning once, no `partial_result` line, exit 0
-- [ ] **[pin]** `test_e2e.py::test_a_junk_body_still_fails_when_converted`: `-y --video-format mkv` on a junk body: `Download failed`, exit 1, no `.mkv` left
-- [ ] **[fix]** `test_e2e.py::test_a_rerun_after_a_conversion_downloads_nothing`: `-y` twice on `webm.html` into one folder: one `.mp4`, the second run says `has already been downloaded` and has no `Converting video`
-- [ ] **[pin]** `test_e2e.py::test_same_title_videos_both_survive_the_conversion`: `-y` on `single-webm` then `single-webm-b` into one folder: `Clip.mp4` and `Clip [single-webm-b].mp4`, different content. Passes on `main` (as `.webm`); fails with the conversion but without the `_AvoidNameClash` change
-- [ ] **[pin]** `test_e2e.py::test_images_and_audio_keep_their_extension_in_video_mode`: `jpg-alone.html`, `tiny.gif` and the `query-carousel` audio item keep `.jpg`, `.gif`, `.m4a`; `-y -p` on `ig-carousel` keeps its images `.jpg`
-- [ ] **[fix]** `test_e2e.py::test_webm_prefers_a_webm_format` (D4): `-y --video-format webm` on `mp4-or-webm` downloads the webm format and prints no `Converting video`
-- [ ] **[fix]** `test_e2e.py::test_webm_on_merged_h264_streams` (D5): `-y --video-format webm` on `merged`: one `Clip.webm`, exit 0, no `.fv.`, `.fa.` or `.temp.` file left
-- [ ] **[pin]** `test_e2e.py::test_merges_into_mp4_and_mkv_are_unchanged`: `merged` with the default and with mkv: `Clip.mp4` h264/aac and `Clip.mkv`, no `[VideoConvertor]` or `[VideoRemuxer]` line
-- [ ] **[pin]** `test_e2e.py::test_subtitles_embed_in_the_converted_file`: `-y -s` on `subs-flv` saves `Clip.mp4` with one subtitle stream and keeps `Clip.en.vtt` (replaces the `flv` case of `test_a_container_that_cannot_hold_every_file_warns`)
-- [ ] The 29 tests listed in Findings are updated to the new files, each named in the commit body. The 17 `untagged` ones move to a source the conversion skips (`typed/audio/webm/audio.webm/clip.weba` or another audio-labelled file already in `media_url`), so spec 29's warning stays covered in video mode; none is deleted without saying why
-- [ ] unit `test_downloader.py`: `build_ydl_opts` sets `final_ext` to the container in video mode only; webm gets `format_sort == ["ext:webm:webm"]` and `merge_output_format == "webm/mkv"`; mp4 and mkv keep today's values; `test_non_mp4_container_keeps_default_codec_order` still holds for mkv
-- [ ] unit `test_downloader.py::test_converts_reads_like_the_probe`: one table over `vcodec` `'none'`, a named codec, unknown with `mp4`, `ogg`, `ogx`, `m4a`, `mp3`, `jpg`, `JPG`, `gif`
-- [ ] unit `test_downloader.py`: `_AvoidNameClash` with a container checks the converted name, and an image's own name
-- [ ] `not_converted` exists in both `i18n.py` blocks (the parity test)
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** `test_e2e.py::test_the_default_mp4_converts_a_single_format_source[webm.html|tiny.webm|video-ogg.html|tiny.flv]`: `-y`, exactly one file, `.mp4`, video `h264` and audio `aac`, no source file left, `Done.`, exit 0
+- [x] **[fix]** `test_e2e.py::test_wizard_summary_matches_the_saved_container`: the wizard on `webm.html` with `SINGLE_WALK` shows `Container: mp4` and saves one `.mp4`; with `-i --video-format mkv` on `tiny.mp4`, `Container: mkv` and one `.mkv`
+- [x] **[fix]** `test_e2e.py::test_mkv_remuxes_without_re_encoding[tiny.mp4|webm.html|theora.ogg|tiny.flv]`: `-y --video-format mkv`, one `.mkv` whose codec names equal the source's, `Remuxing video` in the output, no `Converting video`
+- [x] **[fix]** `test_e2e.py::test_webm_re_encodes_what_it_cannot_hold`: `-y --video-format webm` on `tiny.mp4`, one `.webm`, video in `{vp8, vp9, av1}`, audio in `{vorbis, opus}`
+- [x] **[pin]** `test_e2e.py::test_a_file_already_in_the_container_is_left_alone[mp4-tiny.mp4|webm-tiny.webm|mkv-merged]`: no `[VideoConvertor]` or `[VideoRemuxer]` line at all, codecs unchanged
+- [x] **[fix]** `test_e2e.py::test_a_video_that_cannot_be_converted_is_kept[es|en]`: `-y` on `fake.test/attached`: `Clip.mkv` kept, no `.mp4` left, `t("not_converted", "Clip.mkv", "mp4")` once, `Done.`, exit 0, one history row
+- [x] **[fix]** `test_e2e.py::test_a_failed_conversion_does_not_stop_a_carousel[single|p]`: `-y` and `-y -p` on `attached-carousel`: both items saved, the warning once, no `partial_result` line, exit 0
+- [x] **[pin]** `test_e2e.py::test_a_junk_body_still_fails_when_converted`: `-y --video-format mkv` on a junk body: `Download failed`, exit 1, no `.mkv` left
+- [x] **[fix]** `test_e2e.py::test_a_rerun_after_a_conversion_downloads_nothing`: `-y` twice on `webm.html` into one folder: one `.mp4`, the second run says `has already been downloaded` and has no `Converting video`
+- [x] **[pin]** `test_e2e.py::test_same_title_videos_both_survive_the_conversion`: `-y` on `single-webm` then `single-webm-b` into one folder: `Clip.mp4` and `Clip [single-webm-b].mp4`, different content. Passes on `main` (as `.webm`); fails with the conversion but without the `_AvoidNameClash` change
+- [x] **[pin]** `test_e2e.py::test_images_and_audio_keep_their_extension_in_video_mode`: `jpg-alone.html`, `tiny.gif` and the `query-carousel` audio item keep `.jpg`, `.gif`, `.m4a`; `-y -p` on `ig-carousel` keeps its images `.jpg`
+- [x] **[fix]** `test_e2e.py::test_webm_prefers_a_webm_format` (D4): `-y --video-format webm` on `mp4-or-webm` downloads the webm format and prints no `Converting video`
+- [x] **[fix]** `test_e2e.py::test_webm_on_merged_h264_streams` (D5): `-y --video-format webm` on `merged`: one `Clip.webm`, exit 0, no `.fv.`, `.fa.` or `.temp.` file left
+- [x] **[pin]** `test_e2e.py::test_merges_into_mp4_and_mkv_are_unchanged`: `merged` with the default and with mkv: `Clip.mp4` h264/aac and `Clip.mkv`, no `[VideoConvertor]` or `[VideoRemuxer]` line
+- [x] **[pin]** `test_e2e.py::test_subtitles_embed_in_the_converted_file`: `-y -s` on `subs-flv` saves `Clip.mp4` with one subtitle stream and keeps `Clip.en.vtt` (replaces the `flv` case of `test_a_container_that_cannot_hold_every_file_warns`)
+- [x] The 29 tests listed in Findings are updated to the new files, each named in the commit body. The 17 `untagged` ones move to a source the conversion skips (`typed/audio/webm/audio.webm/clip.weba` or another audio-labelled file already in `media_url`), so spec 29's warning stays covered in video mode; none is deleted without saying why
+- [x] unit `test_downloader.py`: `build_ydl_opts` sets `final_ext` to the container in video mode only; webm gets `format_sort == ["ext:webm:webm"]` and `merge_output_format == "webm/mkv"`; mp4 and mkv keep today's values; `test_non_mp4_container_keeps_default_codec_order` still holds for mkv
+- [x] unit `test_downloader.py::test_converts_reads_like_the_probe`: one table over `vcodec` `'none'`, a named codec, unknown with `mp4`, `ogg`, `ogx`, `m4a`, `mp3`, `jpg`, `JPG`, `gif`
+- [x] unit `test_downloader.py`: `_AvoidNameClash` with a container checks the converted name, and an image's own name
+- [x] `not_converted` exists in both `i18n.py` blocks (the parity test)
 
 ## Live check
 
@@ -336,9 +340,56 @@ If this ships in 0.4.0, add to the review list in `PLAN.md`:
 
 Release note: "Videos are now saved in the container you choose even when the site offers a single file in another one. mkv remuxes without losing quality; mp4 and webm re-encode when they have to, which can take a while on long videos. A video that can't be converted is kept as downloaded, and the run says so."
 
+## Validation
+
+On `main` at `f25ddf5` (merge `09075a2` plus `state.json` commits), yt-dlp 2026.10.26, ffmpeg n9.0.2. GitHub CI run 42758715707 on `f25ddf5`: success.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on the merge `09075a2`: exit 0, 2194 passed, 9 deselected and 4 xfailed in `es` and in `en`. Of the 4 xfails, two are row 25's (`test_audio_rerun_is_not_a_false_failure[opus]`, `test_wizard_twice_on_an_ogg_labelled_as_audio_keeps_one_file`). The other two, `test_an_item_that_failed_is_not_named_as_untagged[-p|--playlist-items]`, pin a pre-existing defect of the metadata step outside this item (see Remaining notes). `f25ddf5` differs from `09075a2` only in `.ai/`.
+- **Criteria:** every test the criteria name exists on `main`. Ran on their own on `main`: the 15 e2e criteria as a `pytest -k` selection over their names, 27 passed; `tests/test_downloader.py` and `tests/test_i18n.py`, 114 passed. Those cover `final_ext` per mode, the webm `format_sort` and `merge_output_format`, `test_non_mp4_container_keeps_default_codec_order`, the `_converts` table (14 cases), `_AvoidNameClash` with a container, and `not_converted` in both blocks. The 29 changed tests are named in `862f4df`'s body: the 17 `untagged` ones moved to `.weba`, `.oga` and `clip.weba` sources, and one (`test_a_container_that_cannot_hold_every_file_warns[flv]`) was removed, with the reason given, in favour of `test_subtitles_embed_in_the_converted_file`.
+- **Reverting the fix:** on a `git archive` copy of `HEAD` in the scratchpad, with `downloader.py`, `cli.py`, `i18n.py` and `probe.py` from the pre-merge `8c61b4a` and the merged tests, run through `PYTHONPATH`. Of the 27 e2e criteria cases, 19 failed, including every `[fix]` case. 8 passed: every case of `test_a_file_already_in_the_container_is_left_alone`, `test_a_junk_body_still_fails_when_converted[mkv|webm]`, `test_images_and_audio_keep_their_extension_in_video_mode` and `test_merges_into_mp4_and_mkv_are_unchanged`. Two tests labelled `[pin]` fail there: `test_same_title_videos_both_survive_the_conversion` and `test_subtitles_embed_in_the_converted_file`. That is expected: as written they name the converted `.mp4`, which `main` never made. The behaviour they protect on `main` (two same-title files, subtitles in the file) was measured in Findings. The label in the criteria was wrong, not the tests.
+- **Reproduction:** the Problem's runs, with `main`'s real console script and the Problem's environment (fresh `HOME` and `XDG_*_HOME` per run, `XDG_VIDEOS_DIR` and `XDG_MUSIC_DIR` unset, `LANG=en_US.UTF-8`, stdin from `/dev/null` or a file of replies). The pages were on a scratch `http.server` on `127.0.0.1:47613`, serving 0.5 s 64x64 clips made with ffmpeg. Downloads went to the scratchpad and were deleted afterwards.
+
+| Run | Output | On disk (ffprobe) |
+| --- | ------ | ----------------- |
+| `-y`, `page_vp8_vorbis_webm.html` | `[VideoConvertor] Converting video from webm to mp4`, `Deleting original file`, `Done.`, exit 0 | `vp8_vorbis (1).mp4`: h264, aac |
+| `-y --video-format mkv`, the same page | `[VideoRemuxer] Remuxing video from webm to mkv`, `Done.`, exit 0 | `vp8_vorbis (1).mkv`: vp8, vorbis |
+| `-y --video-format mkv`, `page_h264_aac_mp4.html` | `Remuxing video from mp4 to mkv`, `Done.`, exit 0 | `h264_aac (1).mkv`: h264, aac |
+| `-y --video-format webm`, the same page | `Converting video from mp4 to webm`, `Done.`, exit 0 | `h264_aac (1).webm`: vp9, opus |
+| Wizard, Enter at every step, webm page | `✓ Container: mp4`, `Converting video`, `Done.`, `download-media -y <url>`, exit 0 | `Videos/vp8_vorbis (1).mp4`: h264, aac; 1 history row, `video` |
+| Wizard, `2` at the container step, mp4 page | `✓ Container: mkv`, `Remuxing video`, `Done.`, `download-media -y --video-format mkv <url>`, exit 0 | `Videos/h264_aac (1).mkv`: h264, aac; 1 history row, `video` |
+
+- **Live check:** run once per container, as Live check says, with the real console script, a fresh `HOME` and `XDG_*_HOME`, no cookies, and output in new scratchpad folders that were deleted afterwards. Each run downloaded `Downloading 1 format(s): 0` (the VP9/Opus webm).
+
+| Run | Wall time | Output | On disk (ffprobe) | History |
+| --- | --------- | ------ | ----------------- | ------- |
+| `-y -q 360` | 4.8 s | `[VideoConvertor] Converting video from webm to mp4`, `Deleting original file …webm`, `[Metadata]`, `Done.`, exit 0, command `download-media -y -q 360 -o <dir> '<url>'` | 1 file: `Die Temperaturkurve der Erde (ZDF, Terra X) 720p HD 50FPS.mp4`, 1.81 MB, h264 426x240 + aac, 45.32 s | 1 row, `video`, the folder |
+| `-y -q 360 --video-format mkv` | 2.8 s | `[VideoRemuxer] Remuxing video from webm to mkv`, `Deleting original file …webm`, `[Metadata]`, `Done.`, exit 0, command with `--video-format mkv` | 1 file: `… 50FPS.mkv`, 1.50 MB, vp9 426x240 + opus, 45.33 s | 1 row, `video`, the folder |
+
+  Disk, summary and history agree on both runs. The recode cost about 2 s over the remux on this 45 s 240p clip, in line with the 2.6 s measured during planning.
+
+- **Cases, tests only:** the rest of the Cases table (`-p`, `-P`, `--playlist-items`, single mode on a carousel, `-l`, `-a`, HLS under mkv, labelled audio, `.ogx` and extensionless links, `-i --video-format webm`, `LANG=es*`) is covered by the criteria tests or by the tests listed below. All passed in the gate.
+- **Not run:** the full gate, for the reason above; live tests (`tests/live/`), which this item doesn't touch.
+- **Scope:** outside `.ai/`, the merge touches `README.md`, `cli.py`, `downloader.py`, `i18n.py`, `probe.py`, `tests/conftest.py`, `tests/test_downloader.py`, `tests/test_e2e.py` and `tests/test_i18n.py`. The last one isn't in the Files table, and holds the `not_converted` message test. No change to `wizard.py`, `equivalent.py`, `history.py`, `config.py`, `AGENTS.md`, `pyproject.toml`, `PKGBUILD` or the version.
+
+### What changed after approval
+
+- **The media check runs before converting (`862f4df`).** Design item 2 called `_has_media_streams` only after a `PostProcessingError`. ffmpeg reads a text body as a subtitle track and converts it without an error, into a file that would pass for saved. The step now asks ffprobe first and leaves a body with no media to the metadata step, which fails it as it does without a conversion.
+- **`_AvoidNameClash` checks the container's name on every item (`862f4df`).** Design item 5 limited it to what `_converts`. yt-dlp's `final_ext` looks for the container's name on every item, images included, so the check does too. An image saved after a same-named video gets its id (`tiny [tiny].jpg`) instead of being taken as already downloaded. Covered by `test_an_image_named_like_a_converted_video_is_still_saved` and `test_audio_named_like_a_converted_video_is_still_saved`.
+- **Originals are deleted only when this run downloaded them (`597d135`, test-engineer round 1, data loss).** With `final_ext` set to the container, yt-dlp takes a same-named file in another container as already downloaded. The step then converted it and let yt-dlp delete it: a `tiny.mp4` from a default run vanished on a later `--video-format webm` run, and so would a `.webm` saved as is by an earlier release on the first default run after upgrading. The step now hands yt-dlp the original to delete only when `info["__real_download"]` is set. An earlier file stays next to its conversion. Covered by `test_another_container_keeps_the_file_an_earlier_run_saved`, `test_another_container_keeps_the_items_an_earlier_run_saved` and the `4360f86` tests (third container, failed conversion, merge reusing a stream file, resumed download, several URLs, the wizard).
+- **ffprobe giving no answer warns `not_converted` (`3a7fdd7`, QA minor 1, at the human's request).** `_has_media_streams` returns `None` when ffprobe is missing, fails, times out or prints a stream type it doesn't know. The step then keeps the file as downloaded and names it in `not_converted`, rather than skipping it silently. The metadata step still fails a body it can't tag. Covered by `test_no_ffprobe_means_no_answer`, `test_a_video_ffprobe_cannot_read_is_kept_and_named`, `test_a_junk_body_ffprobe_cannot_read_is_not_converted` and `test_wizard_names_a_video_ffprobe_cannot_read`.
+- **ffprobe's csv parsed past side data (`f0b5bd4`, round 2).** A stream with side data (a phone's display matrix, HDR metadata) prints as `video,`, and stream groups add blank rows. Read as an unknown type, that made a rotated phone video "no answer", so it was never converted. Only the first field of each non-blank row is read now. Covered by `test_a_rotated_video_is_converted`, `test_a_video_with_side_data_is_converted` and `test_a_rotated_video_ffmpeg_cannot_tag_is_a_success`.
+- **`not_converted` is per item (`a2dbda3`, round 2).** The step used to add a name right away. Under `-p` or `--playlist-items`, a junk body it kept (ffprobe with no answer) then failed in the metadata step, so the warning said "kept" next to a count that said "failed". The name now goes on `_Ydl.item_not_converted`, and `download()` takes it only when the item is saved, as it does for `no_cover`. Covered by `test_an_item_that_failed_is_not_named_as_not_converted` and `test_every_item_kept_as_downloaded_is_named_once`.
+- **Tests beyond the criteria**, among others: `test_the_container_step_speaks_as_yt_dlp`, `test_a_rerun_in_each_container_downloads_nothing`, `test_a_rerun_of_a_merge_into_webm_downloads_nothing`, `test_a_rerun_under_p_downloads_nothing_and_warns_again`, `test_a_rerun_after_a_failed_conversion_keeps_one_file`, `test_a_failed_conversion_under_playlist_items`, `test_several_urls_one_not_converted_and_one_broken`, `test_audio_mode_ignores_the_container`, `test_listing_formats_converts_nothing` and `test_a_merge_in_another_container_keeps_the_earlier_file`. `77a8689` moved a strict xfail (`test_an_item_that_failed_is_not_named_as_untagged`) to an unrotated silent video, so it fails for the reason it states.
+
+### Remaining notes (for the planner)
+
+1. The 0.4.0 review list in `PLAN.md` doesn't have this item's four changes yet (SemVer above). Add a fifth: after `597d135`, a default run into a folder holding a same-named file in another container (an earlier `--video-format`, or a `.webm` saved by 0.3.0) keeps it and adds the conversion next to it, so the folder ends with two files. `PLAN.md`'s "Next" paragraph still puts `container-choice` first.
+2. `test_an_item_that_failed_is_not_named_as_untagged[-p|--playlist-items]` is a strict xfail for a pre-existing defect: the metadata step names an item as `untagged` before a later check fails it. It needs a row.
+3. Out of scope, as Out says: VP9 or AV1 inside an `.mp4`, and high bit depth or HDR sources (one new row); recode quality settings.
+
 ## Open decisions
 
-D1 is the human's call, and the reason this row waited. D2 to D7 have a recommended option each.
+Settled by the human: D1 C, D2 B, D3 A, D4 A, D5 A, D6 A, D7 A. The options are kept as they were put.
 
 ### D1: remux or recode
 
