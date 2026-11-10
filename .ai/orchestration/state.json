@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T00:02:18-04:00",
+  "updated": "2026-11-10T00:13:45-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2236,14 +2236,13 @@
         "55f001a",
         "857efbf",
         "f0b5bd4",
-        "a2dbda3"
+        "a2dbda3",
+        "e903168",
+        "95533c9"
       ],
       "review": {
-        "approved": false,
-        "findings": [
-          "major downloader.py:587 ffprobe 9 prints 'video,' for a stream with side data (phone display matrix); since 3a7fdd7 that reads as no answer, so a rotated .mov stays .mov under the default mp4 and a rotated mp4 isn't remuxed or converted; worked at 4360f86. Strict xfails test_a_rotated_video_is_converted, test_media_streams_by_what_ffprobe_says",
-          "minor downloader.py:654 under -p/--playlist-items with ffprobe unable to answer, a junk body named in not_converted then fails in the metadata step; warning says kept, count says failed. Strict xfail test_an_item_that_failed_is_not_named_as_not_converted"
-        ]
+        "approved": true,
+        "findings": []
       },
       "history": [
         {
@@ -2329,6 +2328,13 @@
           "result": "done",
           "at": "2026-11-09T23:58:25-04:00",
           "note": "Round 2 fixed: f0b5bd4 reads ffprobe csv rows by first field past side data (rotation, stereo3d, HDR, timecode, TS measured); a2dbda3 names only saved items in not_converted. 6 xfails flipped; 10 side-data cases fail without f0b5bd4. Gate exit 0 at a2dbda3, 2186 passed + 2 xfailed. Planner: test helper streams() still splits ffprobe csv by whitespace."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T00:13:45-04:00",
+          "note": "Round 2 closed in real runs (rotated mov with and without audio, per-item naming in -p, --playlist-items over 3 URLs es, wizard). Mutation 7/8, survivor equivalent. Gate exit 0 at 95533c9, 2194 passed + 4 xfailed. Pre-existing on main, strict xfail in 95533c9, planner row: under -a -p an item that fails audio extraction is named in untagged next to 1 failed."
         }
       ]
     },
