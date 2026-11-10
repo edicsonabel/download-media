@@ -86,6 +86,9 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "partial_result": "{} de {} items descargados ({} sin medio descargable, {} con error).",
         "subs_none": "No se pudo guardar ningún subtítulo en {}; el contenido se guardó sin ellos.",
         "subs_failed": '{0}: no se pudieron descargar los subtítulos "{1}" ({2}).',
+        "subs_empty": (
+            "{0}: el archivo de subtítulos no contiene texto; se conserva, pero no se incrusta."
+        ),
         "subs_not_embedded": (
             "{}: uno o más subtítulos no se pudieron incrustar; todos se conservan como archivos aparte."
         ),
@@ -190,6 +193,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "partial_result": "{} of {} items downloaded ({} without downloadable media, {} failed).",
         "subs_none": "No subtitles in {} could be saved; the media was saved without them.",
         "subs_failed": '{0}: couldn\'t download the "{1}" subtitles ({2}).',
+        "subs_empty": "{0}: the subtitle file holds no text; it's kept, but not embedded.",
         "subs_not_embedded": (
             "{}: one or more subtitles couldn't be embedded; all of them are kept as separate files."
         ),

@@ -348,6 +348,7 @@ _SUBTITLES = {
     # Broken files under a subtitle extension; missing.vtt is never written (a 404).
     "empty.vtt": "",
     "garbage.vtt": "\x00\x01 not a subtitle \xff\xfe\n" * 8,
+    "header.vtt": "WEBVTT\n\n",  # A valid file with no cue: no subtitle text.
 }
 
 
@@ -985,6 +986,8 @@ class FakeSiteIE(InfoExtractor):
         tracks: dict[str, dict[str, str]] = {
             "subs-empty": {"en": "empty.vtt"},
             "subs-garbage": {"en": "garbage.vtt"},
+            "subs-garbage-two": {"en": "en.vtt", "es": "garbage.vtt"},
+            "subs-header": {"en": "header.vtt"},
             "subs-one-broken": {"en": "en.vtt", "es": "en.ttml"},
             "subs-404": {"en": "missing.vtt"},
             "subs-404-two": {"en": "en.vtt", "es": "missing.vtt"},

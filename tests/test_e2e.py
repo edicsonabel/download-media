@@ -6353,14 +6353,40 @@ def test_an_embed_that_fails_after_starting_leaves_no_temp_file(run: Any, out: P
     assert len(history_rows()) == 1
 
 
-def test_a_garbage_subtitle_file_never_fails_the_run(run: Any, out: Path) -> None:
-    # ffmpeg reads it as an empty track; whether it warns is ffmpeg's call, the files are ours.
-    code, output = run("-y", "-s", "https://fake.test/subs-garbage")
+@pytest.mark.parametrize(
+    ("flags", "page", "video"),
+    [
+        ((), "subs-garbage", "Clip.mp4"),
+        ((), "subs-header", "Clip.mp4"),
+        (("--video-format", "mkv"), "subs-garbage", "Clip.mkv"),
+    ],
+    ids=["subs-garbage", "subs-header", "subs-garbage-mkv"],
+)
+def test_an_empty_subtitle_is_not_embedded(
+    run: Any, out: Path, flags: tuple[str, ...], page: str, video: str
+) -> None:
+    # ffmpeg would read it as an empty track, which players offer and show nothing for.
+    code, output = run("-y", "-s", *flags, f"https://fake.test/{page}")
     assert code == 0
-    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert names(out) == ["Clip.en.vtt", video]
     assert leftovers(out) == []
-    assert streams(out / "Clip.mp4") >= {"video", "audio"}
+    assert streams(out / video) == {"video", "audio"}
+    assert subtitle_streams(out / video) == []
+    assert output.count(t("subs_empty", "Clip.en.vtt")) == 1
+    assert never_said("subs_not_embedded", output)
+    assert never_said("subs_none", output)
+    assert "[EmbedSubtitle] Embedding" not in output
     assert output.count(t("done")) == 1
+
+
+def test_an_empty_language_leaves_the_good_one_embedded(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-garbage-two")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.es.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    assert output.count(t("subs_empty", "Clip.es.vtt")) == 1
+    assert t("subs_empty", "Clip.en.vtt") not in output
+    assert never_said("subs_not_embedded", output)
 
 
 @pytest.mark.parametrize(
@@ -6495,13 +6521,18 @@ def test_a_subtitle_404_in_playlist_mode_saves_the_video_and_says_so(run: Any, o
     assert line.startswith(t("subs_failed", "01 - Clip [s1].mp4", "en", "")[:-3])
 
 
-@pytest.mark.parametrize("page", ["subs-404"])
+@pytest.mark.parametrize("page", ["subs-404", "subs-garbage"])
 def test_audio_names_a_failed_or_empty_subtitle(run: Any, out: Path, page: str) -> None:
     code, output = run("-y", "-a", "-s", f"https://fake.test/{page}")
     assert code == 0
-    assert names(out) == ["Clip.mp3"]
-    [line] = subs_failed_lines(output)
-    assert line.startswith(t("subs_failed", "Clip.mp3", "en", "")[:-3])
+    if page == "subs-404":
+        assert names(out) == ["Clip.mp3"]
+        [line] = subs_failed_lines(output)
+        assert line.startswith(t("subs_failed", "Clip.mp3", "en", "")[:-3])
+    else:
+        assert names(out) == ["Clip.en.vtt", "Clip.mp3"]
+        assert output.count(t("subs_empty", "Clip.en.vtt")) == 1
+        assert subs_failed_lines(output) == []
 
 
 def test_a_subtitle_404_with_cookies_is_not_retried(
@@ -6752,19 +6783,32 @@ def test_subtitle_warnings_in_both_languages(
 
 
 @pytest.mark.parametrize(
-    ("lang", "failed"),
+    ("lang", "failed", "empty"),
     [
-        ("es", 'Clip.mp4: no se pudieron descargar los subtítulos "en" (HTTP Error 404: '),
-        ("en", 'Clip.mp4: couldn\'t download the "en" subtitles (HTTP Error 404: '),
+        (
+            "es",
+            'Clip.mp4: no se pudieron descargar los subtítulos "en" (HTTP Error 404: ',
+            "Clip.en.vtt: el archivo de subtítulos no contiene texto; "
+            "se conserva, pero no se incrusta.",
+        ),
+        (
+            "en",
+            'Clip.mp4: couldn\'t download the "en" subtitles (HTTP Error 404: ',
+            "Clip.en.vtt: the subtitle file holds no text; it's kept, but not embedded.",
+        ),
     ],
 )
 def test_subtitle_failure_warnings_in_both_languages(
-    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str, failed: str
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str, failed: str, empty: str
 ) -> None:
     monkeypatch.setattr(i18n, "LANG", lang)
     code, output = run("-y", "-s", "https://fake.test/subs-404")
     assert code == 0
     assert failed in output
+    shutil.rmtree(out)
+    code, output = run("-y", "-s", "https://fake.test/subs-garbage")
+    assert code == 0
+    assert empty in output
 
 
 # A browser whose cookies can't be read (spec 26). The isolated home holds no browser at all,

@@ -95,6 +95,8 @@ class DownloadResult:
     not_converted: tuple[str, ...] = ()
     # Per saved file, a subtitle language that couldn't be fetched, and yt-dlp's reason.
     subs_failed: tuple[tuple[str, str, str], ...] = ()
+    # Subtitle files that hold no subtitle text; kept, never embedded.
+    subs_empty: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -204,6 +206,7 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         # Subtitle files this run wrote for the current item, and the languages it couldn't.
         self.item_subs: list[str] = []
         self.item_subs_failed: list[tuple[str, str]] = []
+        self.item_subs_empty: list[str] = []
         super().__init__(*args, **kwargs)
 
     def existing_file(self, filepaths: Any, *, default_overwrite: bool = True) -> Any:
@@ -243,7 +246,7 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_errors = len(self.errors)
         self.item_thumbs, self.item_no_cover, self.item_images = [], False, []
         self.item_not_converted = []
-        self.item_subs, self.item_subs_failed = [], []
+        self.item_subs, self.item_subs_failed, self.item_subs_empty = [], [], []
         try:
             result = super().process_info(info_dict)
         except BaseException:
@@ -611,16 +614,39 @@ def _subtitle_streams(path: str) -> int | None:
     return len(done.stdout.split()) if done.returncode == 0 else None
 
 
+def _subtitle_packets(path: str) -> int | None:
+    """Subtitle packets ffprobe reads in the file; None when it finds no subtitle stream."""
+    try:
+        cmd = ["ffprobe", "-v", "error", "-count_packets", "-select_streams", "s"]
+        cmd += ["-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", _probe_path(path)]
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    # As in _has_media_streams: side data adds a field, stream groups add blank rows.
+    rows = [row.split(",", 1)[0].strip() for row in done.stdout.splitlines()]
+    counts = [row for row in rows if row]
+    if done.returncode != 0 or not counts:
+        return None
+    # N/A: a stream with nothing in it, such as binary junk or a header with no cue.
+    return sum(int(row) if row.isdigit() else 0 for row in counts)
+
+
 class _SubtitlesSeen(PostProcessor):  # type: ignore[misc]
-    """Record whether an item that reached post-processing got any subtitle file."""
+    """Record whether an item that reached post-processing got any subtitle file.
+
+    Also notes the files that hold no subtitle text: the embed would make an empty track of them.
+    """
 
     def __init__(self, seen: list[bool]) -> None:
         super().__init__()
         self._seen = seen
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
-        if _subtitle_files(info):
+        files = _subtitle_files(info)
+        if files:
             self._seen.append(True)
+        empty = [path for path in files if _subtitle_packets(path) == 0]
+        self._downloader.item_subs_empty.extend(empty)
         return [], info
 
 
@@ -649,15 +675,28 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
         return super().run_ffmpeg_multiple_files(input_paths, out_path, opts, **kwargs)
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
-        files = _subtitle_files(info)
+        requested = info.get("requested_subtitles")
+        empty = set(getattr(self._downloader, "item_subs_empty", ()))
+        tracks = {
+            lang: sub for lang, sub in (requested or {}).items() if sub.get("filepath") not in empty
+        }
+        files = _subtitle_files({"requested_subtitles": tracks})
         temp = Path(prepend_extension(info["filepath"], "temp"))
         temp_was_there = temp.exists()
-        try:
-            super().run(info)
-        except PostProcessingError:
-            # ffmpeg fails before opening the temp file when it can't read a track.
-            if not temp_was_there:
-                temp.unlink(missing_ok=True)
+        left_out = len(tracks) < len(requested or {})
+        # With every file left out for holding no text, there's nothing to embed.
+        if files or not left_out:
+            if left_out:
+                info["requested_subtitles"] = tracks
+            try:
+                super().run(info)
+            except PostProcessingError:
+                # ffmpeg fails before opening the temp file when it can't read a track.
+                if not temp_was_there:
+                    temp.unlink(missing_ok=True)
+            finally:
+                if left_out:
+                    info["requested_subtitles"] = requested
         # Covers the failure above, containers that can't hold subtitles, srt in webm, json.
         streams = _subtitle_streams(info["filepath"]) if files else None
         if streams is not None and streams < len(files):
@@ -859,6 +898,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     no_cover: list[str] = []
     not_converted: list[str] = []
     subs_failed: list[tuple[str, str, str]] = []
+    subs_empty: list[str] = []
     with _Ydl(ydl_opts) as ydl:
         load_browser_cookies(ydl, opts.cookies_browser)
         ydl.save_images = True
@@ -871,6 +911,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
                 not_converted.extend(ydl.item_not_converted)
                 name = Path(path).name
                 subs_failed.extend((name, lang, why) for lang, why in ydl.item_subs_failed)
+                subs_empty.extend(Path(sub).name for sub in ydl.item_subs_empty)
 
         ydl.add_post_hook(keep)
         container = None if opts.audio_only else opts.video_format
@@ -918,6 +959,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         no_cover=tuple(no_cover),
         not_converted=tuple(not_converted),
         subs_failed=tuple(subs_failed),
+        subs_empty=tuple(subs_empty),
     )
 
 
