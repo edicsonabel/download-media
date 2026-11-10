@@ -6535,6 +6535,27 @@ def test_audio_names_a_failed_or_empty_subtitle(run: Any, out: Path, page: str) 
         assert subs_failed_lines(output) == []
 
 
+@pytest.mark.parametrize(
+    ("page", "left"),
+    [("subs-novideo", []), ("subs-junk", ["Clip.mp4"])],  # A junk body stays (roadmap row 46).
+)
+def test_a_failed_video_leaves_no_subtitle_file(
+    run: Any, out: Path, page: str, left: list[str]
+) -> None:
+    url = f"https://fake.test/{page}"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == left
+
+
+def test_a_failed_item_under_p_leaves_no_subtitle_file(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-novideo-carousel")
+    assert code == 0
+    assert names(out) == ["02 - Clip [s2].mp4"]
+    assert t("partial_result", 1, 2, 0, 1) in output
+
+
 def test_a_subtitle_404_with_cookies_is_not_retried(
     run: Any, out: Path, fake_site: list[Any]
 ) -> None:

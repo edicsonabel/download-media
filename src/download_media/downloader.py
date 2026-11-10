@@ -255,10 +255,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
             # retry counts afresh, and anything else leaves download() before the count is read.
             self.repeated_errors += len(self.errors) - self.item_errors
             self.drop_thumbs()
+            self.drop_subs()
             raise
         if self.item_failed():
             self.repeated_errors += len(self.errors) - self.item_errors - 1
             self.drop_thumbs()
+            self.drop_subs()
         else:
             self.images += self.item_images
         return result
@@ -349,6 +351,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         for path in self.item_thumbs:
             Path(path).unlink(missing_ok=True)
         self.item_thumbs = []
+
+    def drop_subs(self) -> None:
+        # All of them are this run's: overwrites is unset, so yt-dlp deleted any earlier copy.
+        for path in self.item_subs:
+            Path(path).unlink(missing_ok=True)
+        self.item_subs = []
 
     def item_failed(self) -> bool:
         # ignoreerrors reports a failed post-processing step, then runs the post hooks anyway.

@@ -1010,6 +1010,18 @@ class FakeSiteIE(InfoExtractor):
             return {**webm_video, "subtitles": {"en": wrong}}
         if page == "subs-flv":
             return {**flv_video, "subtitles": self._tracks(en="en.vtt")}
+        if page in ("subs-novideo", "subs-junk"):
+            path = "missing.mp4" if page == "subs-novideo" else JUNK
+            return {
+                **self._video("v1", path=path, page=page),
+                "subtitles": self._tracks(en="en.vtt"),
+            }
+        if page == "subs-novideo-carousel":
+            entries = [
+                {**self._video("s1", path="missing.mp4"), "subtitles": self._tracks(en="en.vtt")},
+                self._video("s2"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
         if page == "subs-404-carousel":
             entries = [
                 {**self._video("s1"), "subtitles": self._tracks(en="missing.vtt")},
