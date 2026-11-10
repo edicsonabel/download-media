@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:09:09-04:00",
+  "updated": "2026-11-10T01:16:51-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2431,17 +2431,21 @@
     "fix/cookies-undecrypted": {
       "type": "fix",
       "title": "Say so when the browser's cookies load but none decrypt",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/67-cookies-undecrypted.md",
       "branch": "fix/cookies-undecrypted",
       "worktree": ".worktrees/fix-cookies-undecrypted",
       "commits": [
         "24354d6",
-        "feb1576"
+        "feb1576",
+        "d01cbcf"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -2470,6 +2474,13 @@
           "result": "done",
           "at": "2026-11-10T00:39:18-04:00",
           "note": "feb1576: jar_failure (D1, D2), undecrypted flag, keyring hint with a named keyring (D3), cookies_none_decrypted es/en (D4). Gate exit 0, 2120 passed + 2 xfailed es/en, 98.89%. Reverting src fails 24 tests plus a collection error. Hand runs R1, R2, R6, R8-R11 match the spec. Only the two named flips. Process: the suggested pgrep wait pattern matches its own shell; use '^(bash|timeout [0-9]+) .*scripts/pre-release[.]sh'."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T01:16:51-04:00",
+          "note": "No bugs. 33 tests in d01cbcf (7 new-behaviour tests fail on main's src). Mutation 17/17. Gate exit 0 at d01cbcf, 2153 passed + 2 xfailed. Hand runs in every mode match. Planner: a Chromium jar of only empty-on-purpose cookies reads 'none could be decrypted' (wording nit); expired-only jar counts as working (spec 18 path); load_browser_cookies deletes pre-set report hooks (no caller)."
         }
       ]
     },
