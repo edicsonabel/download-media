@@ -300,6 +300,15 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "audio-no-ext": '<audio src="typed/audio/mpeg/tiny.mp3/stream"></audio>',
         "audio-source-vorbis": """<audio><source src="tiny.ogg" type='audio/ogg; codecs="vorbis"'></audio>""",
         "audio-source-ogg": """<audio><source src="theora.ogg" type="audio/ogg"></audio>""",
+        # The <audio> tag sets vcodec 'none' over the codecs its type names; the type sets ext.
+        "audio-source-theora-videotype": (
+            """<audio><source src="theora.ogg" type='video/ogg; codecs="theora, vorbis"'></audio>"""
+        ),
+        "audio-source-mp4-videotype": f"<audio>{codecs}</audio>",
+        # An audio type naming a video codec: the same formats as real Vorbis.
+        "audio-source-theora-audiotype": (
+            """<audio><source src="theora.ogg" type='audio/ogg; codecs="theora, vorbis"'></audio>"""
+        ),
         "audio-hls": '<audio src="tiny.m3u8"></audio>',
         "audios-theora-and-vorbis": '<audio src="theora.ogg"></audio><audio src="tiny.ogg"></audio>',
         "ogg-video-and-audio": '<video src="theora.ogg"></video><audio src="tiny.ogg"></audio>',

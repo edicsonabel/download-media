@@ -3604,6 +3604,7 @@ def test_an_uppercase_m4a_in_a_video_tag_stays_a_video(
     [
         ("video-upper-mp3.html", "video-upper-mp3 (1).MP3", False),
         ("typed/audio/mp4/clip.m4a/CLIP.M4A", "CLIP.M4A", True),
+        ("audio-source-theora-videotype.html", "audio-source-theora-videotype (1).ogv", True),
     ],
 )
 @pytest.mark.parametrize(
@@ -3669,6 +3670,83 @@ def test_wizard_offers_the_video_of_other_labelled_shapes(
     assert code == 0
     assert names(elsewhere / "Videos") == [saved]
     assert "video" in streams(elsewhere / "Videos" / saved)
+
+
+DECLARED_VIDEO = pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("audio-source-theora-videotype.html", "audio-source-theora-videotype (1).ogv"),
+        ("audio-source-mp4-videotype.html", "audio-source-mp4-videotype (1).mp4"),
+    ],
+    ids=["theora", "mp4"],
+)
+
+
+@DECLARED_VIDEO
+def test_wizard_keeps_the_video_an_audio_tag_declares(
+    generic: Any,
+    pasted: Any,
+    media_url: str,
+    home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    page: str,
+    saved: str,
+) -> None:
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert detected("kind_audio") in output
+    assert t("audio_may_hold_video") in output
+    assert t("done") in output
+    assert names(home / "Music") == []
+    assert names(home / "Videos") == [saved]
+    assert "video" in streams(home / "Videos" / saved)
+    [line] = commands(output)
+    assert line == f"download-media -y {media_url}/{page}"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("HOME", str(elsewhere))
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(elsewhere / "Videos") == [saved]
+    assert "video" in streams(elsewhere / "Videos" / saved)
+
+
+@DECLARED_VIDEO
+def test_wizard_still_saves_the_audio_of_a_declared_video_when_asked(
+    generic: Any, media_url: str, home: Path, page: str, saved: str
+) -> None:
+    # URL, type, format, folder, cookies.
+    code, output = generic(page, "", "2", "", "", "")
+    assert code == 0
+    assert names(home / "Videos") == []
+    assert names(home / "Music") == [f"{Path(saved).stem}.mp3"]
+    assert commands(output) == [f"download-media -y -a {media_url}/{page}"]
+
+
+def test_wizard_twice_on_a_declared_video_keeps_one_file(generic: Any, home: Path) -> None:
+    for _ in range(2):
+        code, output = generic("audio-source-mp4-videotype.html", *SINGLE_WALK)
+        assert code == 0
+        assert t("done") in output
+        assert names(home / "Videos") == ["audio-source-mp4-videotype (1).mp4"]
+    assert len(history_rows()) == 2
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Out of spec 37: yt-dlp overwrites the codecs parsed from an audio/* type with the "
+    "tag's 'none' (common.py:3450), leaving formats equal to real Vorbis audio, so nothing "
+    "tells this video from audio.",
+)
+def test_an_audio_tag_whose_audio_type_names_a_video_codec_keeps_its_video(
+    generic: Any, home: Path
+) -> None:
+    code, _ = generic("audio-source-theora-audiotype.html", *SINGLE_WALK)
+    assert code == 0
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".ogg")
+    assert "video" in streams(home / "Videos" / saved)
 
 
 def test_hls_in_an_audio_tag_reads_as_video_and_keeps_it(generic: Any, home: Path) -> None:

@@ -196,6 +196,17 @@ def _audio_by_label_only(fmt: dict[str, Any]) -> bool:
     return fmt.get("vcodec") == "none" and fmt.get("acodec") is None and not _ext_says_audio(ext)
 
 
+def _declared_video(fmt: dict[str, Any], info: dict[str, Any]) -> bool:
+    # On a page, <audio> sets vcodec 'none' over a type that declared a video, and that type
+    # still sets ext (common.py:3363, :3450). Site extractors read manifests: not them.
+    ext = str(fmt.get("ext") or "").lower()
+    return (
+        info.get("extractor_key") == "HTML5MediaEmbed"
+        and fmt.get("vcodec") == "none"
+        and ext in MEDIA_EXTENSIONS.video
+    )
+
+
 def _format_kind(fmt: dict[str, Any]) -> ContentKind:
     """Read a format as yt-dlp does: ``'none'`` is absent, ``None`` is unknown."""
     vcodec = fmt.get("vcodec")
@@ -346,7 +357,7 @@ def _read_result(url: str, site: str, data: Any, errors: list[str]) -> Probe:
         duration=_seconds(data),
         filesize=data.get("filesize_approx") or data.get("filesize"),
         may_hold_video=kind == ContentKind.SINGLE_AUDIO
-        and any(_audio_by_label_only(f) for f in _formats(data)),
+        and any(_audio_by_label_only(f) or _declared_video(f, data) for f in _formats(data)),
     )
 
 

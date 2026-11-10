@@ -424,6 +424,50 @@ def test_an_uppercase_extension_that_says_audio_is_not_flagged(ext: str) -> None
     assert may_hold_video({"vcodec": "none", "acodec": None, "ext": ext}) is False
 
 
+def flagged_from(extractor_key: str | None, *formats: dict[str, Any]) -> bool:
+    data: dict[str, Any] = {"id": "i", "title": "t", "formats": list(formats)}
+    if extractor_key is not None:
+        data["extractor_key"] = extractor_key
+    return _read_result("http://x/f", "generic", data, []).may_hold_video
+
+
+PAGE_PARSER = "HTML5MediaEmbed"
+
+
+@pytest.mark.parametrize("ext", ["ogv", "mp4", "webm", "MP4"])
+@pytest.mark.parametrize("acodec", ["vorbis", "mp4a.40.2", "opus", None])
+def test_an_audio_tag_declaring_a_video_container_is_flagged(ext: str, acodec: str | None) -> None:
+    assert flagged_from(PAGE_PARSER, {"vcodec": "none", "acodec": acodec, "ext": ext}) is True
+
+
+@pytest.mark.parametrize(
+    "ext,acodec", [("ogg", "vorbis"), ("oga", "vorbis"), ("m4a", "mp4a.40.2"), ("mp3", "mp3")]
+)
+def test_an_audio_tag_on_an_audio_container_with_a_named_codec_is_not_flagged(
+    ext: str, acodec: str
+) -> None:
+    assert flagged_from(PAGE_PARSER, {"vcodec": "none", "acodec": acodec, "ext": ext}) is False
+
+
+@pytest.mark.parametrize("extractor_key", ["Generic", "Youtube", "FakeSite", None])
+@pytest.mark.parametrize("ext,acodec", [("webm", "opus"), ("mp4", "mp4a.40.2"), ("ogv", "vorbis")])
+def test_a_named_codec_on_a_video_container_from_elsewhere_is_not_flagged(
+    extractor_key: str | None, ext: str, acodec: str
+) -> None:
+    fmt = {"vcodec": "none", "acodec": acodec, "ext": ext}
+    assert flagged_from(extractor_key, fmt) is False
+
+
+def test_a_declared_video_flags_neither_a_playlist_nor_a_video_result() -> None:
+    declared = {"vcodec": "none", "acodec": "vorbis", "ext": "ogv"}
+    entry = {"id": "e", "extractor_key": PAGE_PARSER, "formats": [declared]}
+    data = {"id": "p", "extractor_key": PAGE_PARSER, "entries": [entry]}
+    playlist = _read_result("http://x/f", "generic", data, [])
+    assert playlist.is_playlist
+    assert playlist.may_hold_video is False
+    assert flagged_from(PAGE_PARSER, declared, {"vcodec": "theora", "ext": "ogv"}) is False
+
+
 KINDS_WEAKEST_FIRST = [
     (IMAGE, STORYBOARD),
     (UNKNOWN, {"vcodec": None, "acodec": None, "ext": "jpg"}),
