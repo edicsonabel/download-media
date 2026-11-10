@@ -1,9 +1,11 @@
 # 61 — Save lone image posts
 
-Status: draft
+Status: done
 Item: `feature/ig-lone-images`
 
-> **For the human's review before the release:** the architect took every decision below under the overnight delegation and recommends an option for each. Four change published behaviour. A lone result with no formats and a thumbnail is now saved as an image, on any site, with a notice saying so (D1, the one to look at). Lone images are always named with their id (D2). Instagram's logged-out sentence `There is no video in this post` now counts as a case browser cookies can fix (D6), which reverses one row of spec 18's table. The direct preview reads pages through the tool's own yt-dlp subclass, which also gives carousel previews their title (D5, row 63). Nothing renames a flag, changes a default or moves a path, so this reads as minor, and 0.4.0 already is one. The logged-in path can only be checked with the human's own cookies: that's the live check, an open item for the morning.
+> **Done, pending two things of the human's.** It merged in `11b4fc4` and was validated on `main` at `b385d4c` (see Validation). The live check, which needs the human's own Instagram cookies, is still open (see Live check). D1 to D7 were approved under the overnight delegation with the recommended options. For the 0.4.0 review, the human should look first at D1 and its cost, then D2, D5 and D6.
+>
+> **Written before the merge, for the human's review:** the architect took every decision below under the overnight delegation and recommends an option for each. Four change published behaviour. A lone result with no formats and a thumbnail is now saved as an image, on any site, with a notice saying so (D1, the one to look at). Lone images are always named with their id (D2). Instagram's logged-out sentence `There is no video in this post` now counts as a case browser cookies can fix (D6), which reverses one row of spec 18's table. The direct preview reads pages through the tool's own yt-dlp subclass, which also gives carousel previews their title (D5, row 63). Nothing renames a flag, changes a default or moves a path, so this reads as minor, and 0.4.0 already is one. The logged-in path can only be checked with the human's own cookies: that's the live check, an open item for the morning.
 
 ## Problem
 
@@ -174,7 +176,7 @@ The wording is a proposal. The developer may adjust it, keeping both blocks in s
 | wizard `-i --cookies firefox`                            | Banner, folder, cookies (default firefox), save. 3 prompts                                                                                                     |
 | wizard `-i -a --cookies firefox`                         | Saved as an image; the printed command has no `-a`                                                                                                             |
 | wizard, declines cookies                                 | As today after that answer: `probe_failed`, manual flow, `Download failed`, now with `image_post_hint`. Exit 1 (row 38)                                        |
-| wizard `-i -l --cookies firefox`                         | Folder, cookies, then `item_image_skipped`, exit 0                                                                                                             |
+| wizard `-i -l --cookies firefox`                         | Since spec 22 D3 (`intent-flags`, merged first), `-i -l` asks only for the URL: one prompt, then `item_image_skipped`, exit 0, no files, the same output as `-y -l` under the wizard's title (`test_wizard_in_list_mode_names_a_lone_image`, `33a464c`). Written before 22 merged, this row said "Folder, cookies, then `item_image_skipped`" |
 | multi-URL wizard, a video and the image, with cookies    | Both saved, one printed command naming both URLs, exit 0                                                                                                       |
 | two lone images with one title (`ig-image`, `ig-lone-image-b`) | `Clip [i1].jpg` and `Clip [i9].jpg`                                                                                                                      |
 | a lone image next to a video of the same title           | `Clip.mp4` and `Clip [i1].jpg`                                                                                                                                 |
@@ -197,33 +199,35 @@ New `fake_site` pages (`tests/conftest.py`):
 
 Criteria:
 
-- [ ] `scripts/pre-release.sh --no-live` passes.
-- [ ] **[fix]** e2e `test_a_lone_image_with_cookies_is_saved_in_every_direct_mode`, parametrized over `-y`, `-y -P`, `-y -p`, `-y --playlist-items 1`, `-y --video-format mkv`: with `--cookies firefox` on `ig-lone-image`, the folder holds exactly `Clip [i1].jpg`, byte-identical to the fixture's `tiny.jpg`; exit 0; `t("done")`, `t("image_alone_saved", "Clip [i1].jpg")`; no `t("cookies_retry", …)`, no `partial_result`, no `No video formats found`; one history row of kind `video`.
-- [ ] **[fix]** e2e `test_a_lone_image_rerun_adds_nothing`: `-y --cookies firefox` twice, then `-y -p --cookies firefox`: one file, unchanged mtime, exit 0 each time.
-- [ ] **[fix]** e2e `test_the_preview_reads_a_lone_image`: `--cookies firefox`, Enter: `f"{t('p_title')}: Clip"` in the output, no `ERROR:` line, `Clip [i1].jpg` saved. Answering `n`: no files, exit 1.
-- [ ] **[fix]** e2e `test_the_preview_reads_a_carousel`: on `ig-carousel`, `f"{t('p_title')}: Post"` and no `ERROR:` line before the confirmation. The four files of spec 01 follow.
-- [ ] **[fix]** e2e `test_audio_mode_skips_a_lone_image`, over `-y -a` and `-y -a -p`, with cookies: `t("item_image_skipped", "i1")`, `t("no_supported_items")`, exit 1, no file, no history row.
-- [ ] **[fix]** e2e `test_list_mode_names_a_lone_image`: `-y -l --cookies firefox`: `t("item_image_skipped", "i1")`, exit 0, no files.
-- [ ] **[fix]** e2e `test_a_lone_image_without_cookies_says_cookies_may_save_it`, over `-y`, `-y -p`, `-y -l`: `t("failed", url)` (`_list_formats` prints it too), `t("image_post_hint")`, no `→ try again with --cookies <browser>` line, exit 1, no files.
-- [ ] **[fix]** e2e `test_cookies_that_do_not_log_in_say_so_on_an_image_post`: `-y --cookies firefox` on `no-video-post`: `t("cookies_retry", "firefox")`, `t("auth_still_needed", "firefox")`, no `t("image_post_hint")`, exit 1.
-- [ ] **[fix]** e2e `test_wizard_asks_for_cookies_on_a_lone_image_and_saves_it`: `-i` on `ig-lone-image`, replies URL `""`, browser `str(BROWSERS.index("firefox") + 2)`, folder `""`: exactly 3 prompts, `t("image_post_needs_login")`, `detected("kind_image")`, no `t("ask_type")`, `t("ask_quality")` or `t("ask_vformat")`; `Clip [i1].jpg`; exit 0; the printed command is `download-media -y -o <out> --cookies firefox https://fake.test/ig-lone-image`, and replayed into the same folder it adds nothing.
-- [ ] **[fix]** e2e `test_wizard_with_cookies_walks_only_the_folder_for_a_lone_image`: `-i --cookies firefox`, 3 prompts (URL, folder, cookies), saved. With `-i -a --cookies firefox`: saved as `.jpg`, and the printed command has no `-a`.
-- [ ] **[fix]** e2e `test_wizard_saves_a_lone_image_among_other_urls`: `-i --cookies firefox -o <out> <video> <ig-lone-image>`: `Clip.mp4` and `Clip [i1].jpg`, no `wizard_skipped`, exit 0, one printed command naming both URLs.
-- [ ] **[pin]** e2e: the wizard declining cookies on `ig-lone-image` still walks the manual flow to `Download failed`, exit 1, no files, now with `t("image_post_hint")`. It pins today's walk for row 38 to change.
-- [ ] **[fix]** e2e `test_lone_images_are_named_by_their_id`: `-y ig-image ig-lone-image-b` saves `Clip [i1].jpg` and `Clip [i9].jpg`; `-y video ig-image` saves `Clip.mp4` and `Clip [i1].jpg`.
-- [ ] **[fix]** e2e: `-y` and `-y -p` on `ig-lone-broken`: `t("image_not_saved", "i1")`, exit 1, no files. With `--cookies firefox`: `t("cookies_retry", "firefox")` too.
-- [ ] **[fix]** `DIRECT_OUTCOMES["thumbnail-image"]`: `""`, `-p`, `-P`: `(0, ["Clip [i1].jpg"])`; `-a`: `(1, [])`; `-l`: `(0, [])`.
-- [ ] **[pin]** e2e: `-y` on `image`, `no-url-format`, `drm`, `upcoming` and `no-video-post` (no cookies): exit 1, no files. `image-format` stays in the two refusal tests, `ig-image` and `thumbnail-image` leave them, and the multi-URL refusal tests use `IMAGE = "https://fake.test/image-format"` with their prompt counts unchanged.
-- [ ] **[fix]** `test_probe.py`: `probe(ig-lone-image)` without cookies: `failed`, `needs_cookies`, `error_message == "There is no video in this post"`. With cookies: `SINGLE_IMAGE`, `saveable_image`. `thumbnail-image`: `saveable_image`. `image-format`: `SINGLE_IMAGE`, not `saveable_image`.
-- [ ] **[fix]** `test_probe.py`: `is_auth_error` and `is_image_post_error` are true for `"[Instagram] x: There is no video in this post"`, which moves out of the not-auth list; `no-video-post` leaves `test_probe_does_not_ask_for_cookies_when_they_cannot_help`; `test_a_failure_with_metadata_never_reads_as_an_image[no-video-post]` stays.
-- [ ] **[pin]** `test_probe.py::test_instagram_still_says_there_is_no_video_in_this_post`: `inspect.getsource(yt_dlp.extractor.instagram.InstagramIE._real_extract)` contains `There is no video in this post`. A reworded yt-dlp fails the gate instead of silently dropping the hint.
-- [ ] **[fix]** `test_downloader.py`: the `match_filter` skips a lone `is_saveable_image` entry with `item_image_skipped` and counts it once when `keep_images=False`, passes it when `True`, and passes a lone entry with nothing to fetch in both.
-- [ ] **[fix]** `test_wizard_flow.py`: a `Probe(SINGLE_IMAGE, saveable_image=True)` plans `output` and `cookies`, and turns off `audio_only`; `Probe(SINGLE_IMAGE)` is still refused.
-- [ ] **[fix]** `test_cli.py`: `_hint_for_download_error` on the sentence prints `image_post_hint` without cookies and `auth_still_needed` with them, and never the generic line.
-- [ ] `test_i18n.py` passes: the three keys are in both blocks.
-- [ ] `AGENTS.md`, `README.md` and `.ai/live.env.example` carry the lines in Design.
+- [x] `scripts/pre-release.sh --no-live` passes.
+- [x] **[fix]** e2e `test_a_lone_image_with_cookies_is_saved_in_every_direct_mode`, parametrized over `-y`, `-y -P`, `-y -p`, `-y --playlist-items 1`, `-y --video-format mkv`: with `--cookies firefox` on `ig-lone-image`, the folder holds exactly `Clip [i1].jpg`, byte-identical to the fixture's `tiny.jpg`; exit 0; `t("done")`, `t("image_alone_saved", "Clip [i1].jpg")`; no `t("cookies_retry", …)`, no `partial_result`, no `No video formats found`; one history row of kind `video`.
+- [x] **[fix]** e2e `test_a_lone_image_rerun_adds_nothing`: `-y --cookies firefox` twice, then `-y -p --cookies firefox`: one file, unchanged mtime, exit 0 each time.
+- [x] **[fix]** e2e `test_the_preview_reads_a_lone_image`: `--cookies firefox`, Enter: `f"{t('p_title')}: Clip"` in the output, no `ERROR:` line, `Clip [i1].jpg` saved. Answering `n`: no files, exit 1.
+- [x] **[fix]** e2e `test_the_preview_reads_a_carousel`: on `ig-carousel`, `f"{t('p_title')}: Post"` and no `ERROR:` line before the confirmation. The four files of spec 01 follow.
+- [x] **[fix]** e2e `test_audio_mode_skips_a_lone_image`, over `-y -a` and `-y -a -p`, with cookies: `t("item_image_skipped", "i1")`, `t("no_supported_items")`, exit 1, no file, no history row.
+- [x] **[fix]** e2e `test_list_mode_names_a_lone_image`: `-y -l --cookies firefox`: `t("item_image_skipped", "i1")`, exit 0, no files.
+- [x] **[fix]** e2e `test_a_lone_image_without_cookies_says_cookies_may_save_it`, over `-y`, `-y -p`, `-y -l`: `t("failed", url)` (`_list_formats` prints it too), `t("image_post_hint")`, no `→ try again with --cookies <browser>` line, exit 1, no files.
+- [x] **[fix]** e2e `test_cookies_that_do_not_log_in_say_so_on_an_image_post`: `-y --cookies firefox` on `no-video-post`: `t("cookies_retry", "firefox")`, `t("auth_still_needed", "firefox")`, no `t("image_post_hint")`, exit 1.
+- [x] **[fix]** e2e `test_wizard_asks_for_cookies_on_a_lone_image_and_saves_it`: `-i` on `ig-lone-image`, replies URL `""`, browser `str(BROWSERS.index("firefox") + 2)`, folder `""`: exactly 3 prompts, `t("image_post_needs_login")`, `detected("kind_image")`, no `t("ask_type")`, `t("ask_quality")` or `t("ask_vformat")`; `Clip [i1].jpg`; exit 0; the printed command is `download-media -y -o <out> --cookies firefox https://fake.test/ig-lone-image`, and replayed into the same folder it adds nothing.
+- [x] **[fix]** e2e `test_wizard_with_cookies_walks_only_the_folder_for_a_lone_image`: `-i --cookies firefox`, 3 prompts (URL, folder, cookies), saved. With `-i -a --cookies firefox`: saved as `.jpg`, and the printed command has no `-a`.
+- [x] **[fix]** e2e `test_wizard_saves_a_lone_image_among_other_urls`: `-i --cookies firefox -o <out> <video> <ig-lone-image>`: `Clip.mp4` and `Clip [i1].jpg`, no `wizard_skipped`, exit 0, one printed command naming both URLs.
+- [x] **[pin]** e2e: the wizard declining cookies on `ig-lone-image` still walks the manual flow to `Download failed`, exit 1, no files, now with `t("image_post_hint")`. It pins today's walk for row 38 to change.
+- [x] **[fix]** e2e `test_lone_images_are_named_by_their_id`: `-y ig-image ig-lone-image-b` saves `Clip [i1].jpg` and `Clip [i9].jpg`; `-y video ig-image` saves `Clip.mp4` and `Clip [i1].jpg`.
+- [x] **[fix]** e2e: `-y` and `-y -p` on `ig-lone-broken`: `t("image_not_saved", "i1")`, exit 1, no files. With `--cookies firefox`: `t("cookies_retry", "firefox")` too.
+- [x] **[fix]** `DIRECT_OUTCOMES["thumbnail-image"]`: `""`, `-p`, `-P`: `(0, ["Clip [i1].jpg"])`; `-a`: `(1, [])`; `-l`: `(0, [])`.
+- [x] **[pin]** e2e: `-y` on `image`, `no-url-format`, `drm`, `upcoming` and `no-video-post` (no cookies): exit 1, no files. `image-format` stays in the two refusal tests, `ig-image` and `thumbnail-image` leave them, and the multi-URL refusal tests use `IMAGE = "https://fake.test/image-format"` with their prompt counts unchanged.
+- [x] **[fix]** `test_probe.py`: `probe(ig-lone-image)` without cookies: `failed`, `needs_cookies`, `error_message == "There is no video in this post"`. With cookies: `SINGLE_IMAGE`, `saveable_image`. `thumbnail-image`: `saveable_image`. `image-format`: `SINGLE_IMAGE`, not `saveable_image`.
+- [x] **[fix]** `test_probe.py`: `is_auth_error` and `is_image_post_error` are true for `"[Instagram] x: There is no video in this post"`, which moves out of the not-auth list; `no-video-post` leaves `test_probe_does_not_ask_for_cookies_when_they_cannot_help`; `test_a_failure_with_metadata_never_reads_as_an_image[no-video-post]` stays.
+- [x] **[pin]** `test_probe.py::test_instagram_still_says_there_is_no_video_in_this_post`: `inspect.getsource(yt_dlp.extractor.instagram.InstagramIE._real_extract)` contains `There is no video in this post`. A reworded yt-dlp fails the gate instead of silently dropping the hint.
+- [x] **[fix]** `test_downloader.py`: the `match_filter` skips a lone `is_saveable_image` entry with `item_image_skipped` and counts it once when `keep_images=False`, passes it when `True`, and passes a lone entry with nothing to fetch in both.
+- [x] **[fix]** `test_wizard_flow.py`: a `Probe(SINGLE_IMAGE, saveable_image=True)` plans `output` and `cookies`, and turns off `audio_only`; `Probe(SINGLE_IMAGE)` is still refused.
+- [x] **[fix]** `test_cli.py`: `_hint_for_download_error` on the sentence prints `image_post_hint` without cookies and `auth_still_needed` with them, and never the generic line.
+- [x] `test_i18n.py` passes: the three keys are in both blocks.
+- [x] `AGENTS.md`, `README.md` and `.ai/live.env.example` carry the lines in Design.
 
 ## Live check
+
+**Status: open, for the human.** It wasn't run at validation: it needs the human's own cookies, and no role contacts instagram.com. Run the block below from the repo root on `main`, one command at a time. If step 2 fails, revert the merge (`git revert -m 1 11b4fc4`) rather than hold 0.4.0 (PLAN.md, Next release).
 
 Needs the human's Instagram session, so it can't run overnight: an open item for the morning. Run it in the validation stage, through the tool only, one command at a time, with no other live run in progress (Instagram rate-limits by IP). `DM_LIVE_IG_IMAGE` is a public post holding a single image, which spec 18's step 3 already used in 0.3.0.
 
@@ -250,6 +254,46 @@ What must hold:
 3. Step 3: `already present`, still one file.
 4. Step 4: `image_post_needs_login`, one cookies prompt, `Detected: instagram / Image` with the title, the folder prompt, no type or quality step, one `.jpg` with the same name as step 2.
 5. If the logged-in run prints anything else (yt-dlp's `No video formats found!`, a refusal, a carousel), record it: it corrects this spec's Findings, which rest on `instagram.py` and the 0.3.0 run.
+
+## What changed from this spec
+
+- **Deviation (developer, accepted in review):** `_skip_items_without_media` doesn't tell a lone result by its missing `playlist_index`, as Design said. yt-dlp also calls the `match_filter` on a list's raw entries before it gives them an index, then on each again with one. With "no index" as the test, `-a` would have named and counted every carousel image twice. The filter takes a `saving_image` callable instead, which reads a flag `_Ydl.process_video_result` sets while it saves the URL's own image. It is pinned by `test_filter_leaves_a_list_s_raw_entries_to_the_check_with_their_index`, `test_a_list_s_images_are_never_called_the_url_s_only_result` and `test_audio_mode_counts_each_carousel_image_once`. The notice works as Design said: `DownloadResult.lone_images`, filled from `ydl.images` when `_Ydl.lone_image` is set.
+- **Cases, `-i -l`:** rewritten after spec 22 (see the row). The test was cut to one reply in `33a464c`.
+- **Reproduction 1's file name:** the canned answer QA reused at validation (`qa61/scripts/ig.py`) gives the post the pk `3250000000000000001`, so yt-dlp names it `C0aUcfgBQAB`, not the URL's `C0abcDEFghi`. yt-dlp takes the id from the answer, not from the URL. The rule `<title> [<id>].<ext>` holds either way.
+
+## Notes from review (QA minors, not fixed)
+
+1. `image_alone_saved` says "…and saved it" on a rerun too, after yt-dlp's `Video thumbnail is already present`, when nothing was written. Measured at validation: `-y` then `-y -p` on the same folder, one file, same mtime, the line both times. The Cases table asks for the line again on a rerun, so this is about wording ("saved it" against "found it already saved"), and it goes to the planner, not a fix here. Both language blocks would change.
+2. The Cases row for `-i -l` was out of date after spec 22. Fixed above.
+3. The spec was still `draft` at merge. Fixed here.
+
+## Validation
+
+On `main` at `b385d4c` (merge `11b4fc4`; `b385d4c` only touches `state.json`), yt-dlp 2026.10.26, `LANG=C` unless noted. Fresh `HOME` and XDG folders, the session bus pointed at a dead address, every proxy variable at a dead port, `no_proxy=127.0.0.1`, and `cookiesfrombrowser` dropped before yt-dlp sees it, so no browser was read and nothing left loopback.
+
+- **Gate:** not run again. The tech-lead's run on `11b4fc4` passed, exit 0, `3000 passed, 9 deselected, 15 xfailed`, and `src/` and `tests/` haven't changed since. CI on `b385d4c` (run 42819751344) was still running when this was written.
+- **Criteria tests, run:** `pytest tests/test_probe.py tests/test_downloader.py tests/test_wizard_flow.py tests/test_cli.py tests/test_i18n.py tests/test_e2e.py -k "lone or image or preview or no_video or direct_modes_keep or refused or image_post or carousel or wizard_skips or every_url"`, exit 0, `544 passed, 1791 deselected, 2 xfailed` (the two strict xfails are spec 37's uppercase-image ones). `tests/test_i18n.py` alone: 7 passed. Every test the criteria name exists once (`grep`). `no-video-post` is gone from `test_probe_does_not_ask_for_cookies_when_they_cannot_help` and still in `test_a_failure_with_metadata_never_reads_as_an_image`. The two refusal tests are parametrized on `image-format` only, and `IMAGE` is `https://fake.test/image-format`.
+- **Reproduction 1, run again** with yt-dlp's real `InstagramIE` on canned answers (QA's script, copied):
+
+  | Command                                  | On `main` now                                                                                                                                                         |
+  | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `-y --cookies firefox <url>`             | `Video by someone [C0aUcfgBQAB].jpg`, 96×120 by ffprobe (the larger candidate), `image_alone_saved`, `Done.`, exit 0, one `video` history row; only `media/<pk>/info/` requested. The printed command keeps `--cookies firefox -P` |
+  | the same again                           | `Video thumbnail is already present`, one file, same mtime, `image_alone_saved`, exit 0                                                                               |
+  | `-y <url>`                               | `ERROR: … There is no video in this post`, `Download failed`, then `→ it may be a single image, which the site only shows to logged-in users: try again with --cookies <browser> …`, exit 1, no files, no generic hint |
+  | `-y -p`, `-y --video-format mkv`, with cookies | the same `.jpg`, `image_alone_saved`, exit 0                                                                                                                     |
+  | `-y -a --cookies firefox`                | `[download] C0aUcfgBQAB: an image, skipping`, `No items are downloadable.`, exit 1, no files, no history file; the printed command is shown                            |
+  | `-y -l --cookies firefox`                | the same skip line, exit 0, no files                                                                                                                                  |
+  | preview `--cookies firefox`, Enter twice | `Title: Video by someone`, `Channel: Some One`, no `ERROR:` line, then the `.jpg`, exit 0. Answering `n`: `Cancelled.`, exit 1, no files                              |
+  | `-i --cookies firefox <url>`, Enter      | 3 prompts (URL, folder, cookies with `[2]` firefox), `Detected: instagram / Image`, saved, exit 0                                                                       |
+  | `-i <url>`, Enter, `2`, Enter            | `image_post_needs_login`, the cookies prompt, a second probe, `Detected: instagram / Image`, the folder, saved, exit 0. Printed: `download-media -y -o <out> --cookies firefox -P <url>` |
+  | `-i <url>`, Enter at every prompt        | `image_post_needs_login`, `No cookies`, `Could not inspect URL: There is no video in this post`, the manual flow, `Download failed` and `image_post_hint`, exit 1, no files (row 38) |
+  | `-i -l --cookies firefox <url>`          | one prompt (URL), the skip line, exit 0, no files                                                                                                                     |
+
+- **D5 and row 63, measured:** the direct preview on the real `InstagramIE` carousel (an image and a video), with and without `--cookies firefox`, now prints `Title: Post by someone` and `Channel: Some One`, with no `ERROR:` line. It shows no item count, size or duration, which `_show_preview` never printed for a list. Declining wrote nothing.
+- **D1's cost, measured:** a scratch extractor returning `live_status: is_upcoming`, `formats: []` and a thumbnail, without raising, saved `Stream [s1].jpg`, `image_alone_saved`, `Done.`, exit 0, in `-y` and `-y -p`. Before this item, yt-dlp's `raise_no_formats` failed it with `No video formats found!` (`YoutubeDL.py:2958-2959`, read, not run on the old code). `is_saveable_image` (`downloader.py:128-135`) only looks at `_type`, the formats or `url`, and the thumbnails. It never reads `live_status`. YouTube and Instagram raise for an upcoming stream inside the extractor, so they still fail (pinned by `upcoming` on `fake_site`). An extractor that returns an upcoming stream, or a video whose manifest failed with `fatal=False`, with a thumbnail and no formats now ends as a saved `.jpg` and exit 0. The notice and the wizard's `Image` banner show it, but a script only sees exit 0.
+- **Docs:** `AGENTS.md`, `README.md` and `.ai/live.env.example` carry the lines in Design (`git diff 2d9362a 11b4fc4`).
+- **Mapped, not run here:** spec criteria checked through their tests only: the `ig-lone-broken` failure, two lone images with one title, a lone image next to a video, the multi-URL wizard, `thumbnail-image` in `DIRECT_OUTCOMES`, and the `match_filter`, probe, plan and hint units. The test-engineer's mutation run (23 of 23 caught) backs them.
+- **Not run:** the live check (above).
 
 ## Open decisions
 
