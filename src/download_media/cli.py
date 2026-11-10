@@ -18,7 +18,7 @@ from typing import NamedTuple, NoReturn
 
 from yt_dlp.utils import DownloadError
 
-from . import __version__, equivalent, history, selection, wizard
+from . import __version__, downloader, equivalent, history, selection, wizard
 from .clipboard import read_clipboard
 from .config import (
     AUDIO_FORMATS,
@@ -237,8 +237,6 @@ def _show_preview(url: str, opts: DownloadOptions) -> _Preview:
     info(t("fetching"))
     from typing import Any
 
-    from yt_dlp import YoutubeDL
-
     ydl_opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
@@ -249,8 +247,11 @@ def _show_preview(url: str, opts: DownloadOptions) -> _Preview:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
     cookies_failed = False
     try:
-        with YoutubeDL(ydl_opts) as ydl:
+        # Through the module: the download's own subclass, which reads images instead of
+        # failing on them. Nothing is written: extract_info doesn't download.
+        with downloader._Ydl(ydl_opts) as ydl:
             load_browser_cookies(ydl, opts.cookies_browser)
+            ydl.save_images = True
             data = ydl.extract_info(url, download=False)
     except CookiesUnavailable as exc:
         # Said before the user confirms; the download then goes on without them.
@@ -258,7 +259,8 @@ def _show_preview(url: str, opts: DownloadOptions) -> _Preview:
         cookies_failed = True
         del ydl_opts["cookiesfrombrowser"]
         try:
-            with YoutubeDL(ydl_opts) as ydl:
+            with downloader._Ydl(ydl_opts) as ydl:
+                ydl.save_images = True
                 data = ydl.extract_info(url, download=False)
         except Exception:
             data = None

@@ -11161,3 +11161,29 @@ def test_lone_results_with_nothing_to_save_still_fail(run: Any, out: Path, page:
     assert code == 1
     assert t("done") not in output
     assert names(out) == []
+
+
+@pytest.mark.parametrize("reply", ["", "n"], ids=["confirmed", "declined"])
+def test_the_preview_reads_a_lone_image(run: Any, out: Path, answers: Any, reply: str) -> None:
+    prompts = answers(reply)
+    code, output = run(*WITH_COOKIES, LONE_IMAGE)
+    assert prompts == [t("ask_confirm")]
+    assert f"{t('p_title')}: Clip" in output
+    assert "ERROR:" not in output
+    if reply:
+        assert code == 1
+        assert names(out) == []
+        return
+    assert code == 0
+    assert names(out) == [LONE_NAME]
+    assert t("image_alone_saved", LONE_NAME) in output
+
+
+def test_the_preview_reads_a_carousel(run: Any, out: Path, answers: Any) -> None:
+    answers("")
+    code, output = run(IG_CAROUSEL)
+    assert code == 0
+    before = output[: output.index(t("downloading"))]
+    assert f"{t('p_title')}: Post" in before
+    assert "ERROR:" not in before
+    assert names(out) == IG_SINGLE
