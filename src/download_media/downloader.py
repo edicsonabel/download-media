@@ -396,7 +396,8 @@ def build_ydl_opts(opts: DownloadOptions, output_dir: Path) -> dict[str, Any]:
                 "writethumbnail": opts.audio_format != "wav",
                 # Nothing would embed or delete a list's own thumbnail.
                 "allow_playlist_files": False,
-                # download() adds the cover step (_EmbedCover) and the metadata step.
+                # download() adds the metadata step (_TagSource), then the cover step
+                # (_EmbedCover).
                 "postprocessors": [
                     {
                         "key": "FFmpegExtractAudio",
@@ -786,9 +787,11 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
             step = _RemuxTo if container == "mkv" else _RecodeTo
             ydl.add_post_processor(step(ydl, container), when="post_process")
         # Appended after the params' postprocessors: audio extraction comes first.
+        # Metadata before the cover, as yt-dlp's CLI orders them: the metadata step maps m4a
+        # with -vn, which would drop a cover embedded before it.
+        ydl.add_post_processor(_TagSource(ydl, untagged), when="post_process")
         if ydl_opts.get("writethumbnail"):
             ydl.add_post_processor(_EmbedCover(ydl), when="post_process")
-        ydl.add_post_processor(_TagSource(ydl, untagged), when="post_process")
         final_ext = opts.audio_format if opts.audio_only else None
         ydl.add_post_processor(_AvoidNameClash(final_ext, container=container), when="video")
         counts: list[int | None] = []

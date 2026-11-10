@@ -21,7 +21,7 @@ import pytest
 from yt_dlp import YoutubeDL
 from yt_dlp.aes import aes_cbc_encrypt_bytes
 from yt_dlp.cookies import pbkdf2_sha1
-from yt_dlp.utils import ReExtractInfo
+from yt_dlp.utils import PostProcessingError, ReExtractInfo
 
 from download_media import cli, i18n, wizard
 from download_media.config import AUDIO_FORMATS, BROWSERS, history_file
@@ -80,6 +80,18 @@ def streams(path: Path) -> set[str]:
     """The stream types ffprobe finds in ``path``."""
     probe = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0"]
     return set(subprocess.run([*probe, str(path)], capture_output=True, text=True).stdout.split())
+
+
+def video_streams(path: Path) -> list[bool]:
+    """Whether each video stream ffprobe finds in ``path`` is an attached picture (a cover)."""
+    probe = ["ffprobe", "-v", "error", "-select_streams", "v"]
+    probe += ["-show_entries", "stream_disposition=attached_pic", "-of", "csv=p=0"]
+    done = subprocess.run([*probe, str(path)], capture_output=True, text=True)
+    return [row.strip() == "1" for row in done.stdout.splitlines() if row.strip()]
+
+
+def attached_pictures(path: Path) -> int:
+    return sum(video_streams(path))
 
 
 def detected(kind: str) -> str:
@@ -2687,9 +2699,52 @@ def test_a_working_cover_is_still_embedded(generic: Any, out: Path, audio_format
     [saved] = names(out)
     assert saved.endswith(f".{audio_format}")
     assert cover_warnings(output) == 0
-    # yt-dlp's metadata step, which runs after the cover's, keeps no video stream in an m4a.
-    if audio_format == "mp3":
-        assert "video" in streams(out / saved)
+    assert cover_leftovers(out) == []
+    assert "audio" in streams(out / saved)
+    assert attached_pictures(out / saved) == 1
+
+
+def test_m4a_holding_video_keeps_its_cover_not_its_video(generic: Any, out: Path) -> None:
+    # ExtractAudio skips an .m4a, and yt-dlp's metadata step drops its h264 (-vn).
+    code, output = generic("audio-video-m4a.html", flags=("-y", "-a", "-f", "m4a", "-o", str(out)))
+    assert code == 0
+    [saved] = names(out)
+    assert saved.endswith(".m4a")
+    assert video_streams(out / saved) == [True]
+    assert "audio" in streams(out / saved)
+    assert cover_leftovers(out) == []
+    assert cover_warnings(output) == 0
+
+
+def test_m4a_cover_survives_a_rerun(generic: Any, media_url: str, out: Path) -> None:
+    flags = ("-y", "-a", "-f", "m4a", "-o", str(out))
+    for _ in range(2):
+        code, output = generic("audio.html", flags=flags)
+        assert code == 0
+        assert cover_warnings(output) == 0
+    [saved] = names(out)
+    assert saved.endswith(".m4a")
+    assert attached_pictures(out / saved) == 1
+    assert _source_url(out / saved) == f"{media_url}/audio.html"
+
+
+@pytest.mark.parametrize("flags", [(), ("-p",)], ids=["single", "playlist"])
+def test_a_failed_metadata_step_leaves_no_cover(
+    monkeypatch: pytest.MonkeyPatch,
+    generic: Any,
+    media_url: str,
+    out: Path,
+    flags: tuple[str, ...],
+) -> None:
+    # The cover step runs after the metadata step, so the thumbnail is still on disk here.
+    def step(self: Any, info: dict[str, Any]) -> Any:
+        raise PostProcessingError("no tags")
+
+    monkeypatch.setattr(_TagSource, "run", step)
+    code, output = generic("audio.html", flags=("-y", "-a", "-f", "m4a", *flags, "-o", str(out)))
+    assert code == 1
+    assert t("failed", f"{media_url}/audio.html") in output
+    assert cover_leftovers(out) == []
 
 
 def test_video_with_an_og_image_leaves_no_image(generic: Any, out: Path) -> None:

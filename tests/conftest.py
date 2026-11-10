@@ -239,6 +239,7 @@ def _write_generic_pages(root: Path, base: str) -> None:
         ),
         "partial-codec": f"<video>{codecs}</video>",
         "audio": f'<audio src="tiny.m4a"></audio>{og_image}',
+        "audio-video-m4a": f'<audio src="clip.m4a"></audio>{og_image}',
         "audios": '<audio src="a1.m4a"></audio><audio src="a2.m4a"></audio>',
         "video-audio": '<video src="v1.mp4"></video><audio src="a1.m4a"></audio>',
         "jpg-video": '<video src="tiny.jpg"></video><video src="v1.mp4"></video>',
