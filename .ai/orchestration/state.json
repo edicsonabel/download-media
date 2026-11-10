@@ -2848,7 +2848,7 @@
           "agent": "architect",
           "result": "validated",
           "at": "2026-11-10T04:32:02-04:00",
-          "note": "Criteria hold on main: 208 criteria tests pass; R1 (storyboard stub, en/es), R2 (uppercase extensions), R3 (video declared in <audio>) reproduced fixed with the real console script; -y unchanged. Spec done with deviations and xfails recorded; PLAN row 37 done; review items 34-37 with the three human flags. CI on e26115d pending at validation. Worktree and branch removed."
+          "note": "Criteria hold on main: 208 criteria tests pass; R1 (storyboard stub, en/es), R2 (uppercase extensions), R3 (video declared in <audio>) reproduced fixed with the real console script; -y unchanged. Spec done with deviations and xfails recorded; PLAN row 37 done; review items 34-37 with the three human flags. CI on e26115d pending at validation. Worktree and branch removed. CI run 42782386544 on e26115d succeeded (attempt 1)."
         }
       ]
     },
