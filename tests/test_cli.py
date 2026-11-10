@@ -956,11 +956,6 @@ def test_ctrl_c_stops_a_calling_bash_loop(piped: bool) -> None:
     assert b"Traceback" not in err
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="F2: a second Ctrl-C while main() prints Cancelled. escapes main() and entry(): "
-    "Python prints a traceback before dying by SIGINT",
-)
 def test_a_second_ctrl_c_on_the_cancel_line_shows_no_traceback(monkeypatch) -> None:
     import os
     import signal

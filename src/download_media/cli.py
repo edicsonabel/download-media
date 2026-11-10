@@ -619,7 +619,10 @@ def _main(argv: list[str] | None) -> int:
 
 def entry() -> NoReturn:
     """The console script: after Ctrl-C, end by SIGINT, so a calling shell loop stops too."""
-    code = main()
+    try:
+        code = main()
+    except KeyboardInterrupt:  # A second Ctrl-C while main() printed its cancel line.
+        code = EXIT_INTERRUPTED
     if code == EXIT_INTERRUPTED:
         # Without the flush, output still buffered for a pipe dies with the process.
         for stream in (sys.stdout, sys.stderr):
