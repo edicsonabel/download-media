@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:49:55-04:00",
+  "updated": "2026-11-10T04:54:46-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2955,13 +2955,15 @@
     "fix/intent-flags": {
       "type": "fix",
       "title": "Make -l and bundled or abbreviated flags skip the wizard, and -l list every URL",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/22-intent-flags.md",
       "branch": "fix/intent-flags",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-intent-flags",
+      "commits": [
+        "0d1af00"
+      ],
       "review": null,
       "history": [
         {
@@ -2970,6 +2972,20 @@
           "result": "approved",
           "at": "2026-11-10T04:42:23-04:00",
           "note": "Next P2 in PLAN.md's order after ig-lone-images (probe-fail-fast waits on ig-lone's line), under the human's overnight delegation. Spec written in parallel."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T04:54:46-04:00",
+          "note": "Spec 0d1af00, PLAN row 22 to spec. Reproduced on e447bea: -l, -q720, -as, --aud open the wizard; every -l path lists only the first URL; '-- -a' read as a flag. D1-D5; detection by a second argparse parse into a sentinel namespace; no new messages; no live check. Planner: cookie retry for -l on login walls; wizard.run unused in src; repeated cookie failure report per URL."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T04:54:46-04:00",
+          "note": "Spec approved under the overnight delegation, every recommended option. Not breaking. For the human's review: -l on a login wall loses the wizard's cookie offer (gets the --cookies hint, as -y -l always has); '-- -a' now goes to the wizard. Development starts now in parallel with ig-lone-images (no overlapping cli.py lines; one shared test at test_e2e.py:10469 that whichever lands second deletes)."
         }
       ]
     }
