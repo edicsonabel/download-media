@@ -8394,6 +8394,26 @@ def test_a_junk_body_ffprobe_cannot_read_is_not_converted(
     assert history_rows() == []
 
 
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_wizard_names_a_video_ffprobe_cannot_read(
+    generic: Any, home: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    said = i18n._MESSAGES[lang]
+    other = i18n._MESSAGES["en" if lang == "es" else "es"]
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("timeout"))
+        code, output = generic("webm.html", *SINGLE_WALK)
+    assert code == 0
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".webm")
+    assert output.count(said["not_converted"].format(saved, "mp4")) == 1
+    assert other["not_converted"].split("{}")[1] not in output
+    assert said["done"] in output
+    assert container_steps(output) == 0
+    assert len(history_rows()) == 1
+
+
 @pytest.mark.parametrize(
     ("flags", "saved"),
     [

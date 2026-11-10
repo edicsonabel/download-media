@@ -376,6 +376,7 @@ def fake_ffprobe(folder: Path, script: str, monkeypatch: pytest.MonkeyPatch) -> 
         ("printf 'data\\nvideo\\n'", True),
         # A file holding no audio or video doesn't count as saved.
         ("printf 'subtitle\\ndata\\nattachment\\n'", False),
+        ("printf 'unknown\\n'", False),
         ("true", False),
         # ffprobe failed, or printed something it never prints: no answer either way.
         ("echo video; exit 1", None),
