@@ -2571,7 +2571,8 @@ def test_audio_whose_thumbnail_is_not_an_image_is_saved_and_tagged(
     assert t("no_cover", saved) in output
     assert cover_warnings(output) == 1
     assert t("done") in output
-    # The metadata step runs after a failed cover, so a rerun recognises the file.
+    # The metadata step runs before the cover, which keeps its tags when it fails: a rerun
+    # recognises the file.
     assert _source_url(out / saved) == f"{media_url}/{page}"
 
 
@@ -2745,6 +2746,157 @@ def test_a_failed_metadata_step_leaves_no_cover(
     assert code == 1
     assert t("failed", f"{media_url}/audio.html") in output
     assert cover_leftovers(out) == []
+
+
+@pytest.mark.parametrize("audio_format", ["mp3", "m4a"])
+@pytest.mark.parametrize("page", ["audio.html", "audio-png-thumb.html"])
+def test_a_cover_keeps_the_tags_written_before_it(
+    generic: Any, media_url: str, out: Path, page: str, audio_format: str
+) -> None:
+    code, output = generic(page, flags=("-y", "-a", "-f", audio_format, "-o", str(out)))
+    assert code == 0
+    assert t("done") in output
+    [saved] = names(out)
+    assert saved.endswith(f".{audio_format}")
+    assert video_streams(out / saved) == [True]
+    assert _source_url(out / saved) == f"{media_url}/{page}"
+    assert cover_warnings(output) == 0
+    assert untagged_warnings(output) == 0
+    # The console shows the steps in the order they ran.
+    assert output.index("[Metadata]") < output.index("[EmbedThumbnail]")
+
+
+@pytest.mark.parametrize("audio_format", ["mp3", "m4a"])
+def test_a_cover_survives_every_rerun(
+    generic: Any, media_url: str, out: Path, audio_format: str
+) -> None:
+    flags = ("-y", "-a", "-f", audio_format, "-o", str(out))
+    for _ in range(3):
+        code, output = generic("audio.html", flags=flags)
+        assert code == 0
+        assert cover_warnings(output) == 0
+        [saved] = names(out)
+        assert video_streams(out / saved) == [True]
+        assert _source_url(out / saved) == f"{media_url}/audio.html"
+
+
+@pytest.mark.parametrize("audio_format", ["mp3", "m4a"])
+def test_a_cover_that_fails_after_the_tags_keeps_them(
+    generic: Any, media_url: str, out: Path, audio_format: str
+) -> None:
+    page = "audio-junk-thumb.html"
+    for _ in range(2):
+        code, output = generic(page, flags=("-y", "-a", "-f", audio_format, "-o", str(out)))
+        assert code == 0
+        [saved] = names(out)
+        assert saved.endswith(f".{audio_format}")
+        assert t("no_cover", saved) in output
+        assert cover_warnings(output) == 1
+        assert video_streams(out / saved) == []
+        # Tagged before the cover failed, so the rerun recognises it and keeps one file.
+        assert _source_url(out / saved) == f"{media_url}/{page}"
+
+
+COVER_CAROUSEL = "https://fake.test/cover-carousel"
+
+
+def carousel_covers(folder: Path) -> dict[str, list[bool]]:
+    """Each saved item's video streams, keyed by its id."""
+    found = ((re.search(r"\[(\w+)\]", name), name) for name in names(folder))
+    return {match.group(1): video_streams(folder / name) for match, name in found if match}
+
+
+@pytest.mark.parametrize(
+    ("flags", "items"),
+    [
+        ((), ["a1", "m1", "v1", "v2"]),
+        (("-p",), ["a1", "m1", "v1", "v2"]),
+        (("--playlist-items", "2,3"), ["m1", "v1"]),
+        (("--playlist-items", "3-4"), ["m1", "v2"]),
+    ],
+    ids=["single", "playlist", "items-2-3", "items-3-4"],
+)
+def test_every_carousel_item_keeps_its_own_cover_in_m4a(
+    run: Any, out: Path, flags: tuple[str, ...], items: list[str]
+) -> None:
+    code, output = run("-y", "-a", "-f", "m4a", *flags, COVER_CAROUSEL)
+    assert code == 0
+    assert t("done") in output
+    assert not said_partial_result(output)
+    assert len(names(out)) == len(items)
+    assert all(name.endswith(".m4a") for name in names(out))
+    # v2 has no thumbnail; m1 is an .m4a holding h264, which the metadata step drops.
+    expected = {"a1": [True], "v1": [True], "m1": [True], "v2": []}
+    assert carousel_covers(out) == {item: expected[item] for item in items}
+    assert cover_leftovers(out) == []
+    assert cover_warnings(output) == 0
+    assert untagged_warnings(output) == 0
+
+
+@pytest.mark.parametrize(
+    "flags", [(), ("-p",), ("--playlist-items", "1,2")], ids=["single", "playlist", "items"]
+)
+def test_a_failed_metadata_step_on_a_carousel_leaves_no_cover(
+    monkeypatch: pytest.MonkeyPatch, run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    def step(self: Any, info: dict[str, Any]) -> Any:
+        raise PostProcessingError("no tags")
+
+    monkeypatch.setattr(_TagSource, "run", step)
+    code, output = run("-y", "-a", "-f", "m4a", *flags, COVER_CAROUSEL)
+    assert code == 1
+    assert t("failed", COVER_CAROUSEL) in output
+    assert t("done") not in output
+    assert cover_leftovers(out) == []
+
+
+def test_wizard_m4a_keeps_its_cover(generic: Any, home: Path) -> None:
+    # URL, format (2 is m4a), folder, cookies.
+    for _ in range(2):
+        code, output = generic("audio.html", "", "2", "", "")
+        assert code == 0
+        assert t("done") in output
+        assert names(home / "Music") == ["audio (1).m4a"]
+        assert video_streams(home / "Music" / "audio (1).m4a") == [True]
+        assert cover_warnings(output) == 0
+
+
+def test_confirmed_direct_m4a_keeps_its_cover(generic: Any, out: Path) -> None:
+    code, output = generic("audio.html", "", flags=("-a", "-f", "m4a", "-o", str(out)))
+    assert code == 0
+    assert names(out) == ["audio (1).m4a"]
+    assert video_streams(out / "audio (1).m4a") == [True]
+    assert cover_warnings(output) == 0
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_a_kept_m4a_cover_warns_in_neither_language(
+    generic: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output = generic("audio.html", flags=("-y", "-a", "-f", "m4a", "-o", str(out)))
+    assert code == 0
+    assert i18n._MESSAGES[lang]["done"] in output
+    [saved] = names(out)
+    assert attached_pictures(out / saved) == 1
+    for said in i18n._MESSAGES.values():
+        assert said["no_cover"].format(saved) not in output
+        assert said["untagged"].format(saved) not in output
+
+
+@pytest.mark.parametrize("container", ["mp4", "mkv", "webm"])
+def test_video_mode_in_every_container_gets_no_cover(
+    generic: Any, media_url: str, out: Path, container: str
+) -> None:
+    flags = ("-y", "--video-format", container, "-o", str(out))
+    code, output = generic("og-video.html", flags=flags)
+    assert code == 0
+    assert names(out) == [f"video.{container}"]
+    assert attached_pictures(out / f"video.{container}") == 0
+    assert {"video", "audio"} <= streams(out / f"video.{container}")
+    assert _source_url(out / f"video.{container}") == f"{media_url}/og-video.html"
+    assert "[EmbedThumbnail]" not in output
+    assert cover_warnings(output) == 0
 
 
 def test_video_with_an_og_image_leaves_no_image(generic: Any, out: Path) -> None:
