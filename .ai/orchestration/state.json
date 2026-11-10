@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:16:51-04:00",
+  "updated": "2026-11-10T01:22:39-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2536,12 +2536,14 @@
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "approved",
+      "next_agent": "developer",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "1ddf169"
+      ],
       "review": null,
       "history": [
         {
@@ -2550,6 +2552,20 @@
           "result": "approved",
           "at": "2026-11-10T01:06:22-04:00",
           "note": "Next P2 in PLAN.md's order after cancel-exits, under the human's overnight delegation. Spec written in parallel."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T01:22:39-04:00",
+          "note": "Spec 1ddf169, PLAN row 36 to spec. Reproduced on bb65124: a subtitle 404/0-byte/cut body fails the single video (never fetched); single mode stops a carousel; -p cut subtitle marks a saved video failed; junk .vtt embeds as an empty track; failed videos leave .vtt. D1-D5. Runtime prototype matched. Planner: HLS/DASH partial subs; rerun loses earlier subtitle; cosmetic EmbedSubtitle line."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T01:22:39-04:00",
+          "note": "Spec approved under the human's overnight delegation, every recommended option (D1 ignoreerrors only around subtitle writing, D2 subs_failed warning, D3 ffprobe packet count leaves empty subtitles out of the embed with subs_empty, D4 delete a failed item's subtitle files, D5 README). Not breaking; two new messages. 0.4.0 review list: five changes in the spec. Development waits until m4a-cover, cookies-undecrypted and cancel-exits merge (it touches lines next to all three)."
         }
       ]
     }
