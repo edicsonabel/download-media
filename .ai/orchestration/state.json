@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:50:06-04:00",
+  "updated": "2026-11-10T01:50:52-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2620,12 +2620,14 @@
       "type": "fix",
       "title": "Close the remaining media-kind edge cases",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "approved",
+      "next_agent": "developer",
       "doc": ".ai/specs/37-kind-edges.md",
       "branch": "fix/kind-edges",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "5123f99"
+      ],
       "review": null,
       "history": [
         {
@@ -2634,6 +2636,20 @@
           "result": "approved",
           "at": "2026-11-10T01:31:02-04:00",
           "note": "Planner's recommendation after subs-failures (c717a8e), under the human's overnight delegation. Lives in probe.py's _format_kind and downloader.py's extension helpers, away from the items in flight; spec written now."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T01:50:52-04:00",
+          "note": "Spec 5123f99, PLAN row 37 to spec. Reproduced on cfc7c54: storyboard-only reads as a standalone image (exit 0) while -y fails; uppercase .MP3/.M4A/.JPG read as Video; new: CLIP.M4A as audio/mp4 loses its video in the wizard (from spec 27's f2ceff7); Theora and video/mp4 <source> inside <audio> lose the video. D1-D3; one audio/* case pinned as strict xfail. Planner: upper-ext-names row (X.WEBM.mp4 and reruns redownload); row 38 cause; row 64 fourth report (common.py:3450)."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T01:50:52-04:00",
+          "note": "Spec approved under the human's overnight delegation, every recommended option (D1 A pass storyboard-only to yt-dlp, D2 A any-case extensions with .M4A as a possible video container, D3 A extend spec 27's type step to HTML5MediaEmbed formats with a video extension and no codec). Flagged for the human: D2 reverses spec 27's f2ceff7 for .M4A (real uppercase .M4A audio needs '2' for mp3); D3 narrows by extractor_key, which spec 27 D1 C had rejected as the sole test. Wizard-only changes, four review items. Development after cancel-exits merges (shared refusal-test parameter lists)."
         }
       ]
     }
