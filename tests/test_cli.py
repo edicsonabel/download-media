@@ -956,6 +956,28 @@ def test_ctrl_c_stops_a_calling_bash_loop(piped: bool) -> None:
     assert b"Traceback" not in err
 
 
+@pytest.mark.parametrize("argv", [["--bogus"], ["-y"]], ids=["usage-error", "no-url"])
+def test_entry_keeps_main_s_own_exits_after_catching_the_second_ctrl_c(
+    monkeypatch, argv: list[str]
+) -> None:
+    import os
+    import signal
+    import sys
+
+    from download_media import cli
+
+    sent: list[int] = []
+    monkeypatch.setattr(sys, "argv", ["download-media", *argv])
+    monkeypatch.setattr(cli, "read_clipboard", lambda: None)
+    monkeypatch.setattr(signal, "signal", lambda sig, handler: None)
+    monkeypatch.setattr(os, "kill", lambda pid, sig: sent.append(sig))
+    with pytest.raises(SystemExit) as exc:
+        cli.entry()
+    # argparse and die() leave main() by SystemExit: no Ctrl-C, so no 130 and no self-kill.
+    assert exc.value.code == {"--bogus": 2, "-y": 1}[argv[0]]
+    assert sent == []
+
+
 def test_a_second_ctrl_c_on_the_cancel_line_shows_no_traceback(monkeypatch) -> None:
     import os
     import signal
@@ -992,6 +1014,114 @@ def test_a_second_ctrl_c_on_the_cancel_line_shows_no_traceback(monkeypatch) -> N
     assert pressed
     assert not escaped
     assert sent == [signal.SIGINT]
+
+
+# entry() after a Ctrl-C, with output still buffered and the self-kill held back (SIGINT
+# blocked), so Python shuts down and flushes again: what the streams were pointed at shows.
+_UNKILLED = """
+import signal, sys
+from download_media import cli
+
+def main():
+    print("cancel line")
+    sys.stderr.write("partial")  # No newline: it stays in stderr's buffer.
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
+    return cli.EXIT_INTERRUPTED
+
+cli.main = main
+cli.entry()
+"""
+
+
+@pytest.mark.parametrize("case", ["stdout-reader-gone", "both-readers-gone", "disk-full"])
+def test_ctrl_c_with_a_stream_that_fails_to_flush_still_exits_130_quietly(case: str) -> None:
+    import os
+    import subprocess
+    import sys
+
+    if case == "disk-full" and not os.path.exists("/dev/full"):
+        pytest.skip("no /dev/full")
+    out_r, out_w = os.pipe()
+    err_r, err_w = os.pipe()
+    os.close(out_r)  # `| tee log`, its tee killed by the same Ctrl-C.
+    if case == "both-readers-gone":
+        os.close(err_r)
+    if case == "disk-full":
+        os.close(out_w)
+        out_w = os.open("/dev/full", os.O_WRONLY)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _UNKILLED],
+        stdin=subprocess.DEVNULL,
+        stdout=out_w,
+        stderr=err_w,
+        env=_child_env(),
+        start_new_session=True,
+    )
+    os.close(out_w)
+    os.close(err_w)
+    err = b""
+    if case != "both-readers-gone":
+        with os.fdopen(err_r, "rb") as reader:
+            err = reader.read()
+    try:
+        proc.wait(timeout=60)
+    finally:
+        _reap(proc)
+    # 120 when Python's last flush hits the broken stream; a traceback if entry() lets it out.
+    assert proc.returncode == 130, err
+    assert b"Exception ignored" not in err
+    assert b"Traceback" not in err
+
+
+# Out of scope (pre-existing on main, no Ctrl-C involved): a stdout that can't be written.
+@pytest.mark.xfail(
+    strict=True,
+    reason="Out of scope (pre-existing): with stdout's reader gone and no Ctrl-C "
+    "(`download-media ... | head -1`), Python's final flush prints 'Exception ignored ... "
+    "BrokenPipeError' (exit 120); planner row",
+)
+def test_stdout_s_reader_gone_without_ctrl_c_prints_no_python_internals() -> None:
+    import os
+    import subprocess
+    import sys
+
+    out_r, out_w = os.pipe()
+    os.close(out_r)
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "download_media", "--version"],
+            stdin=subprocess.DEVNULL,
+            stdout=out_w,
+            stderr=subprocess.PIPE,
+            env=_child_env(),
+            timeout=60,
+            start_new_session=True,
+        )
+    finally:
+        os.close(out_w)
+    assert b"Exception ignored" not in proc.stderr
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Out of scope (pre-existing): with stdout closed (`download-media ... >&-`), ui.py "
+    "calls sys.stdout.isatty() on None at import: an AttributeError traceback; planner row",
+)
+def test_a_closed_stdout_shows_no_traceback() -> None:
+    import os
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "download_media", "--version"],
+        stdin=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        env=_child_env(),
+        timeout=60,
+        start_new_session=True,
+        preexec_fn=lambda: os.close(1),
+    )
+    assert b"Traceback" not in proc.stderr
 
 
 @pytest.mark.xfail(
