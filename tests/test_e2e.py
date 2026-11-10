@@ -3548,7 +3548,7 @@ def test_wizard_keeps_the_audio_flow_for_an_uppercase_audio_extension(
     assert saved.endswith(".mp3")
 
 
-@pytest.mark.parametrize("ext", ["mp3", "flac", "wav"])
+@pytest.mark.parametrize("ext", ["mp3", "flac", "wav", "opus"])
 def test_wizard_reads_an_uppercase_audio_extension_as_audio(
     generic: Any, home: Path, ext: str
 ) -> None:
@@ -3561,13 +3561,36 @@ def test_wizard_reads_an_uppercase_audio_extension_as_audio(
     assert saved.endswith(".mp3")
 
 
-def test_wizard_reads_an_uppercase_image_extension_as_unknown(generic: Any, home: Path) -> None:
+@pytest.mark.parametrize(
+    ("page", "ext"), [("video-upper-jpg", ".JPG"), ("video-mixed-png", ".Png")]
+)
+def test_wizard_reads_an_uppercase_image_extension_as_unknown(
+    generic: Any, home: Path, page: str, ext: str
+) -> None:
     # As the lowercase page: Unknown asks once more before the download.
-    code, output = generic("video-upper-jpg.html", *SINGLE_WALK, "")
+    code, output = generic(f"{page}.html", *SINGLE_WALK, "")
     assert code == 0
     assert detected("kind_unknown") in output
     [saved] = names(home / "Videos")
-    assert saved.endswith(".JPG")
+    assert saved.endswith(ext)
+    assert names(home / "Music") == []
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Out of spec 37 (finding 4), for the planner: yt-dlp's generic extractor checks a "
+    "direct link's extension against ALLOWED_EXTENSIONS as is (generic.py:906-908), so PIC.PNG "
+    "becomes unknown_video and the default mp4 container step turns the image into PIC.mp4; "
+    "a lowercase pic.png is saved as is.",
+)
+@pytest.mark.parametrize("flags", [(), ("-y",)], ids=["wizard", "yes"])
+def test_a_direct_link_to_an_uppercase_image_saves_the_image(
+    generic: Any, home: Path, flags: tuple[str, ...]
+) -> None:
+    replies = () if flags else SINGLE_WALK
+    code, _ = generic("typed/image/png/tiny.png/PIC.PNG", *replies, flags=flags)
+    assert code == 0
+    assert names(home / "Videos") == ["PIC.PNG"]
 
 
 def test_wizard_keeps_the_video_of_an_uppercase_m4a_labelled_as_audio(
@@ -3677,8 +3700,11 @@ DECLARED_VIDEO = pytest.mark.parametrize(
     [
         ("audio-source-theora-videotype.html", "audio-source-theora-videotype (1).ogv"),
         ("audio-source-mp4-videotype.html", "audio-source-mp4-videotype (1).mp4"),
+        ("audio-source-webm-videotype.html", "audio-source-webm-videotype (1).webm"),
+        # One declared video among the sources is enough: yt-dlp may pick it.
+        ("audio-sources-audio-then-video.html", "audio-sources-audio-then-video (1).mp4"),
     ],
-    ids=["theora", "mp4"],
+    ids=["theora", "mp4", "webm", "audio-then-video"],
 )
 
 
@@ -3731,6 +3757,40 @@ def test_wizard_twice_on_a_declared_video_keeps_one_file(generic: Any, home: Pat
         assert t("done") in output
         assert names(home / "Videos") == ["audio-source-mp4-videotype (1).mp4"]
     assert len(history_rows()) == 2
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known, roadmap row 25 (opus-rerun): ogg keeps purl in stream tags while "
+    "_source_url reads format tags, so the second run writes "
+    "'audio-source-theora-videotype (1) [audio-source-theora-videotype-1].ogv'.",
+)
+def test_wizard_twice_on_a_declared_ogv_keeps_one_file(generic: Any, home: Path) -> None:
+    for _ in range(2):
+        code, _ = generic("audio-source-theora-videotype.html", *SINGLE_WALK)
+        assert code == 0
+    assert names(home / "Videos") == ["audio-source-theora-videotype (1).ogv"]
+
+
+@pytest.mark.parametrize(
+    ("page", "saved"),
+    [
+        ("audio-source-theora-videotype.html", "audio-source-theora-videotype (1).mp3"),
+        ("typed/audio/mp4/clip.m4a/CLIP.M4A", "CLIP.mp3"),
+    ],
+    ids=["declared-video", "upper-m4a"],
+)
+def test_interactive_audio_flag_opens_the_new_type_steps_at_audio(
+    generic: Any, media_url: str, home: Path, page: str, saved: str
+) -> None:
+    # URL, then type, format, folder, cookies: the type step opens at audio.
+    code, output = generic(page, *[""] * 5, flags=("-i", "-a"))
+    assert code == 0
+    assert t("ask_type") in output
+    assert t("audio_may_hold_video") in output
+    assert names(home / "Videos") == []
+    assert names(home / "Music") == [saved]
+    assert commands(output) == [f"download-media -y -a {media_url}/{page}"]
 
 
 @pytest.mark.xfail(
@@ -3802,6 +3862,8 @@ def test_wizard_keeps_the_video_behind_an_audio_tag_with_no_extension(
         ("site-audio-label", SINGLE_WALK, [], ["Clip.ogg"]),
         # The extractor named the codec: no type step, as before.
         ("site-audio-named", AUDIO_WALK, ["Clip.mp3"], []),
+        # The shape spec 37 flags on a page's <audio>, from a site: its manifest named it.
+        ("site-audio-video-ext", AUDIO_WALK, ["Clip.mp3"], []),
     ],
 )
 def test_wizard_on_a_site_extractor_s_audio_follows_what_it_named(
@@ -4060,6 +4122,41 @@ def test_direct_run_on_a_storyboard_only_video_still_fails(run: Any, out: Path) 
     assert code == 1
     assert NO_FORMAT.rstrip(".") in output
     assert names(out) == []
+
+
+def test_wizard_on_a_storyboard_only_video_and_another_url_saves_the_other(
+    run: Any, answers: Any, out: Path
+) -> None:
+    # Six manual steps for the first URL, six for the video, then the preview.
+    prompts = answers(*SINGLE_WALK, *SINGLE_WALK, "")
+    code, output = run("-i", STORYBOARD_ONLY, VIDEO)
+    assert len(prompts) == 13
+    assert code == 1
+    assert t("probe_failed", NO_FORMAT) in output
+    assert t("image_only_skipped") not in output
+    assert t("failed", STORYBOARD_ONLY) in output
+    assert names(out) == ["Clip.mp4"]
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize(
+    ("flags", "code", "saved"),
+    [
+        (("-p",), 0, ["02 - Clip [v1].mp4"]),
+        (("--playlist-items", "1"), 1, []),
+        (("--playlist-items", "2"), 0, ["02 - Clip [v1].mp4"]),
+    ],
+    ids=["all", "storyboard-item", "video-item"],
+)
+def test_direct_runs_on_a_storyboard_entry_fail_it_as_the_probe_does(
+    run: Any, out: Path, flags: tuple[str, ...], code: int, saved: list[str]
+) -> None:
+    # The probe shows the entry as [?], not inspected: a download fails it the same way.
+    url = "https://fake.test/storyboard-carousel"
+    result, output = run("-y", *flags, url)
+    assert result == code
+    assert names(out) == saved
+    assert (t("failed", url) in output) is (not saved)
 
 
 IG_CAROUSEL = "https://fake.test/ig-carousel"

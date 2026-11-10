@@ -1113,8 +1113,15 @@ def test_an_entry_that_really_failed_is_not_handed_back(
         ([STORYBOARD], True),
         ([STORYBOARD, {**STORYBOARD, "format_id": "sb1", "ext": "MHTML"}], True),
         ([{"vcodec": "none", "acodec": "none", "ext": "jpg", "format_note": "thumbnail"}], False),
+        # Only a result made of storyboards alone goes: an image next to one stays an image,
+        # and so does a result with no formats at all.
+        (
+            [STORYBOARD, {"vcodec": "none", "acodec": "none", "ext": "jpg", "format_id": "t"}],
+            False,
+        ),
+        ([], False),
     ],
-    ids=["storyboard", "storyboards", "image-format"],
+    ids=["storyboard", "storyboards", "image-format", "storyboard-and-image", "no-formats"],
 )
 def test_a_storyboard_only_result_goes_to_yt_dlp(
     monkeypatch: pytest.MonkeyPatch, formats: list[dict[str, Any]], handed_to_yt_dlp: bool

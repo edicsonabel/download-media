@@ -288,7 +288,9 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "video-upper-mp3": '<video src="typed/audio/mpeg/tiny.mp3/TINY.MP3"></video>',
         "video-upper-flac": '<video src="typed/audio/flac/tiny.flac/TINY.FLAC"></video>',
         "video-upper-wav": '<video src="typed/audio/x-wav/tiny.wav/TINY.WAV"></video>',
+        "video-upper-opus": '<video src="typed/audio/ogg/tiny.opus/TINY.OPUS"></video>',
         "video-upper-jpg": '<video src="typed/image/jpeg/tiny.jpg/TINY.JPG"></video>',
+        "video-mixed-png": '<video src="typed/image/png/tiny.png/Tiny.Png"></video>',
         "video-upper-m4a-video": '<video src="typed/video/mp4/clip.m4a/CLIP.M4A"></video>',
         "og-video-ogg": f'<meta property="og:video" content="{base}/theora.ogg">',
         "video-tag-audio-ogg": '<video src="tiny.ogg"></video>',
@@ -305,6 +307,14 @@ def _write_generic_pages(root: Path, base: str) -> None:
             """<audio><source src="theora.ogg" type='video/ogg; codecs="theora, vorbis"'></audio>"""
         ),
         "audio-source-mp4-videotype": f"<audio>{codecs}</audio>",
+        "audio-source-webm-videotype": (
+            """<audio><source src="tiny.webm" type='video/webm; codecs="vp8, vorbis"'></audio>"""
+        ),
+        # Real audio first, then a declared video: either source can be the one saved.
+        "audio-sources-audio-then-video": (
+            """<audio><source src="tiny.ogg" type='audio/ogg; codecs="vorbis"'>"""
+            f"{codecs}</audio>"
+        ),
         # An audio type naming a video codec: the same formats as real Vorbis.
         "audio-source-theora-audiotype": (
             """<audio><source src="theora.ogg" type='audio/ogg; codecs="theora, vorbis"'></audio>"""
@@ -729,6 +739,10 @@ class FakeSiteIE(InfoExtractor):
         if page == "site-audio-named":
             named = {"format_id": "a", "url": f"{self.media_url}/tiny.ogg", "ext": "ogg"}
             return self._with_formats("a1", {**named, "vcodec": "none", "acodec": "vorbis"})
+        if page == "site-audio-video-ext":
+            # A DASH audio rendition: the shape an <audio> declaring a video leaves on a page.
+            rendition = {"format_id": "a", "url": f"{self.media_url}/audio.webm", "ext": "webm"}
+            return self._with_formats("a1", {**rendition, "vcodec": "none", "acodec": "vorbis"})
         if page == "split-streams":
             video_only = {**plain_video, "acodec": "none"}
             return self._with_formats("v1", video_only, audio)
