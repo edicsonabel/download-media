@@ -2034,10 +2034,8 @@ def test_listing_formats_directly_on_media_without_codec_info(
     assert history_rows() == []
 
 
-def test_listing_formats_alone_walks_the_wizard_instead_of_refusing(
-    generic: Any, home: Path
-) -> None:
-    code, output = generic("multi.html", *PICKER_WALK, flags=("-l",))
+def test_list_formats_alone_lists_media_without_codec_info(generic: Any, home: Path) -> None:
+    code, output = generic("multi.html", flags=("-l",))
     assert code == 0
     assert t("no_supported_items") not in output
     assert "Available formats" in output
@@ -5260,18 +5258,12 @@ def test_an_instagram_url_typed_after_back_is_probed_without_a_second_prompt(
     assert len(names(out)) == 2
 
 
-def test_list_formats_in_the_wizard_survives_back_twice_before_the_probe(
-    wizard_urls: Any, fake_site: list[Any], out: Path
-) -> None:
-    # URL, back, URL, back, URL, cookies, picker, type, quality, container, folder.
-    replies = (*BACK_TWICE, "", FIRST_BROWSER, "", "", "", "", str(out))
-    code, output, asked = wizard_urls(["-l", X_CAROUSEL], *replies)
-    assert asked == 11
+def test_list_formats_on_a_cookie_site_asks_nothing(wizard_urls: Any) -> None:
+    code, output, asked = wizard_urls(["-l", X_CAROUSEL])
+    assert asked == 0
     assert code == 0
-    assert output.count(t("auth_needed_pre")) == 3
+    assert t("auth_needed_pre") not in output
     assert "Available formats for v1" in output
-    assert fake_site and {used[0] for used in fake_site} == {BROWSERS[0]}
-    assert names(out) == []
 
 
 def test_cookies_that_do_not_help_end_the_retry_without_a_loop(wizard_on: Any, out: Path) -> None:
@@ -5441,17 +5433,18 @@ def test_audio_intent_survives_the_cookie_retry(wizard_on: Any, out: Path) -> No
     assert names(out) == ["Clip.mp3"]
 
 
-def test_listing_formats_goes_through_the_cookie_retry(
+def test_list_formats_on_a_login_wall_says_to_pass_cookies(
     fake_site: list[Any], answers: Any, capfd: pytest.CaptureFixture[str]
 ) -> None:
-    # -l alone opens the wizard, so it gets the same retry before listing.
-    prompts = answers("", FIRST_BROWSER, *VIDEO_STEPS)
+    # -l skips the wizard, so nothing offers cookies along the way (spec 22).
+    answers()
     code = cli.main(["-l", GATED])
     captured = capfd.readouterr()
-    assert code == 0
-    assert len(prompts) == 6
-    assert asked_for_login(LOGIN_REQUIRED) in captured.out + captured.err
-    assert "main" in captured.out
+    output = captured.out + captured.err
+    assert code == 1
+    assert t("failed", GATED) in output
+    assert "--cookies <browser>" in output
+    assert t("ask_cookies") not in output
 
 
 TWO_THIRDS = {"-p": (0, ["01 - Clip [v2].mp4"])}
@@ -6104,23 +6097,80 @@ def test_interactive_flags_preset_every_walk(wizard_urls: Any, out: Path) -> Non
     assert names(out) == sorted(["Clip.mp4", *BOTH_ITEMS])
 
 
-def test_list_formats_still_walks_and_lists_only_the_first_url(
-    wizard_urls: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Pin, not a fix: row 22 takes -l out of the wizard and lists every URL.
-    extracted: list[str] = []
+# -l lists every URL, without the wizard (spec 22).
+@pytest.fixture
+def extracted(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The URLs the fake extractor saw, in order."""
+    seen: list[str] = []
     real = FakeSiteIE._real_extract
 
     def recording(self: FakeSiteIE, url: str) -> dict[str, Any]:
-        extracted.append(url)
+        seen.append(url)
         return real(self, url)
 
     monkeypatch.setattr(FakeSiteIE, "_real_extract", recording)
-    code, _, asked = wizard_urls(["-l", VIDEO, VIDEO_B], *SINGLE_WALK)
-    assert asked == 6
+    return seen
+
+
+def test_list_formats_lists_every_url_without_a_prompt(
+    wizard_urls: Any, extracted: list[str], home: Path
+) -> None:
+    code, output, asked = wizard_urls(["-l", VIDEO, VIDEO_B])
+    assert asked == 0
     assert code == 0
-    assert VIDEO in extracted
-    assert VIDEO_B not in extracted
+    assert extracted == [VIDEO, VIDEO_B]
+    assert output.count("Available formats for") == 2
+    assert t("equiv_cmd") not in output
+    assert names(home) == []
+
+
+@pytest.mark.parametrize("flag", ["-y", "-a"])
+def test_list_formats_lists_every_url_in_every_direct_mode(
+    wizard_urls: Any, extracted: list[str], home: Path, flag: str
+) -> None:
+    code, _, asked = wizard_urls([flag, "-l", VIDEO, VIDEO_B])
+    assert asked == 0
+    assert code == 0
+    assert extracted == [VIDEO, VIDEO_B]
+
+
+def test_list_formats_goes_on_after_a_failed_url_and_exits_1(
+    wizard_urls: Any, extracted: list[str], home: Path
+) -> None:
+    code, output, _ = wizard_urls(["-l", PRIVATE, VIDEO])
+    assert code == 1
+    assert t("failed", PRIVATE) in output
+    assert extracted == [PRIVATE, VIDEO]
+    assert output.count("Available formats for") == 1
+    assert output.index(t("failed", PRIVATE)) < output.index("Available formats for")
+
+
+def test_list_formats_without_a_url_asks_only_for_it(
+    wizard_urls: Any, extracted: list[str], home: Path
+) -> None:
+    code, output, asked = wizard_urls(["-l"], f"{VIDEO} {VIDEO_B}")
+    assert asked == 1
+    assert code == 0
+    assert extracted == [VIDEO, VIDEO_B]
+    assert output.count("Available formats for") == 2
+
+
+def test_interactive_list_formats_asks_each_url_and_nothing_else(
+    wizard_urls: Any, extracted: list[str], home: Path
+) -> None:
+    code, output, asked = wizard_urls(["-i", "-l", VIDEO, VIDEO_B], "", "")
+    assert asked == 2
+    assert code == 0
+    assert f"{t('wizard_title')} (2/2)" in output
+    assert extracted == [VIDEO, VIDEO_B]
+    assert output.count("Available formats for") == 2
+
+
+@pytest.mark.parametrize("url", [VIDEO, CAROUSEL, IMAGE, PRIVATE])
+def test_list_formats_agrees_with_and_without_yes(wizard_urls: Any, home: Path, url: str) -> None:
+    code, output, asked = wizard_urls(["-l", url])
+    assert asked == 0
+    assert (code, output) == wizard_urls(["-y", "-l", url])[:2]
 
 
 @pytest.mark.parametrize(
@@ -10478,19 +10528,12 @@ def test_ctrl_c_while_the_wizard_probe_loads_cookies(
     assert names(home / "Videos") == []
 
 
-def test_cancelling_the_list_formats_wizard_exits_1(wizard_urls: Any) -> None:
-    code, output, asked = wizard_urls(["-l", VIDEO], "", "c")
-    assert asked == 2
-    assert code == 1
-    assert t("cancelled") in output
-    assert "Available formats" not in output
-
-
-def test_a_lone_image_refused_by_the_list_formats_wizard_exits_1(wizard_urls: Any) -> None:
-    code, output, asked = wizard_urls(["-l", IMAGE], "")
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_cancelling_the_list_formats_wizard_exits_1(wizard_urls: Any, reply: Any) -> None:
+    code, output, asked = wizard_urls(["-l"], reply)
     assert asked == 1
     assert code == 1
-    assert t("image_only_skipped") in output
+    assert t("cancelled") in output
     assert "Available formats" not in output
 
 

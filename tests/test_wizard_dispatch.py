@@ -46,6 +46,13 @@ def test_abbreviated_intent_flags_are_detected(flags: list[str]) -> None:
     assert has_intent_flags([*flags, "u"])
 
 
+@pytest.mark.parametrize("flag", ["-l", "--list", "--li"])
+def test_list_is_an_intent_flag(flag: str) -> None:
+    assert has_intent_flags([flag, "u"])
+    assert not should_run_wizard(_parse([flag, "u"]), [flag, "u"])
+    assert should_run_wizard(_parse([flag]), [flag])
+
+
 def test_tokens_after_double_dash_are_urls_not_flags() -> None:
     assert not has_intent_flags(["--", "-a"])
     assert not has_intent_flags(["--", "--cookies"])
@@ -62,7 +69,7 @@ def test_non_intent_flags_do_not_count(flag: str) -> None:
 
 
 def test_every_option_is_an_intent_flag_or_named_as_not_one() -> None:
-    not_intent = {"help", "version", "urls", "interactive", "no_confirm", "list_formats"}
+    not_intent = {"help", "version", "urls", "interactive", "no_confirm"}
     for action in build_parser()._actions:
         assert action.dest in cli._INTENT_DESTS or action.dest in not_intent, action.dest
 
