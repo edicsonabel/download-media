@@ -1,6 +1,6 @@
 # 69 — Name an item in a warning only once it counts as saved
 
-Status: draft
+Status: done
 Item: `fix/untagged-per-item`
 
 > **For the human's review before the release:** the architect took D1 to D4 under the overnight delegation, each on the recommended option. Three warnings change against 0.3.0, all under `-p` or `--playlist-items`, and only on a run where an item failed: `untagged` and `subs_not_embedded` stop naming the failed item, and `subs_none` is now said when the only item that got subtitles is one that failed (D1). No flag, default, message text, exit status or on-disk path changes. It reads as a patch, inside 0.4.0's minor.
@@ -150,15 +150,15 @@ No yt-dlp option changes. The design relies on `run_pp` under `ignoreerrors: Tru
 
 ## Acceptance criteria
 
-- [ ] `scripts/pre-release.sh --no-live` passes.
-- [ ] **[fix]** `test_an_item_that_failed_is_not_named_as_untagged[-p|--playlist-items]` passes with its `xfail` marker removed. Add `assert never_said("untagged", output)`.
-- [ ] **[fix]** New page `subs-junk-ttml-carousel` in `FakeSiteIE`: item `s1` is `JUNK` with `self._tracks(en="en.vtt", es="en.ttml")`, item `s2` is plain. New `test_an_item_that_failed_is_not_named_as_not_embedded[-p|--playlist-items]` runs `-y -s` plus the mode flags (`--playlist-items 1,2`). It asserts exit 0, `t("partial_result", 1, 2, 0, 1)`, `"02 - Clip [s2].mp4" in names(out)`, `never_said("subs_not_embedded", output)`, and `output.count(t("subs_none", "es,en")) == 1`.
-- [ ] **[fix]** New page `subs-junk-carousel`: item `s1` is `JUNK` with `self._tracks(en="en.vtt")`, item `s2` is plain. New `test_subs_none_counts_only_saved_items[video|audio]` runs `-y -p -s`, adding `-a` for the audio row. It asserts exit 0, `t("partial_result", 1, 2, 0, 1)`, `output.count(t("subs_none", "es,en")) == 1`, and no `.vtt` in `names(out)`.
-- [ ] Each of the three fails on `main` before the fix: the test-engineer reverts `downloader.py` and shows the failure (constraint 5). The two subtitle tests were measured on generic loopback pages, not on `FakeSiteIE`. If a `FakeSiteIE` page doesn't fail before the fix, the test-engineer says so and reports what it printed.
-- [ ] `tests/test_downloader.py`'s `_EmbedSubtitles` unit test (`:480-504`) drives the step with a `_Ydl` (`quiet`, `no_warnings`) and asserts `ydl.item_not_embedded == ["Clip.mp4"]`. The temp-file assertion stays.
-- [ ] These still pass unchanged: `test_a_saved_file_ffmpeg_cannot_tag_is_a_success`, `test_playlist_with_an_untaggable_item_saves_both_and_counts_each_once`, `test_playlist_items_on_the_untaggable_item_alone`, `test_untaggable_subtitled_file_warns_twice_and_keeps_both_files`, `test_rerun_of_an_untaggable_file_under_p_counts_each_run_once`, `test_carousel_with_subtitles_on_one_item`, `test_carousel_where_no_item_has_subtitles_warns_once`, `test_carousel_item_with_an_unreadable_subtitle_still_counts`, `test_an_item_that_failed_is_not_named_as_not_converted`, `test_every_item_kept_as_downloaded_is_named_once`, `test_a_failed_item_next_to_a_saved_one_never_names_its_failed_subtitle`.
-- [ ] `git diff main -- src/download_media/cli.py src/download_media/i18n.py` is empty, and so is the diff of `DownloadResult`'s fields.
-- [ ] `mypy` and `ruff check` / `ruff format --check` pass.
+- [x] `scripts/pre-release.sh --no-live` passes.
+- [x] **[fix]** `test_an_item_that_failed_is_not_named_as_untagged[-p|--playlist-items]` passes with its `xfail` marker removed. Add `assert never_said("untagged", output)`.
+- [x] **[fix]** New page `subs-junk-ttml-carousel` in `FakeSiteIE`: item `s1` is `JUNK` with `self._tracks(en="en.vtt", es="en.ttml")`, item `s2` is plain. New `test_an_item_that_failed_is_not_named_as_not_embedded[-p|--playlist-items]` runs `-y -s` plus the mode flags (`--playlist-items 1,2`). It asserts exit 0, `t("partial_result", 1, 2, 0, 1)`, `"02 - Clip [s2].mp4" in names(out)`, `never_said("subs_not_embedded", output)`, and `output.count(t("subs_none", "es,en")) == 1`.
+- [x] **[fix]** New page `subs-junk-carousel`: item `s1` is `JUNK` with `self._tracks(en="en.vtt")`, item `s2` is plain. New `test_subs_none_counts_only_saved_items[video|audio]` runs `-y -p -s`, adding `-a` for the audio row. It asserts exit 0, `t("partial_result", 1, 2, 0, 1)`, `output.count(t("subs_none", "es,en")) == 1`, and no `.vtt` in `names(out)`.
+- [x] Each of the three fails on `main` before the fix: the test-engineer reverts `downloader.py` and shows the failure (constraint 5). The two subtitle tests were measured on generic loopback pages, not on `FakeSiteIE`. If a `FakeSiteIE` page doesn't fail before the fix, the test-engineer says so and reports what it printed.
+- [x] `tests/test_downloader.py`'s `_EmbedSubtitles` unit test (`:480-504`) drives the step with a `_Ydl` (`quiet`, `no_warnings`) and asserts `ydl.item_not_embedded == ["Clip.mp4"]`. The temp-file assertion stays.
+- [x] These still pass unchanged: `test_a_saved_file_ffmpeg_cannot_tag_is_a_success`, `test_playlist_with_an_untaggable_item_saves_both_and_counts_each_once`, `test_playlist_items_on_the_untaggable_item_alone`, `test_untaggable_subtitled_file_warns_twice_and_keeps_both_files`, `test_rerun_of_an_untaggable_file_under_p_counts_each_run_once`, `test_carousel_with_subtitles_on_one_item`, `test_carousel_where_no_item_has_subtitles_warns_once`, `test_carousel_item_with_an_unreadable_subtitle_still_counts`, `test_an_item_that_failed_is_not_named_as_not_converted`, `test_every_item_kept_as_downloaded_is_named_once`, `test_a_failed_item_next_to_a_saved_one_never_names_its_failed_subtitle`.
+- [x] `git diff main -- src/download_media/cli.py src/download_media/i18n.py` is empty, and so is the diff of `DownloadResult`'s fields.
+- [x] `mypy` and `ruff check` / `ruff format --check` pass.
 
 ## Live check
 
@@ -204,3 +204,38 @@ None blocking. For the 0.4.0 review list, the published behaviour that changes a
 1. `untagged` no longer names a failed item (D1). In 0.3.0 that line is false.
 2. `subs_not_embedded` no longer names a failed item (D1). In 0.3.0 its subtitle files stayed on disk. Spec 36 removes them.
 3. `subs_none` is now said when the only items whose subtitles were written failed (D1, D4). In 0.3.0 those files stayed and the run said nothing.
+
+## Validation
+
+On `main` at `27f42a4`: the merge `e070f3a`, on top of `intent-flags`' merge `8ff961c`, then `.ai/` only. yt-dlp 2026.10.26, Python 3.14.9, ffmpeg on `PATH`. GitHub CI on `27f42a4` (run 42805905463, attempt 1) failed in its `Install ffmpeg` step: the apt mirror timed out after 5 minutes, before any check ran. That's the known infrastructure timeout. The orchestrator retries it, so CI on this commit is still pending.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on `e070f3a`: exit 0, 2920 passed, 15 xfailed, in es and en, no XPASS. Since then only `.ai/` has changed.
+- **Criteria tests:** a `pytest -k` selection over `test_e2e.py` and `test_downloader.py` covering the three `[fix]` tests, the `_EmbedSubtitles` unit test, the eleven tests that must pass unchanged, and the test-engineer's eight new tests: 43 passed, 2 xfailed (the strict xfail below), exit 0. The xfail marker on `test_an_item_that_failed_is_not_named_as_untagged` is gone, and the test asserts `never_said("untagged", output)`. `git diff e070f3a^1 e070f3a -- src/download_media/cli.py src/download_media/i18n.py` is empty, and `DownloadResult` doesn't appear in the `downloader.py` diff. The revert proof belongs to the developer (6 new e2e cases fail on the old code) and the test-engineer (mutation 15/15). It wasn't repeated.
+- **Scope:** `src/` changes only in `downloader.py`, in the places Design names: three per-item fields on `_Ydl`, reset in `process_info`. `_TagSource` and `_SubtitlesSeen` lose their `__init__` overrides, and `_EmbedSubtitles` keeps one with no list. `keep()` copies the three lists only for a saved item, and the two declarations moved up. No flag, message, default, path or dependency changes.
+- **Console check:** `main`'s real console script, `.venv/bin/download-media`, under `env -i` with `LANG=en_US.UTF-8`, `PATH=/usr/bin:/bin`, a dead D-Bus address, a fresh `HOME` plus all four `XDG_*` folders for each run in the scratchpad, stdin from `/dev/null`, and an absolute `-o` for each run. A scratch `http.server` on `127.0.0.1` served `silent.oga`, a silent H.264 `.mov` (`-an -c copy`), plus `a1.m4a` (AAC), `clip.mp4` (H.264/AAC), `vid.oga` (`clip.mp4` renamed), `junk.mp4` and `en.vtt` (the same one-cue WebVTT), `en.ttml`, and one page per case. Everything was deleted afterwards.
+
+| Run | Page | Output | Exit | Disk |
+| --- | --- | --- | --- | --- |
+| `-y -a -p` (the reproduction) | `<audio silent.oga>`, `<audio a1.m4a>` | `ERROR: WARNING: unable to obtain file audio codec with ffprobe`, `1 of 2 items downloaded (0 without downloadable media, 1 failed).`, `Done.`; no `untagged` line | 0 | `01 - p1 (1) [p1-1].oga` (row 46's body), `02 - p1 (2) [p1-2].mp3` |
+| `-y -a --playlist-items 1,2` | same | same lines | 0 | same |
+| `-y -p -s` | `<video junk.mp4>` with an `en` track, `<video clip.mp4>` | `ERROR: Conversion failed!`, `1 of 2 …, 1 failed`, `No subtitles in es,en could be saved; …` once, `Done.` | 0 | the two `.mp4` files, no `.vtt` |
+| `-y -a -p -s` | `<audio silent.oga>` with an `en` track, `<audio a1.m4a>` | `1 of 2 …, 1 failed`, `subs_none` once, `Done.`; no `untagged` line | 0 | the `.oga`, the `.mp3`, no `.vtt` |
+| `-y -p -s --sub-langs en,es` | `<video junk.mp4>` with an `en` (WebVTT) and an `es` (TTML) track, `<video clip.mp4>` | `1 of 2 …, 1 failed`, `No subtitles in en,es could be saved; …` once, `Done.`; no `subs_not_embedded` line | 0 | the two `.mp4` files, no `.vtt` or `.ttml` |
+| `-y -p` (control: an untaggable item that saves) | `<video vid.oga>`, `<video clip.mp4>` | `01 - p5 (1) [p5-1].oga: saved, but ffmpeg couldn't write its metadata, …` once, `Done.` | 0 | `01 - p5 (1) [p5-1].oga`, `02 - p5 (2) [p5-2].mp4` |
+| `-y -p` again, into the `-y -p -s` folder | `junk.mp4` page | both items `has already been downloaded`, `Done.`; no `partial_result` | 0 | unchanged: item 1 is a 762 B mp4 holding only a `mov_text` stream (ffprobe) |
+
+The last row is the strict xfail below, reproduced on the console: a failure that reads as success on the rerun.
+
+- **Cases, tests only:** these come from test-engineer or criterion tests in the selection above and weren't run by hand: the wizard (`-i -s`), several URLs, a list where every item failed, a name noted before a `ReExtractInfo` retry or a raise, mkv and webm, and es output. There's no live check (see Live check).
+
+### What changed after approval
+
+Nothing in `src/` departs from the Design. The test-engineer added eight e2e tests: two saved items named once each, in order, around a failed one, for `untagged` (`-p`, `--playlist-items`, es and en) and `subs_not_embedded` (mp4, mkv, webm). A name noted before a retry or a raise belongs only to the item's last try. The wizard, several URLs, and a list where every item failed name nothing extra. It also added the pages `oga-junk-oga`, `subs-ttml-first-carousel` and `subs-ttml-around-junk-carousel`, and the strict xfail below. QA approved with no findings.
+
+### Strict xfail added in testing, pre-existing
+
+`test_e2e.py::test_a_rerun_does_not_take_a_failed_item_as_saved[-s|no-subs]`: under `-s -p`, `_EmbedSubtitles` rewrites a failed item's junk body into an mp4 that holds only a subtitle stream (Side findings). A rerun of the list, with or without `-s`, finds that file already downloaded, tags it and counts it as saved: `Done.`, exit 0, no `1 failed`. This goes against "a failure never reads as success". Planner row 46 (`failure-leftovers`), as the Out section already noted. Removing the body, or skipping later steps once an item has failed, fixes both.
+
+### Notes from review, no change made
+
+None: QA had no findings, and the test-engineer found no bugs in this item.
