@@ -1,7 +1,9 @@
 # 37 — Stop the probe misreading storyboards, uppercase extensions and video declared in an audio tag
 
-Status: draft
+Status: done
 Item: `fix/kind-edges`
+
+Approved under the human's overnight delegation (D1 A, D2 A, D3 A); this header still read `draft` until validation. Merged in `8930354`, validated on `main` at `e26115d`.
 
 ## Problem
 
@@ -323,7 +325,7 @@ What a live check would add: that a real storyboard-only result reaches `_ProbeY
 
 `fix`. No flag, default, path or message changes, and no exit code changes outside the wizard's walk. Not breaking by `AGENTS.md`'s list. 0.4.0 is already a minor.
 
-Behaviour changes for the 0.4.0 review list (pending merge):
+Behaviour changes for the 0.4.0 review list (moved into it at validation, items 34 to 37 of `PLAN.md`):
 
 1. Spec 37 D1: in the wizard, a video for which yt-dlp lists only storyboards (preview frames) now says `Could not inspect URL: Requested format is not available.` and goes to the manual flow, which ends in `Download failed`, exit 1, as `-y` does. It used to say `This content is a standalone image`, exit 0 (exit 1 after spec 23). In a carousel such an entry shows `[?]`, with `Some items could not be inspected: …`, where it showed `[image]`.
 2. Spec 37 D2: an uppercase audio extension (`.MP3`, `.FLAC`, `.WAV`, …) with no codec info reads `Audio` and converts to mp3 in `~/Music`, as in lower case, where it read `Video` and landed raw in `~/Videos`. `.JPG`, `.PNG`, `.WEBP` read `Unknown` (with its extra confirmation), where they read `Video`.
@@ -368,3 +370,54 @@ The human delegated tonight's decisions to the roles. Each has a recommendation,
 | E. Accept it                                                                     | A strict xfail and a yt-dlp report (row 64). The video stays lost behind `Done.`                                                                                                               |
 
 **Recommendation: A.** Spec 27's rule is "trust a codec only when something looked at the stream". On a generic page nothing did: the `type` attribute is the page's word, like the tag name, and yt-dlp keeps the half that says audio. The extractor name narrows the extra flag to that parser; it isn't the main test, which was spec 27 D1 C's objection. Neither ffprobe check is a wrapper-level way to see the video before the conversion: one runs after the download, the other re-implements it. The residual, an `audio/*` type naming a video codec (finding 2), stays lost and pinned: nothing tells it from real audio.
+
+## Validation
+
+On `main` at `e26115d` (merge `8930354`, then `.ai/orchestration/state.json` only: `git diff --stat 8930354 HEAD` lists nothing else), yt-dlp 2026.10.26, ffmpeg 9.0.2, Python 3.14.9. GitHub CI on `e26115d` was still pending when this was written.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on the merge `8930354`: `All checks passed.`, exit 0, 2440 passed, 9 deselected, 11 xfailed in both `es` and `en`. No file outside `.ai/` has changed since.
+- **Merged tests:** `8930354`'s `src/` and `tests/` equal the branch tip `ad5a4fe` (`git diff --stat ad5a4fe 8930354 -- src tests` is empty), and `main` hadn't touched them since the branch point. Every test function in either parent is at the merge, except `test_entries_yt_dlp_cannot_fetch_stay_images_with_no_warning_of_failure`, renamed as the criterion asks (now `test_entries_with_nothing_to_fetch_stay_images_and_storyboards_are_failures`). 23 test functions are new against `main`.
+- **Criteria tests:** a `pytest -k` selection over `test_e2e.py`, `test_probe.py` and `test_downloader.py` covering every test the criteria name, `[fix]` and `[pin]`, ran on `main`: 208 passed, 5 xfailed (the strict xfails below). The revert proof of the `[fix]` tests is the test-engineer's (mutation 16 of 18, both survivors equivalent).
+- **Console check:** `main`'s real console script, `.venv/bin/download-media`, under `env -i`, `LANG=en_US.UTF-8`, a fresh `HOME` and all four `XDG_*` folders per run in the scratchpad, `XDG_VIDEOS_DIR`/`XDG_MUSIC_DIR` unset, an empty working folder, no clipboard. A scratch `http.server` on `127.0.0.1` served ffmpeg-made `tiny.mp4`, `theora.ogg`, `tiny.ogg`, `tiny.mp3`, `tiny.m4a`, `tiny.jpg`, the copies `TINY.MP3`, `TINY.M4A`, `TINY.JPG`, `CLIP.M4A` (= `tiny.mp4`, served as `audio/mp4`) and the R2/R3 pages. Streams read with ffprobe. Every run left its working folder empty. Everything was deleted afterwards.
+
+| Run | Output | Exit | Disk (streams), history |
+| --- | ------ | ---- | ----------------------- |
+| R3, wizard, Enter ×N, `audio-source-theora-videotype` | `Detected: generic / Audio`, the note, type step at `Video`, `Done.`, `download-media -y <url>` | 0 | `Videos/… (1).ogv` (audio, video), 1 row |
+| R3, wizard, Enter ×N, `audio-source-mp4-videotype` | same | 0 | `Videos/… (1).mp4` (audio, video), 1 row |
+| R3, wizard, `2` at the type step, mp4 page | `Audio only`, `download-media -y -a <url>` | 0 | `Music/… (1).mp3` (audio), 1 row |
+| R3, `-y` theora page (the printed command, fresh `HOME`) | `Done.` | 0 | `Videos/… (1).ogv` (audio, video) |
+| Out, wizard, `audio-source-theora-audiotype` | `Audio`, no type step, `-y -a` | 0 | `Music/… (1).mp3` (audio): video lost, as the strict xfail pins |
+| Pin, wizard, `audio-source-vorbis` | `Audio`, no type step | 0 | `Music/… (1).mp3` |
+| R2, wizard, `<video src="TINY.MP3">` | `Audio`, no type step, `-y -a` | 0 | `Music/video-upper-mp3 (1).mp3` |
+| R2, wizard, `<video src="TINY.JPG">` | `Unknown`, its extra confirmation | 0 | `Videos/video-upper-jpg (1).JPG` |
+| R2, wizard, `<video src="CLIP.M4A">` / `TINY.M4A` | `Video`, as before | 0 | `Videos/… (1).M4A` (audio, video) / (audio) |
+| R2, wizard, direct `CLIP.M4A` | `Audio`, the note, type step, `download-media -y <url>` | 0 | `Videos/CLIP.M4A` (audio, video); on the spec's base this was `Music/CLIP.mp3`, video lost |
+| R2, wizard, `2`, direct `CLIP.M4A` | `-y -a <url>` | 0 | `Music/CLIP.mp3` |
+| R2, wizard, direct `TINY.M4A` | the note, type step | 0 | `Videos/TINY.M4A` (audio): D2's keypress cost |
+| R2, wizard, direct `TINY.MP3` | `Audio`, no type step | 0 | `Music/TINY.mp3` |
+| Pin, `-y` `video-upper-mp3` / `-y` and `-q 1080` direct `CLIP.M4A` / `-y -a` theora page | `Done.` | 0 | raw `.MP3` in `Videos` / `CLIP.M4A` (audio, video) / `.mp3` in `Music`, as the spec measured on `cfc7c54` |
+
+R1 went through `cli.main` with a scratch stub extractor (YouTube's storyboard shape, the `fake_site` loading pattern), from a folder outside the repo, same environment:
+
+| Run | Output | Exit | Disk, history |
+| --- | ------ | ---- | ------------- |
+| Wizard, `storyboard-only`, Enter ×N | `Could not inspect URL: Requested format is not available.`, manual flow, `Download failed: <url>`, `download-media -y <url>`; no `standalone image` | 1 | nothing, 0 rows |
+| same, `LANG=es_ES.UTF-8` | `No se pudo inspeccionar la URL: Requested format is not available.`, `Falló la descarga: <url>` | 1 | nothing, 0 rows |
+| Wizard, storyboard entry then a video | `Some items could not be inspected: Requested format is not available.`, `[?] [no soportado]  (item #1)`, `[video]  Clip`, `Done.`, `download-media -y --playlist-items 2 <url>` | 0 | `Videos/02 - Clip [v1].mp4`, 1 row |
+| `-y -p`, same carousel | `1 of 2 items downloaded (0 without downloadable media, 1 failed).`, `Done.` | 0 | `Videos/02 - Clip [v1].mp4`, 1 row |
+
+- **Cases, tests only:** `-i -a`, several URLs, cookies, the rerun, `-P`, `--playlist-items`, `-l`, and the `.WAV`/`.FLAC`/`.Opus`/`.Png` and `webm`/two-source pages are criterion or test-engineer tests in the gate; they weren't run by hand here.
+- **Scope:** `5b41234..ad5a4fe` touches exactly the six files in the Files table. No message, flag, default, path, dependency or version change; `wizard.py`, `cli.py`, `i18n.py`, `equivalent.py` untouched.
+
+### Departures from the spec
+
+1. **The `TINY.M4A` row** (criterion "moves to `test_wizard_offers_the_video_of_other_labelled_shapes`") went to `REAL_AUDIO_UNDER_A_LABEL` instead, which drives `test_wizard_enter_keeps_real_audio_under_a_label_raw` and `test_wizard_converts_real_audio_under_a_label_when_asked`. `TINY.M4A` holds no video, so the "offers the video" test, which asserts a video stream, can't hold it; the chosen tests assert what the criterion means: the note, the raw `.M4A` in `~/Videos` on Enter, and an `.mp3` on `2`. The console check above agrees.
+2. **One test not listed in the spec also changes:** `test_items_yt_dlp_cannot_fetch_are_never_offered_and_never_saved` (`undownloadable-carousel`) now counts 2 `[image]` instead of 3, because its storyboard entry is now yt-dlp's failure, shown `[?]` and still not offered. It's the same change as the renamed criterion test, on a second test that reads the same page.
+
+### Strict xfails
+
+| Test | Why | Planner row |
+| ---- | --- | ----------- |
+| `test_an_audio_tag_whose_audio_type_names_a_video_codec_keeps_its_video` | The spec's own criterion (finding 2): `common.py:3450` leaves formats equal to real Vorbis audio | Row 64 (`upstream-reports`) as a fourth yt-dlp issue, not yet in that row |
+| `test_wizard_twice_on_a_declared_ogv_keeps_one_file` | Added in testing: the second wizard run on the Theora page writes `… (1) [audio-source-theora-videotype-1].ogv`, because ogg keeps `purl` in stream tags and `_source_url` reads format tags. Same cause as spec 27's `.ogg` rerun xfail | Row 25 (`opus-rerun`) |
+| `test_a_direct_link_to_an_uppercase_image_saves_the_image[wizard\|yes]` | Added in testing, pre-existing (finding 4): a direct `PIC.PNG` comes back as `unknown_video`, so the default mp4 container step turns the image into a one-frame `PIC.mp4`, in the wizard and under `-y`; `pic.png` is saved as is | None yet: for the planner, next to the suggested `upper-ext-names` row (Out), which isn't in `PLAN.md` either |
