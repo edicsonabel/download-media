@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T05:59:04-04:00",
+  "updated": "2026-11-10T06:22:17-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3042,17 +3042,21 @@
     "fix/untagged-per-item": {
       "type": "fix",
       "title": "Name only saved items as untagged",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/69-untagged-per-item.md",
       "branch": "fix/untagged-per-item",
       "worktree": ".worktrees/fix-untagged-per-item",
       "commits": [
         "a1c8379",
-        "8d4926f"
+        "8d4926f",
+        "cb87f6a"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -3081,6 +3085,13 @@
           "result": "done",
           "at": "2026-11-10T05:48:24-04:00",
           "note": "8d4926f: per-item item_untagged, item_not_embedded, item_subs_seen on _Ydl, copied in keep() only for saved items. Strict xfail flipped; 6 new e2e cases fail on the old code. Gate exit 0, 2532 passed + 9 xfailed. DownloadResult, download() return, cli/i18n untouched."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T06:22:17-04:00",
+          "note": "No bugs. Every mode, container, failure shape incl. raise and ReExtractInfo; lists agree with disk. Mutation 15/15 (two caught only by new tests). Gate exit 0 at cb87f6a, 2548 passed + 11 xfailed. Pre-existing, strict xfail, row 46: under -s -p the embed step turns a failed item's junk body into a subtitle-only mp4; a rerun counts it saved: Done., exit 0 (a failure reads as success)."
         }
       ]
     }
