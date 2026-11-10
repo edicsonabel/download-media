@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:51:12-04:00",
+  "updated": "2026-11-10T01:56:02-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2442,17 +2442,18 @@
     "fix/cookies-undecrypted": {
       "type": "fix",
       "title": "Say so when the browser's cookies load but none decrypt",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/67-cookies-undecrypted.md",
       "branch": "fix/cookies-undecrypted",
-      "worktree": ".worktrees/fix-cookies-undecrypted",
+      "worktree": null,
       "commits": [
         "24354d6",
         "feb1576",
         "d01cbcf",
-        "cfc7c54"
+        "cfc7c54",
+        "5cb4fc1"
       ],
       "review": {
         "approved": true,
@@ -2514,6 +2515,13 @@
           "result": "merged",
           "at": "2026-11-10T01:42:49-04:00",
           "note": "Merged as cfc7c54, no conflicts. Gate exit 0 on the merged tree (first with container-choice), 2264 passed + 4 xfailed es/en. Undo: git revert -m 1 cfc7c54. Pushed by the orchestrator under the delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T01:56:02-04:00",
+          "note": "All criteria hold on main with container-choice alongside; 46 criteria tests pass; revert copy fails 29 plus a collection error. Reproduction R1-R15 and es match; mkv and webm runs with cookies keep --video-format and drop --cookies. Gate not re-run (no code change since cfc7c54); CI 42763848261 success. Optional live +basictext step left for the human. Spec done; PLAN row 67 done; its five review items moved into the 0.4.0 list (20-24). Worktree and branch removed."
         }
       ]
     },
