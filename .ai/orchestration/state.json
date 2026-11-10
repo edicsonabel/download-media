@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:31:02-04:00",
+  "updated": "2026-11-10T01:33:51-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2379,17 +2379,21 @@
     "fix/m4a-cover": {
       "type": "fix",
       "title": "Stop -a -f m4a losing its cover image",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/41-m4a-cover.md",
       "branch": "fix/m4a-cover",
       "worktree": ".worktrees/fix-m4a-cover",
       "commits": [
         "9f32301",
-        "91dca9b"
+        "91dca9b",
+        "4ecd8fe"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -2425,6 +2429,13 @@
           "result": "done",
           "at": "2026-11-10T01:06:03-04:00",
           "note": "91dca9b: _TagSource before _EmbedCover. Gate exit 0, 2205 passed + 4 xfailed. 3 e2e and 3 order cases fail without it. Real runs: m4a keeps cover and tags, rerun one cover, mp3 ID3v2.3, m4a holding video keeps cover only, video mkv/mp4 unchanged. Mutagen runs left to the test-engineer (spec D4)."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T01:33:51-04:00",
+          "note": "No bugs. D4 mutagen runs match the spec table cell for cell (mutagen in a scratch --target, deleted). 16 tests in 4ecd8fe, all m4a cases fail without the fix. Mutation 9/9. Gate exit 0 at 4ecd8fe, 2227 passed + 4 xfailed. Planner (rows 43/48): with mutagen, opus with a broken thumbnail is silent on main too, and now keeps the junk as a picture block."
         }
       ]
     },
