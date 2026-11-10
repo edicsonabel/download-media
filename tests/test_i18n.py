@@ -34,3 +34,11 @@ def test_carousel_image_messages() -> None:
             _MESSAGES[lang]
         )
         assert not {"ig_image_warning", "ask_selection_default_videos"} & set(_MESSAGES[lang])
+
+
+def test_refusals_do_not_say_cancelling() -> None:
+    # Nothing is cancelled: the run goes on, the picker asks again, or direct mode fails.
+    for lang in ("es", "en"):
+        for key in ("image_only_skipped", "no_supported_items"):
+            assert "Cancel" not in _MESSAGES[lang][key]
+            assert "Cancelando" not in _MESSAGES[lang][key]

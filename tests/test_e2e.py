@@ -5499,13 +5499,15 @@ def test_wizard_skips_a_refused_url_and_says_so_at_the_end(wizard_urls: Any, out
     assert commands(output) == [f"download-media -y -o {out} {VIDEO}"]
 
 
-def test_wizard_with_every_url_refused_is_cancelled(wizard_urls: Any, out: Path) -> None:
+def test_wizard_with_every_url_refused_names_them_and_exits_1(wizard_urls: Any, out: Path) -> None:
     code, output, asked = wizard_urls([IMAGE, ONLY_IMAGES], "", "")
     assert asked == 2
     assert code == 1
     assert t("image_only_skipped") in output
     assert t("no_supported_items") in output
-    assert t("cancelled") in output
+    assert t("cancelled") not in output
+    assert t("wizard_skipped", IMAGE) in output
+    assert t("wizard_skipped", ONLY_IMAGES) in output
     assert commands(output) == []
     assert names(out) == []
 

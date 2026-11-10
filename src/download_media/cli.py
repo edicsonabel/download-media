@@ -575,9 +575,6 @@ def _main(argv: list[str] | None) -> int:
                 return 1
             runs = [(url, walk) for url, walk in walked if walk is not None]
             refused = [url for url, walk in walked if walk is None]
-            if not runs:
-                warn(t("cancelled"))
-                return 1
 
     if runs is None:
         # Direct mode without URL: try clipboard once (no prompt — just use it if found)
