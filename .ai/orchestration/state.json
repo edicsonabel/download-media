@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T03:10:33-04:00",
+  "updated": "2026-11-10T03:18:30-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2733,14 +2733,17 @@
     "fix/kind-edges": {
       "type": "fix",
       "title": "Close the remaining media-kind edge cases",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/37-kind-edges.md",
       "branch": "fix/kind-edges",
       "worktree": ".worktrees/fix-kind-edges",
       "commits": [
-        "5123f99"
+        "5123f99",
+        "1f852cc",
+        "ae4adf9",
+        "ec60e65"
       ],
       "review": null,
       "history": [
@@ -2771,6 +2774,13 @@
           "result": "approved",
           "at": "2026-11-10T02:50:57-04:00",
           "note": "Development starts from main 5b41234 (cancel-exits merged; its gate still running, base kept if it passes)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T03:18:30-04:00",
+          "note": "Three commits, one per decision. Gate exit 0 at ec60e65, 2425 passed + 8 xfailed. Each fix reverted fails its tests (D1 6, D2 25, D3 17). Real runs match disk. Deviation: the TINY.M4A row moved to REAL_AUDIO_UNDER_A_LABEL (tiny.m4a holds no video); one unlisted test now counts 2 [image] not 3. Planner: upper-ext-names; row 38 storyboard cause."
         }
       ]
     },
