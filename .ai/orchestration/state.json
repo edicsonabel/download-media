@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:25:52-04:00",
+  "updated": "2026-11-10T02:33:00-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2379,18 +2379,19 @@
     "fix/m4a-cover": {
       "type": "fix",
       "title": "Stop -a -f m4a losing its cover image",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/41-m4a-cover.md",
       "branch": "fix/m4a-cover",
-      "worktree": ".worktrees/fix-m4a-cover",
+      "worktree": null,
       "commits": [
         "9f32301",
         "91dca9b",
         "4ecd8fe",
         "3dbd07b",
-        "2dc4607"
+        "2dc4607",
+        "4d9032f"
       ],
       "review": {
         "approved": true,
@@ -2469,6 +2470,13 @@
           "result": "merged",
           "at": "2026-11-10T02:15:01-04:00",
           "note": "Merged as 2dc4607, no conflicts. Gate exit 0 on the merged tree (container-choice + cookies-undecrypted + m4a-cover), 2297 passed + 4 xfailed es/en. Undo: git revert -m 1 2dc4607. Pushed by the orchestrator under the delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T02:33:00-04:00",
+          "note": "Criteria hold on main: m4a keeps its cover and tags, reruns keep one cover, mp3 cover + ID3v2.3 (date TYER=2026, same as yt-dlp's CLI), opus/wav unchanged, video mode identical to before. 26 criteria tests pass. Gate not re-run (tech-lead 2dc4607). CI on 0c76bcd failed twice at 'Install ffmpeg' timeout (infra, no test ran); retried. Spec done with D3 corrected; PLAN row 41 done; items moved to the 0.4.0 list (25-28), item 26 flags the mp3 date loss. Worktree and branch removed."
         }
       ]
     },
