@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T23:26:53-04:00",
+  "updated": "2026-11-09T23:39:52-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2318,12 +2318,14 @@
       "type": "fix",
       "title": "Stop -a -f m4a losing its cover image",
       "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "status": "approved",
+      "next_agent": "developer",
       "doc": ".ai/specs/41-m4a-cover.md",
       "branch": "fix/m4a-cover",
       "worktree": null,
-      "commits": [],
+      "commits": [
+        "9f32301"
+      ],
       "review": null,
       "history": [
         {
@@ -2332,6 +2334,20 @@
           "result": "approved",
           "at": "2026-11-09T23:26:53-04:00",
           "note": "Next P2 in PLAN.md's order, started under the human's overnight delegation: 'Voy a dormir, sigue trabajando y haz lo que más puedas de las features'. Spec written while container-choice finishes; development starts after container-choice merges, since both touch downloader.py's post-processors."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-09T23:39:52-04:00",
+          "note": "Spec 9f32301, PLAN row 41 to spec. Reproduced on a30d433: -a -f m4a saves aac only, Done., exit 0. Fix: _TagSource before _EmbedCover, yt-dlp CLI's order. Measured mp3/m4a/opus/wav with and without mutagen, WebP thumbnail, video mode unchanged, on spec 30's branch too. D1-D4. No live check. Planner: row 48's why is incomplete (mutagen opus loses tags on main; this fixes it)."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-09T23:39:52-04:00",
+          "note": "Spec approved under the human's overnight delegation, every recommended option (D1 swap, D2 no on-disk check, D3 accept ID3v2.3, D4 order pinned in a unit test plus one manual mutagen run). Not breaking. For the 0.4.0 review list: m4a gains a covr stream; mp3 ID3v2.4 to v2.3; with mutagen, opus keeps its tags and loses the untagged warning; log order. Development starts after container-choice merges."
         }
       ]
     }
