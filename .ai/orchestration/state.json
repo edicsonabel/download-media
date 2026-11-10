@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T02:00:12-04:00",
+  "updated": "2026-11-10T02:03:59-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2379,16 +2379,17 @@
     "fix/m4a-cover": {
       "type": "fix",
       "title": "Stop -a -f m4a losing its cover image",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/41-m4a-cover.md",
       "branch": "fix/m4a-cover",
       "worktree": ".worktrees/fix-m4a-cover",
       "commits": [
         "9f32301",
         "91dca9b",
-        "4ecd8fe"
+        "4ecd8fe",
+        "3dbd07b"
       ],
       "review": {
         "approved": true,
@@ -2453,6 +2454,13 @@
           "result": "approved",
           "at": "2026-11-10T02:00:12-04:00",
           "note": "Merge under the delegation. D3's date loss accepted for now (it is what yt-dlp's CLI writes; keeping v2.4 would mean re-implementing the cover step), flagged at the top of spec 41's review items for the human; the architect corrects the wording at validation. Test-engineer fixes the stale comment first (tests only)."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T02:03:59-04:00",
+          "note": "QA minor 2 closed in 3dbd07b (comment only). No other comment described the old order. ruff and test_downloader.py pass."
         }
       ]
     },
