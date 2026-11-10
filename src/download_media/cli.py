@@ -52,29 +52,22 @@ from .i18n import is_yes, t
 from .probe import is_auth_error
 from .ui import C, die, err, fmt_bytes, fmt_duration, info, ok, warn
 
-# Flags that signal "I know what I want; skip the wizard".
-_INTENT_FLAGS: frozenset[str] = frozenset(
-    {
-        "-a",
-        "--audio",
-        "-q",
-        "--quality",
-        "-f",
-        "--format",
-        "--video-format",
-        "-o",
-        "--output",
-        "-s",
-        "--subs",
-        "--sub-langs",
-        "-p",
-        "--playlist",
-        "-P",
-        "--no-playlist",
-        "--playlist-items",
-        "--cookies",
-    }
+# Options that signal "I know what I want; skip the wizard", by argparse dest.
+_INTENT_DESTS = (
+    "audio",
+    "quality",
+    "audio_format",
+    "video_format",
+    "output",
+    "list_formats",
+    "playlist",
+    "no_playlist",
+    "playlist_items",
+    "subs",
+    "sub_langs",
+    "cookies_browser",
 )
+_UNSET = object()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -202,16 +195,12 @@ def options_from_args(args: argparse.Namespace) -> DownloadOptions:
 
 
 def has_intent_flags(argv: list[str]) -> bool:
-    """True if the user passed any "I know what I want" flag."""
-    for token in argv:
-        if token in _INTENT_FLAGS:
-            return True
-        # Handle --flag=value form
-        if "=" in token:
-            head = token.split("=", 1)[0]
-            if head in _INTENT_FLAGS:
-                return True
-    return False
+    """True if any "I know what I want" option was given, in any form argparse accepts."""
+    # argparse only fills a default when the namespace lacks the attribute, so whatever
+    # isn't the sentinel any more was set from the command line.
+    given = argparse.Namespace(**dict.fromkeys(_INTENT_DESTS, _UNSET))
+    build_parser().parse_args(argv, namespace=given)
+    return any(getattr(given, dest) is not _UNSET for dest in _INTENT_DESTS)
 
 
 def should_run_wizard(args: argparse.Namespace, argv: list[str]) -> bool:
@@ -508,6 +497,32 @@ def _list_formats(url: str, opts: DownloadOptions) -> int:
         return 1
 
 
+def _list_every_url(opts: DownloadOptions, *, ask: bool) -> int:
+    """-l: list each URL in order, carrying on past a failure."""
+    if ask:
+        urls = wizard.ask_urls(opts)
+        if urls is None:
+            warn(t("cancelled"))
+            return 1
+        opts.urls = urls
+    else:
+        _url_or_clipboard(opts)
+    codes = [_list_formats(url, opts) for url in opts.urls]
+    return 0 if not any(codes) else 1
+
+
+def _url_or_clipboard(opts: DownloadOptions) -> None:
+    """Direct mode without URL: try clipboard once (no prompt — just use it if found)."""
+    if not opts.urls:
+        clip = read_clipboard()
+        if clip:
+            print(f"{C.DIM}{t('from_clipboard')}{C.RESET} {clip}")
+            opts.urls.append(clip)
+
+    if not opts.urls:
+        die(t("url_required"))
+
+
 def _print_equivalent(runs: list[tuple[str, DownloadOptions]], outcomes: list[_Outcome]) -> None:
     """Print how to repeat the URLs that reached the download.
 
@@ -564,38 +579,21 @@ def _main(argv: list[str] | None) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = build_parser().parse_args(raw_argv)
     opts = options_from_args(args)
+    if opts.list_formats:
+        return _list_every_url(opts, ask=should_run_wizard(args, raw_argv))
 
     runs: list[tuple[str, DownloadOptions]] | None = None
     refused: list[str] = []
     if should_run_wizard(args, raw_argv):
-        if opts.list_formats:
-            result = wizard.run(opts)
-            if result is None:
-                warn(t("cancelled"))
-                return 1
-            opts = result
-        else:
-            walked = wizard.run_all(opts)
-            if walked is None:
-                warn(t("cancelled"))
-                return 1
-            runs = [(url, walk) for url, walk in walked if walk is not None]
-            refused = [url for url, walk in walked if walk is None]
+        walked = wizard.run_all(opts)
+        if walked is None:
+            warn(t("cancelled"))
+            return 1
+        runs = [(url, walk) for url, walk in walked if walk is not None]
+        refused = [url for url, walk in walked if walk is None]
 
     if runs is None:
-        # Direct mode without URL: try clipboard once (no prompt — just use it if found)
-        if not opts.urls:
-            clip = read_clipboard()
-            if clip:
-                print(f"{C.DIM}{t('from_clipboard')}{C.RESET} {clip}")
-                opts.urls.append(clip)
-
-        if not opts.urls:
-            die(t("url_required"))
-
-        if opts.list_formats:
-            return _list_formats(opts.urls[0], opts)
-
+        _url_or_clipboard(opts)
         runs = [(url, opts) for url in opts.urls]
 
     outcomes: list[_Outcome] = []

@@ -510,6 +510,21 @@ def run(opts: DownloadOptions) -> DownloadOptions | None:
         return None
 
 
+def ask_urls(opts: DownloadOptions) -> list[str] | None:
+    """Only the URL prompt, once per URL given: all -l needs. ``None`` if cancelled."""
+    given = opts.urls or [""]
+    urls: list[str] = []
+    for k, url in enumerate(given, 1):
+        _print_title(k, len(given))
+        current = replace(opts, urls=[url] if url else [])
+        try:
+            step_url(current)
+        except _Cancel:
+            return None
+        urls += current.urls
+    return urls
+
+
 def run_all(opts: DownloadOptions) -> list[tuple[str, DownloadOptions | None]] | None:
     """Walk the wizard once per URL, in order.
 
