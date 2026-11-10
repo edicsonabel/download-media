@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, ClassVar
@@ -146,6 +147,10 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(302)
             self.send_header("Location", self.path)
             self.end_headers()
+            return None
+        if self.path.startswith("/hang/"):  # Answers after any sane client gave up.
+            time.sleep(3)
+            self.send_error(504)
             return None
         if self.path.startswith("/short/"):  # A JPEG cut off long before its stated length.
             self.send_response(200)
@@ -373,6 +378,8 @@ _SUBTITLES = {
     # Broken files under a subtitle extension; missing.vtt is never written (a 404).
     "empty.vtt": "",
     "garbage.vtt": "\x00\x01 not a subtitle \xff\xfe\n" * 8,
+    "header.vtt": "WEBVTT\n\n",  # A valid file with no cue: no subtitle text.
+    "note.vtt": "WEBVTT\n\nNOTE nothing to show here\n\n",  # Comments only: no cue.
 }
 
 
@@ -1019,8 +1026,20 @@ class FakeSiteIE(InfoExtractor):
         tracks: dict[str, dict[str, str]] = {
             "subs-empty": {"en": "empty.vtt"},
             "subs-garbage": {"en": "garbage.vtt"},
+            "subs-garbage-two": {"en": "en.vtt", "es": "garbage.vtt"},
+            "subs-header": {"en": "header.vtt"},
             "subs-one-broken": {"en": "en.vtt", "es": "en.ttml"},
             "subs-404": {"en": "missing.vtt"},
+            "subs-404-two": {"en": "en.vtt", "es": "missing.vtt"},
+            "subs-short": {"en": "short/en.vtt"},  # Cut off long before its stated length.
+            "subs-note": {"en": "note.vtt"},
+            "subs-404-both": {"en": "missing.vtt", "es": "missing.vtt"},
+            "subs-503": {"en": "status/503/en.vtt"},
+            "subs-429": {"en": "status/429/en.vtt"},
+            "subs-hang": {"en": "hang/en.vtt"},
+            "subs-ttml-404": {"en": "en.ttml", "es": "missing.vtt"},
+            "subs-garbage-404": {"en": "garbage.vtt", "es": "missing.vtt"},
+            "subs-srt-404": {"en": "en.srt", "es": "missing.vtt"},
             "subs-srt": {"en": "en.srt"},
             "subs-ass": {"en": "en.ass"},
         }
@@ -1039,6 +1058,87 @@ class FakeSiteIE(InfoExtractor):
             return {**webm_video, "subtitles": {"en": wrong}}
         if page == "subs-flv":
             return {**flv_video, "subtitles": self._tracks(en="en.vtt")}
+        if page in ("subs-novideo", "subs-junk"):
+            path = "missing.mp4" if page == "subs-novideo" else JUNK
+            return {
+                **self._video("v1", path=path, page=page),
+                "subtitles": self._tracks(en="en.vtt"),
+            }
+        if page == "subs-novideo-carousel":
+            entries = [
+                {**self._video("s1", path="missing.mp4"), "subtitles": self._tracks(en="en.vtt")},
+                self._video("s2"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-auto-404":  # A subtitle, and auto-captions that 404.
+            return {
+                **self._video("v1", page=page),
+                "subtitles": self._tracks(en="en.vtt"),
+                "automatic_captions": self._tracks(es="missing.vtt"),
+            }
+        if page == "subs-inline-empty":  # Served inline, as some extractors do, with no text.
+            inline = {"en": [{"data": "", "ext": "vtt"}]}
+            return {**self._video("v1", page=page), "subtitles": inline}
+        if page == "subs-webm-404":
+            return {**webm_video, "subtitles": self._tracks(en="en.vtt", es="missing.vtt")}
+        if page == "subs-carousel-404-last":  # Item 1 fine, item 2's subtitle 404s.
+            entries = [
+                {**self._video("s1"), "subtitles": self._tracks(en="en.vtt")},
+                {**self._video("s2"), "subtitles": self._tracks(en="missing.vtt")},
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-carousel-short":  # Every item's subtitle is cut off or empty.
+            entries = [
+                {**self._video("s1"), "subtitles": self._tracks(en="short/en.vtt")},
+                {**self._video("s2"), "subtitles": self._tracks(en="empty.vtt")},
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-junk-404":  # A junk body, and a subtitle that 404s.
+            return {
+                **self._video("v1", path=JUNK, page=page),
+                "subtitles": self._tracks(en="missing.vtt"),
+            }
+        if page == "subs-junk-404-carousel":  # Item 1 as subs-junk-404, item 2 plain.
+            entries = [
+                {**self._video("s1", path=JUNK), "subtitles": self._tracks(en="missing.vtt")},
+                self._video("s2"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-garbage-carousel":  # Item 1's subtitle holds no text, item 2's does.
+            entries = [
+                {**self._video("s1"), "subtitles": self._tracks(en="garbage.vtt")},
+                {**self._video("s2"), "subtitles": self._tracks(en="en.vtt")},
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-404-novideo":  # The subtitle 404s, then so does the video.
+            return {
+                **self._video("v1", path="missing.mp4", page=page),
+                "subtitles": self._tracks(en="missing.vtt"),
+            }
+        if page == "subs-404-then-novideo":  # Item 1's subtitle 404s, item 2's video does.
+            entries = [
+                {**self._video("s1"), "subtitles": self._tracks(en="missing.vtt")},
+                {**self._video("s2", path="missing.mp4"), "subtitles": self._tracks(en="en.vtt")},
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-novideo-two":  # The video 404s after two subtitles were written.
+            return {
+                **self._video("v1", path="missing.mp4", page=page),
+                "subtitles": self._tracks(en="en.vtt", es="es.vtt"),
+            }
+        if page == "subs-auto-novideo":  # Only an auto-caption, then the video 404s.
+            return {
+                **self._video("v1", path="missing.mp4", page=page),
+                "automatic_captions": self._tracks(en="en.vtt"),
+            }
+        if page in ("subs-carousel-both", "subs-carousel-novideo-last"):
+            # Same items, so the same names; in the second, item 2's video 404s.
+            last = "missing.mp4" if page.endswith("last") else "tiny.mp4"
+            entries = [
+                {**self._video("s1"), "subtitles": self._tracks(en="en.vtt")},
+                {**self._video("s2", path=last), "subtitles": self._tracks(en="en.vtt")},
+            ]
+            return self.playlist_result(entries, "post", "Post")
         if page == "subs-404-carousel":
             entries = [
                 {**self._video("s1"), "subtitles": self._tracks(en="missing.vtt")},

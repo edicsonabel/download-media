@@ -6663,14 +6663,40 @@ def test_an_embed_that_fails_after_starting_leaves_no_temp_file(run: Any, out: P
     assert len(history_rows()) == 1
 
 
-def test_a_garbage_subtitle_file_never_fails_the_run(run: Any, out: Path) -> None:
-    # ffmpeg reads it as an empty track; whether it warns is ffmpeg's call, the files are ours.
-    code, output = run("-y", "-s", "https://fake.test/subs-garbage")
+@pytest.mark.parametrize(
+    ("flags", "page", "video"),
+    [
+        ((), "subs-garbage", "Clip.mp4"),
+        ((), "subs-header", "Clip.mp4"),
+        (("--video-format", "mkv"), "subs-garbage", "Clip.mkv"),
+    ],
+    ids=["subs-garbage", "subs-header", "subs-garbage-mkv"],
+)
+def test_an_empty_subtitle_is_not_embedded(
+    run: Any, out: Path, flags: tuple[str, ...], page: str, video: str
+) -> None:
+    # ffmpeg would read it as an empty track, which players offer and show nothing for.
+    code, output = run("-y", "-s", *flags, f"https://fake.test/{page}")
     assert code == 0
-    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert names(out) == ["Clip.en.vtt", video]
     assert leftovers(out) == []
-    assert streams(out / "Clip.mp4") >= {"video", "audio"}
+    assert streams(out / video) == {"video", "audio"}
+    assert subtitle_streams(out / video) == []
+    assert output.count(t("subs_empty", "Clip.en.vtt")) == 1
+    assert never_said("subs_not_embedded", output)
+    assert never_said("subs_none", output)
+    assert "[EmbedSubtitle] Embedding" not in output
     assert output.count(t("done")) == 1
+
+
+def test_an_empty_language_leaves_the_good_one_embedded(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-garbage-two")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.es.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    assert output.count(t("subs_empty", "Clip.es.vtt")) == 1
+    assert t("subs_empty", "Clip.en.vtt") not in output
+    assert never_said("subs_not_embedded", output)
 
 
 @pytest.mark.parametrize(
@@ -6737,16 +6763,61 @@ def test_a_container_that_cannot_hold_every_file_warns(
     assert output.count(t("done")) == 1
 
 
-def test_a_subtitle_404_still_aborts_a_single_video(run: Any, out: Path) -> None:
-    # Out of scope (spec 21): pinned so a change shows up, not endorsed.
-    url = "https://fake.test/subs-404"
-    code, output = run("-y", "-s", url)
-    assert code == 1
-    assert t("failed", url) in output
-    assert names(out) == []
+# Spec 36: a subtitle problem never costs the video.
+def subs_failed_lines(output: str) -> list[str]:
+    head = t("subs_failed", "\0", "\0", "\0").split("\0")[1]
+    return [line for line in output.splitlines() if head in line]
+
+
+@pytest.mark.parametrize(
+    ("page", "reason"),
+    [("subs-404", "404"), ("subs-empty", "data blocks"), ("subs-short", "bytes")],
+)
+def test_a_failed_subtitle_no_longer_costs_the_video(
+    run: Any, out: Path, page: str, reason: str
+) -> None:
+    code, output = run("-y", "-s", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(t("subs_failed", "Clip.mp4", "en", "")[:-3])
+    assert reason in line
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert output.count(t("done")) == 1
+    assert leftovers(out) == []
+    errors = [line for line in output.splitlines() if line.startswith("ERROR:")]
+    assert not [line for line in errors if "subtitle" in line or reason in line]
+    assert len(history_rows()) == 1
+
+
+def test_one_failed_language_keeps_the_others(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-404-two")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(t("subs_failed", "Clip.mp4", "es", "")[:-3])
     assert never_said("subs_none", output)
     assert never_said("subs_not_embedded", output)
-    assert history_rows() == []
+
+
+def test_single_mode_goes_on_past_a_failed_subtitle(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-404-carousel")
+    assert code == 0
+    assert names(out) == ["Clip [s1].mp4", "Clip [s2].mp4"]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(t("subs_failed", "Clip [s1].mp4", "en", "")[:-3])
+    assert output.count(t("done")) == 1
+
+
+def test_a_cut_off_subtitle_is_not_a_failed_item_under_p(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-short"
+    code, output = run("-y", "-p", "-s", url)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert never_said("partial_result", output)
+    assert t("failed", url) not in output
+    assert leftovers(out) == []
 
 
 def test_a_subtitle_404_in_playlist_mode_saves_the_video_and_says_so(run: Any, out: Path) -> None:
@@ -6756,6 +6827,61 @@ def test_a_subtitle_404_in_playlist_mode_saves_the_video_and_says_so(run: Any, o
     assert output.count(t("subs_none", "es,en")) == 1
     assert never_said("subs_not_embedded", output)
     assert never_said("partial_result", output)
+    [line] = subs_failed_lines(output)
+    assert line.startswith(t("subs_failed", "01 - Clip [s1].mp4", "en", "")[:-3])
+
+
+@pytest.mark.parametrize("page", ["subs-404", "subs-garbage"])
+def test_audio_names_a_failed_or_empty_subtitle(run: Any, out: Path, page: str) -> None:
+    code, output = run("-y", "-a", "-s", f"https://fake.test/{page}")
+    assert code == 0
+    if page == "subs-404":
+        assert names(out) == ["Clip.mp3"]
+        [line] = subs_failed_lines(output)
+        assert line.startswith(t("subs_failed", "Clip.mp3", "en", "")[:-3])
+    else:
+        assert names(out) == ["Clip.en.vtt", "Clip.mp3"]
+        assert output.count(t("subs_empty", "Clip.en.vtt")) == 1
+        assert subs_failed_lines(output) == []
+
+
+@pytest.mark.parametrize(
+    ("page", "left"),
+    [("subs-novideo", []), ("subs-junk", ["Clip.mp4"])],  # A junk body stays (roadmap row 46).
+)
+def test_a_failed_video_leaves_no_subtitle_file(
+    run: Any, out: Path, page: str, left: list[str]
+) -> None:
+    url = f"https://fake.test/{page}"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == left
+
+
+def test_a_failed_item_under_p_leaves_no_subtitle_file(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-novideo-carousel")
+    assert code == 0
+    assert names(out) == ["02 - Clip [s2].mp4"]
+    assert t("partial_result", 1, 2, 0, 1) in output
+
+
+def test_a_subtitle_404_with_cookies_is_not_retried(
+    run: Any, out: Path, fake_site: list[Any]
+) -> None:
+    code, output = run("-y", "-s", "--cookies", "brave", "https://fake.test/subs-404")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert t("cookies_retry", "brave") not in output
+    assert fake_site == [("brave",)]
+
+
+def test_wizard_with_subs_survives_a_failed_subtitle(run: Any, out: Path, answers: Any) -> None:
+    answers(*SINGLE_WALK)
+    code, output = run("-i", "-s", "https://fake.test/subs-404")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert len(subs_failed_lines(output)) == 1
 
 
 def test_carousel_with_images_and_one_subtitled_video(run: Any, out: Path) -> None:
@@ -6985,6 +7111,35 @@ def test_subtitle_warnings_in_both_languages(
     code, output = run("-y", "-s", "https://fake.test/subs-fr")
     assert code == 0
     assert none in output
+
+
+@pytest.mark.parametrize(
+    ("lang", "failed", "empty"),
+    [
+        (
+            "es",
+            'Clip.mp4: no se pudieron descargar los subtítulos "en" (HTTP Error 404: ',
+            "Clip.en.vtt: el archivo de subtítulos no contiene texto; "
+            "se conserva, pero no se incrusta.",
+        ),
+        (
+            "en",
+            'Clip.mp4: couldn\'t download the "en" subtitles (HTTP Error 404: ',
+            "Clip.en.vtt: the subtitle file holds no text; it's kept, but not embedded.",
+        ),
+    ],
+)
+def test_subtitle_failure_warnings_in_both_languages(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, lang: str, failed: str, empty: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    code, output = run("-y", "-s", "https://fake.test/subs-404")
+    assert code == 0
+    assert failed in output
+    shutil.rmtree(out)
+    code, output = run("-y", "-s", "https://fake.test/subs-garbage")
+    assert code == 0
+    assert empty in output
 
 
 # A browser whose cookies can't be read (spec 26). The isolated home holds no browser at all,
@@ -10369,3 +10524,525 @@ def test_ctrl_c_at_a_prompt_puts_its_line_after_the_prompt_s_line(
     assert t("equiv_cmd") not in output
     assert names(out) == []
     assert history_rows() == []
+
+
+# Spec 36, attacked: every shape of subtitle failure, in every mode.
+def failed_line(name: str, lang: str) -> str:
+    """The start of the subs_failed line for ``name`` and ``lang``, before the reason."""
+    return t("subs_failed", name, lang, "")[:-3]
+
+
+def error_lines(output: str) -> list[str]:
+    return [line for line in output.splitlines() if line.startswith("ERROR:")]
+
+
+def subtitle_defaults(path: Path) -> list[bool]:
+    """Whether each subtitle stream in ``path`` is marked as the default track."""
+    probe = ["ffprobe", "-v", "error", "-select_streams", "s"]
+    probe += ["-show_entries", "stream_disposition=default", "-of", "csv=p=0"]
+    done = subprocess.run([*probe, str(path)], capture_output=True, text=True, timeout=15)
+    return [row.strip() == "1" for row in done.stdout.splitlines() if row.strip()]
+
+
+@pytest.mark.parametrize(
+    ("page", "reason"),
+    [("subs-503", "503"), ("subs-429", "429"), ("subs-hang", "timed out")],
+)
+def test_any_failure_shape_keeps_the_video_and_names_the_reason(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, page: str, reason: str
+) -> None:
+    from download_media import downloader
+
+    real = downloader.build_ydl_opts
+
+    def quick(*args: Any) -> dict[str, Any]:
+        # A server that never answers: give up in a second instead of minutes.
+        return {**real(*args), "socket_timeout": 0.5, "retries": 1}
+
+    monkeypatch.setattr(downloader, "build_ydl_opts", quick)
+    code, output = run("-y", "-s", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip.mp4", "en"))
+    assert reason in line.lower()
+    assert error_lines(output) == []
+    assert leftovers(out) == []
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert output.count(t("done")) == 1
+    assert len(history_rows()) == 1
+
+
+def test_every_language_failing_names_each_one_in_order(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-404-both")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    lines = subs_failed_lines(output)
+    assert [line[: len(failed_line("Clip.mp4", "es"))] for line in lines] == [
+        failed_line("Clip.mp4", "es"),
+        failed_line("Clip.mp4", "en"),
+    ]
+    assert all("404" in line for line in lines)
+    # Each reason is its own language's, without yt-dlp's framing.
+    assert not [line for line in lines if "Unable to download" in line or "'e" in line]
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert error_lines(output) == []
+
+
+@pytest.mark.parametrize("page", ["subs-note", "subs-inline-empty"])
+def test_a_comment_only_or_inline_empty_subtitle_is_left_out(
+    run: Any, out: Path, page: str
+) -> None:
+    code, output = run("-y", "-s", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == []
+    assert output.count(t("subs_empty", "Clip.en.vtt")) == 1
+    assert never_said("subs_none", output)
+    assert never_said("subs_not_embedded", output)
+    assert subs_failed_lines(output) == []
+    assert "There aren't any subtitles to embed" not in output
+
+
+def test_failed_auto_captions_are_named_like_subtitles(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-auto-404")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip.mp4", "es"))
+    assert never_said("subs_none", output)
+
+
+def test_a_language_the_page_lacks_is_not_a_failed_subtitle(run: Any, out: Path) -> None:
+    code, output = run("-y", "--sub-langs", "fr", "https://fake.test/subs-404")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert subs_failed_lines(output) == []
+    assert output.count(t("subs_none", "fr")) == 1
+
+
+def test_an_unreadable_track_next_to_a_failed_one_keeps_both_warnings(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-ttml-404")
+    assert code == 0
+    assert names(out) == ["Clip.en.ttml", "Clip.mp4"]
+    assert output.count(t("subs_not_embedded", "Clip.mp4")) == 1
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip.mp4", "es"))
+    assert never_said("subs_empty", output)
+    assert leftovers(out) == []
+
+
+def test_an_empty_track_next_to_a_failed_one(run: Any, out: Path) -> None:
+    code, output = run("-y", "-s", "https://fake.test/subs-garbage-404")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == []
+    assert output.count(t("subs_empty", "Clip.en.vtt")) == 1
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip.mp4", "es"))
+    assert never_said("subs_none", output)  # A file was saved, empty or not.
+    assert never_said("subs_not_embedded", output)
+    assert "[EmbedSubtitle] Embedding" not in output
+    assert "There aren't any subtitles to embed" not in output
+
+
+@pytest.mark.parametrize(
+    ("flags", "page", "video", "codec"),
+    [
+        (("--video-format", "mkv"), "subs-404-two", "Clip.mkv", "webvtt"),
+        (("--video-format", "webm"), "subs-404-two", "Clip.webm", "webvtt"),
+        (("--video-format", "webm"), "subs-webm-404", "Clip.webm", "webvtt"),
+        (("--video-format", "mkv"), "subs-garbage-two", "Clip.mkv", "webvtt"),
+    ],
+    ids=["mkv", "webm-converted", "webm-native", "mkv-empty-es"],
+)
+def test_each_container_keeps_the_good_language_and_no_default_track(
+    run: Any, out: Path, flags: tuple[str, ...], page: str, video: str, codec: str
+) -> None:
+    code, output = run("-y", "-s", *flags, f"https://fake.test/{page}")
+    assert code == 0
+    assert video in names(out)
+    assert "Clip.en.vtt" in names(out)
+    assert subtitle_streams(out / video) == [(codec, "eng")]
+    assert subtitle_defaults(out / video) == [False]  # Spec 21: mkv and webm obey it.
+    assert never_said("subs_not_embedded", output)
+    if page == "subs-garbage-two":
+        assert output.count(t("subs_empty", "Clip.es.vtt")) == 1
+    else:
+        [line] = subs_failed_lines(output)
+        assert line.startswith(failed_line(video, "es"))
+    assert leftovers(out) == []
+
+
+def test_mp4_marks_the_first_embedded_language_once_the_empty_one_is_out(
+    run: Any, out: Path
+) -> None:
+    # es comes first in --sub-langs, but holds no text: en is the only track, and mp4's default.
+    code, _ = run("-y", "-s", "https://fake.test/subs-garbage-two")
+    assert code == 0
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    assert len(subtitle_defaults(out / "Clip.mp4")) == 1
+
+
+@pytest.mark.parametrize("flags", [("-P",), ()], ids=["-P", "single"])
+def test_single_mode_on_a_list_names_the_item_that_lost_its_subtitle(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", "-s", *flags, "https://fake.test/subs-carousel-404-last")
+    assert code == 0
+    assert names(out) == ["Clip [s1].en.vtt", "Clip [s1].mp4", "Clip [s2].mp4"]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip [s2].mp4", "en"))
+    assert never_said("subs_none", output)
+    assert output.count(t("done")) == 1
+
+
+def test_playlist_mode_names_only_the_item_that_lost_its_subtitle(run: Any, out: Path) -> None:
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-carousel-404-last")
+    assert code == 0
+    assert names(out) == ["01 - Clip [s1].en.vtt", "01 - Clip [s1].mp4", "02 - Clip [s2].mp4"]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("02 - Clip [s2].mp4", "en"))
+    assert never_said("partial_result", output)
+    assert never_said("subs_none", output)
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize("flags", [("-p",), ()], ids=["-p", "single"])
+def test_cut_off_and_empty_bodies_never_count_as_failed_items(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", "-s", *flags, "https://fake.test/subs-carousel-short")
+    assert code == 0
+    assert [name for name in names(out) if name.endswith(".mp4")] == names(out)
+    assert len(names(out)) == 2
+    lines = subs_failed_lines(output)
+    assert len(lines) == 2
+    assert "bytes" in lines[0]
+    assert "data blocks" in lines[1]
+    assert never_said("partial_result", output)
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert error_lines(output) == []
+    assert leftovers(out) == []
+
+
+@pytest.mark.parametrize(
+    ("items", "saved", "failed"),
+    [("2", "02 - Clip [s2].mp4", True), ("1", "01 - Clip [s1].mp4", False)],
+)
+def test_playlist_items_names_the_failed_subtitle_of_the_items_picked(
+    run: Any, out: Path, items: str, saved: str, failed: bool
+) -> None:
+    code, output = run(
+        "-y", "-s", "--playlist-items", items, "https://fake.test/subs-carousel-404-last"
+    )
+    assert code == 0
+    mp4s = [name for name in names(out) if name.endswith(".mp4")]
+    assert len(mp4s) == 1
+    if failed:
+        [line] = subs_failed_lines(output)
+        assert line.startswith(failed_line(mp4s[0], "en"))
+    else:
+        assert subs_failed_lines(output) == []
+    assert never_said("partial_result", output)
+
+
+def test_a_real_failure_after_a_subtitle_failure_still_counts(run: Any, out: Path) -> None:
+    # The subtitle's errors are routed away; the next item's video error must not be.
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-404-then-novideo")
+    assert code == 0
+    assert names(out) == ["01 - Clip [s1].mp4"]
+    assert t("partial_result", 1, 2, 0, 1) in output
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("01 - Clip [s1].mp4", "en"))
+
+
+def test_a_video_failing_after_its_subtitle_did_still_fails_the_url(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-404-novideo"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []
+    assert subs_failed_lines(output) == []  # A failed item's failure says enough.
+    assert history_rows() == []
+
+
+def test_a_video_failing_after_its_subtitle_did_still_retries_without_cookies(
+    run: Any, out: Path, fake_site: list[Any]
+) -> None:
+    code, output = run("-y", "-s", "--cookies", "brave", "https://fake.test/subs-404-novideo")
+    assert code == 1
+    assert t("cookies_retry", "brave") in output
+    assert fake_site == [("brave",), None]
+    assert names(out) == []
+
+
+@pytest.mark.parametrize("page", ["subs-empty", "subs-short"])
+def test_an_empty_or_cut_off_subtitle_with_cookies_is_not_retried(
+    run: Any, out: Path, fake_site: list[Any], page: str
+) -> None:
+    code, output = run("-y", "-s", "--cookies", "brave", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    assert t("cookies_retry", "brave") not in output
+    assert fake_site == [("brave",)]
+    assert len(subs_failed_lines(output)) == 1
+
+
+def test_several_urls_each_name_their_own_failed_subtitle(run: Any, out: Path) -> None:
+    first, second = "https://fake.test/subs-404", "https://fake.test/subs-carousel-404-last"
+    code, output = run("-y", "-s", first, second)
+    assert code == 0
+    assert names(out) == ["Clip [s1].en.vtt", "Clip [s1].mp4", "Clip [s2].mp4", "Clip.mp4"]
+    lines = subs_failed_lines(output)
+    assert len(lines) == 2
+    assert lines[0].startswith(failed_line("Clip.mp4", "en"))
+    assert lines[1].startswith(failed_line("Clip [s2].mp4", "en"))
+    # The first URL's warning comes before the second URL's download.
+    assert output.index(lines[0]) < output.index("Clip [s1]")
+    assert never_said("failed", output)
+
+
+def test_the_preview_path_keeps_the_video_too(run: Any, out: Path, answers: Any) -> None:
+    answers("")
+    code, output = run("-s", "https://fake.test/subs-404-two")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip.mp4", "es"))
+
+
+def test_wizard_with_sub_langs_names_the_failed_language_and_prints_the_command(
+    run: Any, out: Path, answers: Any
+) -> None:
+    url = "https://fake.test/subs-404-two"
+    answers(*SINGLE_WALK)
+    code, output = run("-i", "--sub-langs", "es", url)
+    assert code == 0
+    assert names(out) == ["Clip.mp4"]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip.mp4", "es"))
+    assert output.count(t("subs_none", "es")) == 1
+    [command] = commands(output)
+    argv = shlex.split(command)
+    assert argv[:2] == ["download-media", "-y"]
+    assert argv[argv.index("--sub-langs") + 1] == "es"
+    assert argv[-1] == url
+    assert len(history_rows()) == 1
+
+
+def test_direct_mode_prints_the_command_after_a_failed_subtitle(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-404"
+    code, output = run("-y", "-s", url)
+    assert code == 0
+    [command] = commands(output)
+    argv = shlex.split(command)
+    assert "-s" in argv
+    assert argv[-1] == url
+
+
+@pytest.mark.parametrize(
+    ("page", "saved", "warning"),
+    [
+        ("subs-404-two", ["Clip.en.vtt", "Clip.mp3"], "failed"),
+        ("subs-note", ["Clip.en.vtt", "Clip.mp3"], "empty"),
+        ("subs-short", ["Clip.mp3"], "failed"),
+    ],
+)
+def test_audio_keeps_going_past_every_subtitle_problem(
+    run: Any, out: Path, page: str, saved: list[str], warning: str
+) -> None:
+    code, output = run("-y", "-a", "-s", f"https://fake.test/{page}")
+    assert code == 0
+    assert names(out) == saved
+    if warning == "failed":
+        [line] = subs_failed_lines(output)
+        assert line.startswith(failed_line("Clip.mp3", "es" if page == "subs-404-two" else "en"))
+    else:
+        assert output.count(t("subs_empty", "Clip.en.vtt")) == 1
+    assert leftovers(out) == []
+    assert error_lines(output) == []
+
+
+def test_audio_that_fails_leaves_no_subtitle_file(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-novideo"
+    code, output = run("-y", "-a", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []
+
+
+def test_a_failed_video_leaves_none_of_its_two_subtitles(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-novideo-two"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_a_failed_post_processing_step_under_p_takes_the_subtitles_too(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-junk"
+    code, output = run("-y", "-p", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert [name for name in names(out) if ".vtt" in name] == []
+
+
+def test_ctrl_c_mid_video_takes_the_item_s_subtitles(
+    out: Path, fake_site: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    interrupt_dl(monkeypatch, lambda info: info.get("ext") != "vtt")
+    code = cli.main(["-y", "-s", "-o", str(out), "https://fake.test/subs-en"])
+    assert code == cli.EXIT_INTERRUPTED
+    assert names(out) == []
+
+
+def test_a_subtitle_part_file_left_by_an_earlier_run_is_kept(run: Any, out: Path) -> None:
+    out.mkdir()
+    (out / "Clip.en.vtt.part").write_text("earlier", encoding="utf-8")
+    code, output = run("-y", "-s", "https://fake.test/subs-404")
+    assert code == 0
+    assert (out / "Clip.en.vtt.part").read_text(encoding="utf-8") == "earlier"
+    assert len(subs_failed_lines(output)) == 1
+
+
+def test_a_failed_video_never_takes_a_subtitle_an_earlier_run_saved(run: Any, out: Path) -> None:
+    code, _ = run("-y", "-a", "-s", "https://fake.test/subs-en")
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp3"]
+    url = "https://fake.test/subs-novideo"  # Same title, so the same subtitle name.
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == ["Clip.en.vtt", "Clip.mp3"]
+
+
+def test_a_failed_video_never_takes_a_saved_manual_subtitle_for_an_auto_caption(
+    run: Any, out: Path
+) -> None:
+    # An auto-caption and a manual subtitle in the same language share the file name.
+    code, _ = run("-y", "-a", "-s", "https://fake.test/subs-en")
+    assert code == 0
+    url = "https://fake.test/subs-auto-novideo"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == ["Clip.en.vtt", "Clip.mp3"]
+
+
+def test_a_failed_video_takes_its_new_auto_caption(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-auto-novideo"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []
+
+
+def test_a_failed_video_takes_only_its_own_language(run: Any, out: Path) -> None:
+    code, _ = run("-y", "-a", "-s", "--sub-langs", "fr", "https://fake.test/subs-fr")
+    assert code == 0
+    assert names(out) == ["Clip.fr.vtt", "Clip.mp3"]
+    code, _ = run("-y", "-s", "--sub-langs", "fr,en", "https://fake.test/subs-novideo")
+    assert code == 1
+    assert names(out) == ["Clip.fr.vtt", "Clip.mp3"]
+
+
+def test_a_rerun_still_takes_a_subtitle_that_is_new_this_time(run: Any, out: Path) -> None:
+    # Run 1 saved the audio without subtitles: run 2's subtitle is its own, and goes.
+    code, _ = run("-y", "-a", "https://fake.test/subs-en")
+    assert code == 0
+    assert names(out) == ["Clip.mp3"]
+    code, _ = run("-y", "-s", "https://fake.test/subs-novideo")
+    assert code == 1
+    assert names(out) == ["Clip.mp3"]
+
+
+def test_a_subtitle_finished_from_an_earlier_part_goes_with_the_failed_video(
+    run: Any, out: Path
+) -> None:
+    # yt-dlp resumes (or restarts) the earlier scratch file and renames it: the subtitle file
+    # is this run's, and must not stay next to "Download failed" with no video.
+    out.mkdir()
+    (out / "Clip.en.vtt.part").write_text("WEBVTT\n\n00:00", encoding="utf-8")
+    url = "https://fake.test/subs-novideo"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []
+
+
+def test_a_failed_item_under_p_takes_only_its_own_subtitle(run: Any, out: Path) -> None:
+    # Both items are "Clip": item 2's cleanup must not reach item 1's subtitle.
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-carousel-novideo-last")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert names(out) == ["01 - Clip [s1].en.vtt", "01 - Clip [s1].mp4"]
+    assert subtitle_streams(out / "01 - Clip [s1].mp4") == [("mov_text", "eng")]
+
+
+def test_a_failed_item_under_p_keeps_the_subtitle_an_earlier_run_saved(run: Any, out: Path) -> None:
+    code, _ = run("-y", "-p", "-a", "-s", "https://fake.test/subs-carousel-both")
+    assert code == 0
+    first = ["01 - Clip [s1].en.vtt", "01 - Clip [s1].mp3", "02 - Clip [s2].en.vtt"]
+    assert names(out) == [*first, "02 - Clip [s2].mp3"]
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-carousel-novideo-last")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert names(out) == sorted([*first, "01 - Clip [s1].mp4", "02 - Clip [s2].mp3"])
+
+
+@pytest.mark.parametrize("flags", [("-p",), ()], ids=["-p", "single"])
+def test_an_empty_subtitle_is_named_for_its_own_item_only(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", "-s", *flags, "https://fake.test/subs-garbage-carousel")
+    assert code == 0
+    empty = [name for name in names(out) if name.endswith(".en.vtt") and "s1" in name]
+    [video] = [name for name in names(out) if name.endswith(".mp4") and "s2" in name]
+    assert output.count(t("subs_empty", empty[0])) == 1
+    assert never_said("subs_empty", output.replace(t("subs_empty", empty[0]), ""))
+    assert subtitle_streams(out / video) == [("mov_text", "eng")]
+
+
+def test_a_failed_item_under_p_never_names_its_failed_subtitle(run: Any, out: Path) -> None:
+    # The junk body fails audio extraction, and the post hooks still run under -p.
+    url = "https://fake.test/subs-junk-404"
+    code, output = run("-y", "-p", "-a", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert subs_failed_lines(output) == []
+    assert [name for name in names(out) if ".vtt" in name or ".part" in name] == []
+
+
+def test_a_failed_item_next_to_a_saved_one_never_names_its_failed_subtitle(
+    run: Any, out: Path
+) -> None:
+    # The warnings are printed here, since item 2 was saved: item 1's subtitle stays unnamed.
+    code, output = run("-y", "-p", "-a", "-s", "https://fake.test/subs-junk-404-carousel")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert subs_failed_lines(output) == []
+    assert [name for name in names(out) if ".vtt" in name or ".part" in name] == []
+    assert "02 - Clip [s2].mp3" in names(out)
+
+
+def test_a_rerun_names_the_failed_subtitle_again(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-404-two"
+    run("-y", "-s", url)
+    code, output = run("-y", "-s", url)
+    assert code == 0
+    assert names(out) == ["Clip.en.vtt", "Clip.mp4"]
+    assert subtitle_streams(out / "Clip.mp4") == [("mov_text", "eng")]
+    [line] = subs_failed_lines(output)
+    assert line.startswith(failed_line("Clip.mp4", "es"))
+
+
+def test_a_failed_video_in_single_mode_still_stops_the_list(run: Any, out: Path) -> None:
+    # The subtitle's ignoreerrors is scoped: item 1's video failure still ends a single run.
+    url = "https://fake.test/subs-novideo-carousel"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []

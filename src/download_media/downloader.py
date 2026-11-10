@@ -34,11 +34,19 @@ from yt_dlp.utils import (
     int_or_none,
     prepend_extension,
     replace_extension,
+    subtitles_filename,
 )
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
-from .cookies import CookieFailure, cookie_failure, jar_failure, logged_failure, ydl_cookies
+from .cookies import (
+    CookieFailure,
+    cookie_failure,
+    jar_failure,
+    logged_failure,
+    short_reason,
+    ydl_cookies,
+)
 from .i18n import t
 from .selection import missing_items
 
@@ -95,6 +103,10 @@ class DownloadResult:
     no_cover: tuple[str, ...] = ()
     # Videos kept as downloaded because ffmpeg couldn't put them in the chosen container.
     not_converted: tuple[str, ...] = ()
+    # Per saved file, a subtitle language that couldn't be fetched, and yt-dlp's reason.
+    subs_failed: tuple[tuple[str, str, str], ...] = ()
+    # Subtitle files that hold no subtitle text; kept, never embedded.
+    subs_empty: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -162,6 +174,14 @@ class _WholeBody:
         return getattr(self._response, name)
 
 
+def _subtitle_reason(lang: str, messages: list[str]) -> str:
+    """yt-dlp's first word on a subtitle it couldn't write, without its own framing."""
+    if not messages:
+        return "?"
+    _, framed, reason = messages[0].partition(f"Unable to download video subtitles for {lang!r}: ")
+    return short_reason(reason if framed else messages[0])
+
+
 class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
@@ -174,6 +194,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     item_errors = 0
     # Errors beyond the first of an item that failed in several steps.
     repeated_errors = 0
+    # While yt-dlp writes one subtitle: its errors are the subtitle's, not the item's.
+    writing_subs = False
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.errors: list[str] = []
@@ -189,6 +211,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.fetching_image = False
         # Candidate paths that were free when yt-dlp checked them, while fetching one image.
         self.image_new: set[str] = set()
+        # What yt-dlp reported while writing the current subtitle.
+        self.sub_reasons: list[str] = []
+        # Subtitle files this run wrote for the current item, and the languages it couldn't.
+        self.item_subs: list[str] = []
+        self.item_subs_failed: list[tuple[str, str]] = []
+        self.item_subs_empty: list[str] = []
         super().__init__(*args, **kwargs)
 
     def existing_file(self, filepaths: Any, *, default_overwrite: bool = True) -> Any:
@@ -228,6 +256,7 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_errors = len(self.errors)
         self.item_thumbs, self.item_no_cover, self.item_images = [], False, []
         self.item_not_converted = []
+        self.item_subs, self.item_subs_failed, self.item_subs_empty = [], [], []
         try:
             result = super().process_info(info_dict)
         except BaseException:
@@ -236,10 +265,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
             # retry counts afresh, and anything else leaves download() before the count is read.
             self.repeated_errors += len(self.errors) - self.item_errors
             self.drop_thumbs()
+            self.drop_subs()
             raise
         if self.item_failed():
             self.repeated_errors += len(self.errors) - self.item_errors - 1
             self.drop_thumbs()
+            self.drop_subs()
         else:
             self.images += self.item_images
         return result
@@ -286,19 +317,76 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_thumbs += [path for path, _ in written or []]
         return written
 
+    def _write_subtitles(self, info_dict: Any, filename: Any) -> Any:
+        subtitles = info_dict.get("requested_subtitles")
+        wanted = self.params.get("writesubtitles") or self.params.get("writeautomaticsub")
+        if not (subtitles and wanted):
+            return super()._write_subtitles(info_dict, filename)
+        # Without ignoreerrors, a subtitle that can't be fetched ends the item before its media
+        # is requested. One language per call, so each reason belongs to its language.
+        written: list[Any] = []
+        try:
+            for lang, sub in subtitles.items():
+                info_dict["requested_subtitles"] = {lang: sub}
+                path = subtitles_filename(filename, lang, sub["ext"], info_dict.get("ext"))
+                part = Path(f"{path}.part")  # The downloader's scratch file.
+                part_was_there = part.exists()
+                # yt-dlp deletes an earlier run's copy and writes it again: still not this run's.
+                file_was_there = Path(path).exists()
+                self.sub_reasons = []
+                had_ignore, ignore = "ignoreerrors" in self.params, self.params.get("ignoreerrors")
+                self.params["ignoreerrors"] = True
+                self.writing_subs = True
+                try:
+                    files = super()._write_subtitles(info_dict, filename)
+                finally:
+                    self.writing_subs = False
+                    self.params.pop("ignoreerrors", None)
+                    if had_ignore:
+                        self.params["ignoreerrors"] = ignore
+                # After an empty body, the downloader returns without raising, and yt-dlp
+                # records a path it never wrote.
+                saved = sub.get("filepath")
+                if saved and Path(saved).is_file():
+                    written += files or []
+                    if not file_was_there:
+                        self.item_subs.append(saved)
+                    continue
+                sub.pop("filepath", None)
+                if not part_was_there:
+                    part.unlink(missing_ok=True)
+                self.item_subs_failed.append((lang, _subtitle_reason(lang, self.sub_reasons)))
+        finally:
+            info_dict["requested_subtitles"] = subtitles
+        return written
+
     def drop_thumbs(self) -> None:
         for path in self.item_thumbs:
             Path(path).unlink(missing_ok=True)
         self.item_thumbs = []
+
+    def drop_subs(self) -> None:
+        for path in self.item_subs:
+            Path(path).unlink(missing_ok=True)
+        self.item_subs = []
 
     def item_failed(self) -> bool:
         # ignoreerrors reports a failed post-processing step, then runs the post hooks anyway.
         return len(self.errors) > self.item_errors
 
     def report_error(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        if self.writing_subs:
+            # Named after the download; an ERROR: line above "Done." would read as a failure.
+            self.report_warning(message)
+            return
         if kwargs.get("is_error", True):
             self.errors.append(str(message))
         super().report_error(message, *args, **kwargs)
+
+    def report_warning(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        if self.writing_subs:
+            self.sub_reasons.append(str(message))
+        super().report_warning(message, *args, **kwargs)
 
     def process_ie_result(self, ie_result: Any, *args: Any, **kwargs: Any) -> Any:
         if self.count_entries and ie_result.get("_type") in ("playlist", "multi_video"):
@@ -546,16 +634,39 @@ def _subtitle_streams(path: str) -> int | None:
     return len(done.stdout.split()) if done.returncode == 0 else None
 
 
+def _subtitle_packets(path: str) -> int | None:
+    """Subtitle packets ffprobe reads in the file; None when it finds no subtitle stream."""
+    try:
+        cmd = ["ffprobe", "-v", "error", "-count_packets", "-select_streams", "s"]
+        cmd += ["-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", _probe_path(path)]
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    # As in _has_media_streams: side data adds a field, stream groups add blank rows.
+    rows = [row.split(",", 1)[0].strip() for row in done.stdout.splitlines()]
+    counts = [row for row in rows if row]
+    if done.returncode != 0 or not counts:
+        return None
+    # N/A: a stream with nothing in it, such as binary junk or a header with no cue.
+    return sum(int(row) if row.isdigit() else 0 for row in counts)
+
+
 class _SubtitlesSeen(PostProcessor):  # type: ignore[misc]
-    """Record whether an item that reached post-processing got any subtitle file."""
+    """Record whether an item that reached post-processing got any subtitle file.
+
+    Also notes the files that hold no subtitle text: the embed would make an empty track of them.
+    """
 
     def __init__(self, seen: list[bool]) -> None:
         super().__init__()
         self._seen = seen
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
-        if _subtitle_files(info):
+        files = _subtitle_files(info)
+        if files:
             self._seen.append(True)
+        empty = [path for path in files if _subtitle_packets(path) == 0]
+        self._downloader.item_subs_empty.extend(empty)
         return [], info
 
 
@@ -584,15 +695,28 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
         return super().run_ffmpeg_multiple_files(input_paths, out_path, opts, **kwargs)
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
-        files = _subtitle_files(info)
+        requested = info.get("requested_subtitles")
+        empty = set(getattr(self._downloader, "item_subs_empty", ()))
+        tracks = {
+            lang: sub for lang, sub in (requested or {}).items() if sub.get("filepath") not in empty
+        }
+        files = _subtitle_files({"requested_subtitles": tracks})
         temp = Path(prepend_extension(info["filepath"], "temp"))
         temp_was_there = temp.exists()
-        try:
-            super().run(info)
-        except PostProcessingError:
-            # ffmpeg fails before opening the temp file when it can't read a track.
-            if not temp_was_there:
-                temp.unlink(missing_ok=True)
+        left_out = len(tracks) < len(requested or {})
+        # With every file left out for holding no text, there's nothing to embed.
+        if files or not left_out:
+            if left_out:
+                info["requested_subtitles"] = tracks
+            try:
+                super().run(info)
+            except PostProcessingError:
+                # ffmpeg fails before opening the temp file when it can't read a track.
+                if not temp_was_there:
+                    temp.unlink(missing_ok=True)
+            finally:
+                if left_out:
+                    info["requested_subtitles"] = requested
         # Covers the failure above, containers that can't hold subtitles, srt in webm, json.
         streams = _subtitle_streams(info["filepath"]) if files else None
         if streams is not None and streams < len(files):
@@ -793,6 +917,8 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     untagged: list[str] = []
     no_cover: list[str] = []
     not_converted: list[str] = []
+    subs_failed: list[tuple[str, str, str]] = []
+    subs_empty: list[str] = []
     with _Ydl(ydl_opts) as ydl:
         load_browser_cookies(ydl, opts.cookies_browser)
         ydl.save_images = True
@@ -803,6 +929,9 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
                 if ydl.item_no_cover:
                     no_cover.append(Path(path).name)
                 not_converted.extend(ydl.item_not_converted)
+                name = Path(path).name
+                subs_failed.extend((name, lang, why) for lang, why in ydl.item_subs_failed)
+                subs_empty.extend(Path(sub).name for sub in ydl.item_subs_empty)
 
         ydl.add_post_hook(keep)
         container = None if opts.audio_only else opts.video_format
@@ -849,6 +978,8 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         untagged=tuple(untagged),
         no_cover=tuple(no_cover),
         not_converted=tuple(not_converted),
+        subs_failed=tuple(subs_failed),
+        subs_empty=tuple(subs_empty),
     )
 
 

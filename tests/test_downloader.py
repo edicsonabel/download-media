@@ -724,3 +724,94 @@ def test_a_load_stopped_halfway_leaves_report_warning_alone(
         with pytest.raises(type(raised)):
             load_browser_cookies(ydl, "chrome")
         assert "report_warning" not in vars(ydl)
+
+
+def test_report_error_outside_subtitles_still_counts() -> None:
+    from download_media.downloader import _Ydl
+
+    with _Ydl({"quiet": True, "no_warnings": True, "ignoreerrors": True}) as ydl:
+        ydl.report_error("the video is gone")
+        assert ydl.errors == ["the video is gone"]
+        assert ydl.sub_reasons == []
+        ydl.writing_subs = True
+        ydl.report_error("Did not get any data blocks")
+        assert ydl.errors == ["the video is gone"]
+        assert ydl.sub_reasons == ["Did not get any data blocks"]
+
+
+@pytest.mark.parametrize(
+    ("messages", "expected"),
+    [
+        (["Unable to download video subtitles for 'en': HTTP Error 404: Not Found"], "HTTP Error"),
+        (["\r[download] Got error: Downloaded 44 bytes", "later"], "[download] Got error"),
+        ([], "?"),
+    ],
+)
+def test_a_subtitle_reason_drops_yt_dlps_framing(messages: list[str], expected: str) -> None:
+    from download_media.downloader import _subtitle_reason
+
+    assert _subtitle_reason("en", messages).startswith(expected)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("en.vtt", 1),
+        ("garbage.vtt", 0),
+        ("empty.vtt", 0),
+        ("header.vtt", 0),
+        ("en.ttml", None),  # ffprobe can't read it.
+        ("tiny.mp4", None),  # No subtitle stream at all.
+    ],
+)
+def test_subtitle_packets_by_what_ffprobe_says(
+    tmp_path: Path, media_url: str, name: str, expected: int | None
+) -> None:
+    from urllib.request import urlopen
+
+    from download_media.downloader import _subtitle_packets
+
+    path = tmp_path / name
+    with urlopen(f"{media_url}/{name}") as body:
+        path.write_bytes(body.read())
+    assert _subtitle_packets(str(path)) == expected
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [("echo 2", 2), ("printf '1,\\n\\nN/A\\n'", 1), ("echo 1; exit 1", None), ("true", None)],
+)
+def test_subtitle_packets_read_ffprobe_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str, expected: int | None
+) -> None:
+    from download_media.downloader import _subtitle_packets
+
+    fake_ffprobe(tmp_path / "bin", script, monkeypatch)
+    assert _subtitle_packets(str(tmp_path / "Clip.en.vtt")) == expected
+
+
+def test_no_ffprobe_means_no_subtitle_packets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from download_media.downloader import _subtitle_packets
+
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    assert _subtitle_packets(str(tmp_path / "Clip.en.vtt")) is None
+
+
+def test_a_hung_ffprobe_counts_no_subtitle_packets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    from download_media.downloader import _subtitle_packets
+
+    fake_ffprobe(tmp_path / "bin", "exec sleep 30", monkeypatch)
+    real_run = subprocess.run
+
+    def short_run(*args: Any, **kwargs: Any) -> Any:
+        assert kwargs.get("timeout"), "without a timeout, a hung ffprobe hangs the download"
+        return real_run(*args, **{**kwargs, "timeout": 0.5})
+
+    monkeypatch.setattr(subprocess, "run", short_run)
+    assert _subtitle_packets(str(tmp_path / "Clip.en.vtt")) is None
