@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T05:48:24-04:00",
+  "updated": "2026-11-10T05:59:04-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2983,18 +2983,24 @@
     "fix/intent-flags": {
       "type": "fix",
       "title": "Make -l and bundled or abbreviated flags skip the wizard, and -l list every URL",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/22-intent-flags.md",
       "branch": "fix/intent-flags",
       "worktree": ".worktrees/fix-intent-flags",
       "commits": [
         "0d1af00",
         "f02d63b",
-        "7b9720a"
+        "7b9720a",
+        "5904676",
+        "773e93f",
+        "cc29c90"
       ],
-      "review": null,
+      "review": {
+        "approved": true,
+        "findings": []
+      },
       "history": [
         {
           "stage": "planning",
@@ -3023,6 +3029,13 @@
           "result": "done",
           "at": "2026-11-10T05:11:12-04:00",
           "note": "f02d63b intent detection by a sentinel-namespace parse; 7b9720a -l as intent flag, every URL listed, ask_urls, AGENTS.md. Gate exit 0 at 7b9720a, 2565 passed + 11 xfailed. Reverting cli.py and wizard.py fails 36 [fix] tests. Console runs match. Shared IMAGE parameter with ig-lone-images: whichever lands second updates it."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T05:59:04-04:00",
+          "note": "No bugs. Every intent flag in every argparse spelling generated from the parser; bundles with -i/-y; main parse unchanged (ambiguous --play still exits 2). -l paths, ask_urls, cookies, login wall, Ctrl-C. 189 new tests fail on the old src. Mutation 27/27. Gate exit 0 at cc29c90, 2898 passed + 15 xfailed. No 3.10 interpreter locally; argparse source read for 3.13/3.14. Planner (strict xfails): stdout ordering with a file/pipe; equivalent command never emits -- for a URL starting with -."
         }
       ]
     },
