@@ -214,6 +214,15 @@ IMAGE, AUDIO, VIDEO, UNKNOWN = (
         ({"vcodec": None, "acodec": "mp4a.40.2", "ext": "mp4"}, VIDEO),
         ({"ext": "mp4"}, VIDEO),
         ({}, VIDEO),
+        # yt-dlp keeps the URL's case: an uppercase extension reads as its lowercase form...
+        *(
+            ({"vcodec": None, "acodec": None, "ext": e}, AUDIO)
+            for e in ("MP3", "FLAC", "WAV", "AAC", "Opus")
+        ),
+        *(({"vcodec": None, "acodec": None, "ext": e}, UNKNOWN) for e in ("JPG", "PNG", "WebP")),
+        *(({"vcodec": None, "acodec": None, "ext": e}, VIDEO) for e in ("OGG", "WMA")),
+        # ...but yt-dlp strips the video only from an extension written "m4a".
+        *(({"vcodec": None, "acodec": None, "ext": e}, VIDEO) for e in ("M4A", "M4a")),
     ],
 )
 @pytest.mark.parametrize(
@@ -340,6 +349,8 @@ def may_hold_video(*formats: dict[str, Any]) -> bool:
             ([{"vcodec": None, "acodec": None, "ext": e}], False)
             for e in EXT_MAY_HOLD_VIDEO + EXT_SAYS_AUDIO
         ),
+        # yt-dlp's metadata step keeps the video of an .M4A: only "m4a" loses it.
+        *(([{"vcodec": "none", "acodec": None, "ext": e}], True) for e in ("M4A", "M4a")),
         ([{"vcodec": "none", "acodec": "opus", "ext": "webm"}], False),
         ([{"vcodec": "none", "acodec": "none", "ext": "mp4"}], False),
         # An HLS audio rendition next to its video variants: the result is a video.
@@ -408,7 +419,7 @@ def test_a_url_only_result_whose_extension_says_audio_is_not_flagged(ext: str) -
     assert result.may_hold_video is False
 
 
-@pytest.mark.parametrize("ext", ["MP3", "M4A", "WAV", "FLAC", "Opus"])
+@pytest.mark.parametrize("ext", ["MP3", "WAV", "FLAC", "Opus"])
 def test_an_uppercase_extension_that_says_audio_is_not_flagged(ext: str) -> None:
     assert may_hold_video({"vcodec": "none", "acodec": None, "ext": ext}) is False
 

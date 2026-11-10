@@ -284,6 +284,12 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "video-m4b": '<video src="clip.m4b"></video>',
         "video-wma": '<video src="clip.wma"></video>',
         "video-m4a": '<video src="clip.m4a"></video>',
+        # yt-dlp keeps the URL's case in ext, and fills no acodec in from an uppercase one.
+        "video-upper-mp3": '<video src="typed/audio/mpeg/tiny.mp3/TINY.MP3"></video>',
+        "video-upper-flac": '<video src="typed/audio/flac/tiny.flac/TINY.FLAC"></video>',
+        "video-upper-wav": '<video src="typed/audio/x-wav/tiny.wav/TINY.WAV"></video>',
+        "video-upper-jpg": '<video src="typed/image/jpeg/tiny.jpg/TINY.JPG"></video>',
+        "video-upper-m4a-video": '<video src="typed/video/mp4/clip.m4a/CLIP.M4A"></video>',
         "og-video-ogg": f'<meta property="og:video" content="{base}/theora.ogg">',
         "video-tag-audio-ogg": '<video src="tiny.ogg"></video>',
         "video-tag-audio-m4b": '<video src="tiny.m4b"></video>',

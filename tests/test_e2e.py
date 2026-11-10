@@ -3399,7 +3399,12 @@ def test_interactive_quality_flag_on_a_file_labelled_as_audio_keeps_the_video(
     assert commands(output) == [f"download-media -y -q 720 {media_url}/theora.ogg"]
 
 
-REAL_AUDIO_UNDER_A_LABEL = [("tiny.ogg", "tiny.ogg"), ("audio-ogg.html", "audio-ogg (1).ogg")]
+REAL_AUDIO_UNDER_A_LABEL = [
+    ("tiny.ogg", "tiny.ogg"),
+    ("audio-ogg.html", "audio-ogg (1).ogg"),
+    # yt-dlp would keep a video in an .M4A, so it reads like an .m4b.
+    ("typed/audio/mp4/tiny.m4a/TINY.M4A", "TINY.M4A"),
+]
 
 
 @pytest.mark.parametrize(("page", "saved"), REAL_AUDIO_UNDER_A_LABEL)
@@ -3528,7 +3533,6 @@ def test_wizard_keeps_the_audio_flow_for_audio_that_says_so(
     "page",
     [
         "typed/audio/mpeg/tiny.mp3/TINY.MP3",
-        "typed/audio/mp4/tiny.m4a/TINY.M4A",
         "typed/audio/x-wav/tiny.wav/TINY.WAV",
         "typed/audio/flac/tiny.flac/TINY.FLAC",
     ],
@@ -3542,6 +3546,90 @@ def test_wizard_keeps_the_audio_flow_for_an_uppercase_audio_extension(
     assert names(home / "Videos") == []
     [saved] = names(home / "Music")
     assert saved.endswith(".mp3")
+
+
+@pytest.mark.parametrize("ext", ["mp3", "flac", "wav"])
+def test_wizard_reads_an_uppercase_audio_extension_as_audio(
+    generic: Any, home: Path, ext: str
+) -> None:
+    code, output = generic(f"video-upper-{ext}.html", *AUDIO_WALK)
+    assert code == 0
+    assert detected("kind_audio") in output
+    assert t("ask_type") not in output
+    assert names(home / "Videos") == []
+    [saved] = names(home / "Music")
+    assert saved.endswith(".mp3")
+
+
+def test_wizard_reads_an_uppercase_image_extension_as_unknown(generic: Any, home: Path) -> None:
+    # As the lowercase page: Unknown asks once more before the download.
+    code, output = generic("video-upper-jpg.html", *SINGLE_WALK, "")
+    assert code == 0
+    assert detected("kind_unknown") in output
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".JPG")
+
+
+def test_wizard_keeps_the_video_of_an_uppercase_m4a_labelled_as_audio(
+    generic: Any, media_url: str, home: Path
+) -> None:
+    # yt-dlp strips the video only from an extension written "m4a".
+    page = "typed/audio/mp4/clip.m4a/CLIP.M4A"
+    code, output = generic(page, *SINGLE_WALK)
+    assert code == 0
+    assert t("audio_may_hold_video") in output
+    assert names(home / "Music") == []
+    assert names(home / "Videos") == ["CLIP.M4A"]
+    assert "video" in streams(home / "Videos" / "CLIP.M4A")
+    assert commands(output) == [f"download-media -y {media_url}/{page}"]
+
+
+@pytest.mark.parametrize("flags", [(), ("-y",)], ids=["wizard", "yes"])
+def test_an_uppercase_m4a_in_a_video_tag_stays_a_video(
+    generic: Any, home: Path, flags: tuple[str, ...]
+) -> None:
+    replies = () if flags else SINGLE_WALK
+    code, output = generic("video-upper-m4a-video.html", *replies, flags=flags)
+    assert code == 0
+    if not flags:
+        assert detected("kind_video") in output
+    [saved] = names(home / "Videos")
+    assert saved.endswith(".M4A")
+    assert "video" in streams(home / "Videos" / saved)
+    assert names(home / "Music") == []
+
+
+@pytest.mark.parametrize(
+    ("page", "saved", "video"),
+    [
+        ("video-upper-mp3.html", "video-upper-mp3 (1).MP3", False),
+        ("typed/audio/mp4/clip.m4a/CLIP.M4A", "CLIP.M4A", True),
+    ],
+)
+@pytest.mark.parametrize(
+    ("flags", "replies", "audio"),
+    [(("-q", "1080"), ("",), False), (("-y",), (), False), (("-y", "-a"), (), True)],
+    ids=["preview", "yes", "yes-audio"],
+)
+def test_direct_runs_on_the_probe_s_edge_shapes_are_unchanged(
+    generic: Any,
+    home: Path,
+    page: str,
+    saved: str,
+    video: bool,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    audio: bool,
+) -> None:
+    code, _ = generic(page, *replies, flags=flags)
+    assert code == 0
+    if audio:
+        assert names(home / "Music") == [f"{Path(saved).stem}.mp3"]
+        assert names(home / "Videos") == []
+    else:
+        assert names(home / "Music") == []
+        assert names(home / "Videos") == [saved]
+        assert ("video" in streams(home / "Videos" / saved)) is video
 
 
 @pytest.mark.parametrize(

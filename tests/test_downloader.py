@@ -155,6 +155,9 @@ def test_mp4_and_mkv_merge_into_themselves(video_format: str) -> None:
         ({"ext": "ogx"}, True),
         ({"ext": "m4a"}, False),
         ({"ext": "mp3"}, False),
+        # Unlike the probe, the container step leaves an .M4A raw: see _converts.
+        ({"ext": "M4A"}, False),
+        ({"ext": "MP3"}, False),
         ({"ext": "jpg"}, False),
         ({"ext": "JPG"}, False),
         ({"ext": "gif"}, False),
