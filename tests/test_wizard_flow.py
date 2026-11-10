@@ -755,3 +755,33 @@ def test_run_all_leaves_the_command_line_options_untouched(
     assert first is not None and second is not None
     assert (first.audio_only, first.cookies_browser) == (True, "brave")
     assert (second.audio_only, second.cookies_browser) == (False, None)
+
+
+# wizard.ask_urls, the only prompt -l asks (spec 22).
+@pytest.mark.parametrize(
+    ("replies", "urls"),
+    [
+        (("", ""), ["http://a", "http://b"]),
+        (("http://c http://d", ""), ["http://c", "http://d", "http://b"]),
+    ],
+)
+def test_ask_urls_leaves_the_options_it_starts_from_alone(
+    monkeypatch: pytest.MonkeyPatch, answers: Any, replies: tuple[str, ...], urls: list[str]
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    monkeypatch.setattr(wizard, "probe", lambda url, cookies: pytest.fail("probed"))
+    given = DownloadOptions(urls=["http://a", "http://b"], audio_only=True)
+    prompts = answers(*replies)
+    assert wizard.ask_urls(given) == urls
+    assert len(prompts) == 2
+    assert given.urls == ["http://a", "http://b"]
+
+
+def test_ask_urls_cancelled_at_the_second_url_leaves_the_options_alone(
+    monkeypatch: pytest.MonkeyPatch, answers: Any
+) -> None:
+    monkeypatch.setattr(wizard, "read_clipboard", lambda: None)
+    given = DownloadOptions(urls=["http://a", "http://b"])
+    answers("http://typed", "c")
+    assert wizard.ask_urls(given) is None
+    assert given.urls == ["http://a", "http://b"]

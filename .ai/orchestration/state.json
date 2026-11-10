@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:46:05-04:00",
+  "updated": "2026-11-10T06:32:47-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2679,12 +2679,12 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
-      "worktree": ".worktrees/fix-subs-failures",
+      "worktree": null,
       "commits": [
         "1ddf169",
         "26980ac",
@@ -2692,7 +2692,9 @@
         "da03a4a",
         "88121be",
         "4d4f725",
-        "1a841c7"
+        "1a841c7",
+        "e447bea",
+        "9e1f396"
       ],
       "review": {
         "approved": true,
@@ -2773,6 +2775,20 @@
           "result": "approved",
           "at": "2026-11-10T04:46:05-04:00",
           "note": "Merge and push under the overnight delegation. Spec text minors go to the architect at validation."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-10T04:56:51-04:00",
+          "note": "Merged as e447bea, no conflicts (tree identical to QA's merge-tree). Gate exit 0 (first with kind-edges + this item), 2526 passed + 11 xfailed. Undo: git revert -m 1 e447bea. Pushed by the orchestrator under the delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T05:03:23-04:00",
+          "note": "Criteria hold: 121 criteria tests pass; console runs (404, cut under -p, junk .vtt in mp4/mkv/-a, failed video single and -p, two runs keeping the earlier subtitle) in en/es match. Spec done, Design 2 fixed to 4d4f725, .part judgement recorded, QA minors noted; PLAN row 36 done, review items 38-42. CI on e54e5c2 pending at validation. Worktree and branch removed. CI run 42786634528 on e54e5c2 succeeded (attempt 1)."
         }
       ]
     },
@@ -2874,14 +2890,20 @@
     "feature/ig-lone-images": {
       "type": "feature",
       "title": "Save a lone Instagram image post when cookies are given",
-      "stage": "planning",
-      "status": "approved",
+      "stage": "development",
+      "status": "in_progress",
       "next_agent": "developer",
       "doc": ".ai/specs/61-ig-lone-images.md",
       "branch": "feature/ig-lone-images",
-      "worktree": null,
+      "worktree": ".worktrees/feature-ig-lone-images",
       "commits": [
-        "f2cb5e7"
+        "f2cb5e7",
+        "25c3cc5",
+        "375265b",
+        "878d0a9",
+        "ec3985a",
+        "5ee7b45",
+        "d5b8d18"
       ],
       "review": null,
       "history": [
@@ -2905,6 +2927,34 @@
           "result": "approved",
           "at": "2026-11-10T02:10:04-04:00",
           "note": "Spec approved under the human's overnight delegation, every recommended option. Flagged first for the human: D1 saves any site's lone no-formats result with a thumbnail as an image, with a notice; extractors that give up on a video without raising (banbye, ebay) then save the thumbnail with exit 0 instead of failing. The notice keeps it honest, but the human should confirm. Also D2 (lone images always named with [id]), D5 (preview through _Ydl; may close row 63), D6 (reverses one row of spec 18's table: 'There is no video in this post' counts as a cookies case). Development after cancel-exits, subs-failures and kind-edges merge."
+        },
+        {
+          "stage": "development",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T04:49:55-04:00",
+          "note": "Development starts from main e447bea (cancel-exits, kind-edges and subs-failures merged; subs-failures' merge gate still running, base kept if it passes)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T05:39:54-04:00",
+          "note": "Five commits (downloader, preview, wizard, cookies hint, docs). Gate exit 0 at 5ee7b45, 2588 passed + 11 xfailed. Each commit's tests fail without its src. yt-dlp's real InstagramIE on a canned logged-in answer saved one 96x120 jpg in -y/-p/mkv/preview; -a skips (exit 1); -l names (exit 0). Deviation: match_filter gets a saving_image callable, since yt-dlp also filters raw list entries without playlist_index (the spec's rule double-counted carousel images under -a). AGENTS.md 'three params' stale (five). Live check open for the human."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T06:32:47-04:00",
+          "note": "No bugs. saving_image deviation holds for every case asked. ~30 runs with yt-dlp's real InstagramIE on canned answers (logged in, logged out, carousels, cookies not logging in) match disk, history, exits. 18 tests in d5b8d18; mutation 23/23. Gate exit 0, 2606 passed + 11 xfailed. For the human's D1 review: is_saveable_image ignores live_status (an extractor returning an upcoming stream with formats [] and a thumbnail without raising would save the thumbnail). Pre-existing: an Instagram /p/ URL asks the playlist question; Whole playlist skips the preview."
+        },
+        {
+          "stage": "development",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T06:32:47-04:00",
+          "note": "Before QA: once fix/intent-flags lands on main, the developer merges main into this branch and cuts test_wizard_in_list_mode_names_a_lone_image to a single URL reply (QA of intent-flags found it fails on the merged tree because -i -l now asks only for the URL)."
         }
       ]
     },
@@ -2948,14 +2998,28 @@
     "fix/intent-flags": {
       "type": "fix",
       "title": "Make -l and bundled or abbreviated flags skip the wizard, and -l list every URL",
-      "stage": "planning",
-      "status": "in_progress",
-      "next_agent": "architect",
+      "stage": "integration",
+      "status": "approved",
+      "next_agent": "tech-lead",
       "doc": ".ai/specs/22-intent-flags.md",
       "branch": "fix/intent-flags",
-      "worktree": null,
-      "commits": [],
-      "review": null,
+      "worktree": ".worktrees/fix-intent-flags",
+      "commits": [
+        "0d1af00",
+        "f02d63b",
+        "7b9720a",
+        "5904676",
+        "773e93f",
+        "cc29c90"
+      ],
+      "review": {
+        "approved": true,
+        "findings": [
+          "minor cli.py:511 stdout ordering with a file/pipe (pre-existing, strict xfail)",
+          "minor equivalent.py never emits -- (pre-existing, strict xfail)",
+          "minor wizard.py:516 -l with no URL prints the wizard title (accepted under D3)"
+        ]
+      },
       "history": [
         {
           "stage": "planning",
@@ -2963,6 +3027,104 @@
           "result": "approved",
           "at": "2026-11-10T04:42:23-04:00",
           "note": "Next P2 in PLAN.md's order after ig-lone-images (probe-fail-fast waits on ig-lone's line), under the human's overnight delegation. Spec written in parallel."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T04:54:46-04:00",
+          "note": "Spec 0d1af00, PLAN row 22 to spec. Reproduced on e447bea: -l, -q720, -as, --aud open the wizard; every -l path lists only the first URL; '-- -a' read as a flag. D1-D5; detection by a second argparse parse into a sentinel namespace; no new messages; no live check. Planner: cookie retry for -l on login walls; wizard.run unused in src; repeated cookie failure report per URL."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T04:54:46-04:00",
+          "note": "Spec approved under the overnight delegation, every recommended option. Not breaking. For the human's review: -l on a login wall loses the wizard's cookie offer (gets the --cookies hint, as -y -l always has); '-- -a' now goes to the wizard. Development starts now in parallel with ig-lone-images (no overlapping cli.py lines; one shared test at test_e2e.py:10469 that whichever lands second deletes)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T05:11:12-04:00",
+          "note": "f02d63b intent detection by a sentinel-namespace parse; 7b9720a -l as intent flag, every URL listed, ask_urls, AGENTS.md. Gate exit 0 at 7b9720a, 2565 passed + 11 xfailed. Reverting cli.py and wizard.py fails 36 [fix] tests. Console runs match. Shared IMAGE parameter with ig-lone-images: whichever lands second updates it."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T05:59:04-04:00",
+          "note": "No bugs. Every intent flag in every argparse spelling generated from the parser; bundles with -i/-y; main parse unchanged (ambiguous --play still exits 2). -l paths, ask_urls, cookies, login wall, Ctrl-C. 189 new tests fail on the old src. Mutation 27/27. Gate exit 0 at cc29c90, 2898 passed + 15 xfailed. No 3.10 interpreter locally; argparse source read for 3.13/3.14. Planner (strict xfails): stdout ordering with a file/pipe; equivalent command never emits -- for a URL starting with -."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-10T06:22:40-04:00",
+          "note": "Gate exit 0 at cc29c90, 2898 passed + 15 xfailed. Code matches the design; docs and commits fine. Real runs en/es as specified. No textual conflicts with main, ig-lone-images or untagged-per-item; on the three-way merged tree ig-lone's test_wizard_in_list_mode_names_a_lone_image fails (feeds three replies; -i -l now asks only the URL); with one reply it passes. Whichever lands second cuts it."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T06:22:40-04:00",
+          "note": "Merge and push under the overnight delegation. intent-flags lands first; ig-lone-images will merge main into its branch and cut that test before its QA."
+        }
+      ]
+    },
+    "fix/untagged-per-item": {
+      "type": "fix",
+      "title": "Name only saved items as untagged",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
+      "doc": ".ai/specs/69-untagged-per-item.md",
+      "branch": "fix/untagged-per-item",
+      "worktree": ".worktrees/fix-untagged-per-item",
+      "commits": [
+        "a1c8379",
+        "8d4926f",
+        "cb87f6a"
+      ],
+      "review": {
+        "approved": true,
+        "findings": []
+      },
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T05:17:50-04:00",
+          "note": "Planner's recommendation after 61 and 22 (cfff3e9), under the human's overnight delegation. Highest open item needing no human decision; strict xfail already pins it."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T05:25:40-04:00",
+          "note": "Spec a1c8379, PLAN row 69 to spec. Reproduced on 43ef19a: -a -p / --playlist-items name a failed .oga as untagged next to 1 failed. Same flaw in subs_not_embedded and subs_none (new with spec 36). D1-D4. No collisions expected. Planner: row 46 side finding (_EmbedSubtitles rewrites a failed item's body under -p -s)."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T05:25:40-04:00",
+          "note": "Spec approved under the overnight delegation, every recommended option (D1 all three lists, D2 per-item names on _Ydl added when saved, D3 unit test to _Ydl, D4 subs_none when only failed items had subtitles). Not breaking. Three review items. Development starts now in parallel."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T05:48:24-04:00",
+          "note": "8d4926f: per-item item_untagged, item_not_embedded, item_subs_seen on _Ydl, copied in keep() only for saved items. Strict xfail flipped; 6 new e2e cases fail on the old code. Gate exit 0, 2532 passed + 9 xfailed. DownloadResult, download() return, cli/i18n untouched."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T06:22:17-04:00",
+          "note": "No bugs. Every mode, container, failure shape incl. raise and ReExtractInfo; lists agree with disk. Mutation 15/15 (two caught only by new tests). Gate exit 0 at cb87f6a, 2548 passed + 11 xfailed. Pre-existing, strict xfail, row 46: under -s -p the embed step turns a failed item's junk body into a subtitle-only mp4; a rerun counts it saved: Done., exit 0 (a failure reads as success)."
         }
       ]
     }

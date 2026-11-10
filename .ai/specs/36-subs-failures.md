@@ -1,6 +1,6 @@
 # 36 — Stop a subtitle failure costing the video, skip empty tracks, and clean up after failed items
 
-Status: draft
+Status: done
 Item: `fix/subs-failures`
 
 > **Decided under the overnight delegation, for the human's morning review:** D1 to D5, each on its recommended option. Every one changes shipped (0.3.0) or 0.4.0-bound behaviour; the list is under "SemVer and the 0.4.0 review list". Nothing is breaking by `AGENTS.md`'s list: no flag, default, path or state format moves.
@@ -64,7 +64,7 @@ A subtitle problem never costs the video. Each subtitle that couldn't be fetched
 | Under `ignoreerrors`, a downloader error still goes through `report_error`. The HTTP downloader reports `Did not get any data blocks` for an empty body (`downloader/http.py:327-330`), and `[download] Got error: …` for a cut-off one (`downloader/common.py:416`). The downloader binds `ydl.report_error` when it's created (`downloader/common.py:95-110`), so `_Ydl.report_error` sees both, records them in `ydl.errors`, and the item counts as failed | measured, below |
 | After the empty-body report, the downloader returns `False` instead of raising (`http.py:330`), and `_write_subtitles` still sets `filepath` to a file that doesn't exist | `YoutubeDL.py:4489-4491` |
 | An inline subtitle (`data`) that can't be written: `report_error`, then `return None`, which ends `process_info` with no download | `YoutubeDL.py:4473-4481` |
-| With `overwrites` unset, `existing_file` deletes a subtitle already on disk and the run writes it again (`Deleting existing file …`), so every subtitle file present after `_write_subtitles` is this run's | `YoutubeDL.py:3321-3329`; measured on a rerun |
+| With `overwrites` unset, `existing_file` deletes a subtitle already on disk and the run writes it again (`Deleting existing file …`). The file present after `_write_subtitles` is then this run's copy, but it replaces one an earlier run saved, so the cleanup must not treat it as new (corrected in testing, `4d4f725`; Design 2) | `YoutubeDL.py:3321-3329`; measured on a rerun |
 | `FFmpegEmbedSubtitlePP.run` embeds every entry of `requested_subtitles` whose `filepath` exists, in one ffmpeg call, after `-map -0:s`. With none left it prints `There aren't any subtitles to embed` and returns | `postprocessor/ffmpeg.py:588-659` |
 
 The same `_write_subtitles` shape (the `ignoreerrors is not True` branch, `existing_file`, `filepath`), the same `existing_file` and the same `report_error` binding in `downloader/common.py` are in the `pyproject.toml` floor, 2024.10.07 (fetched from GitHub and read, not run).
@@ -155,7 +155,7 @@ Override `_write_subtitles(self, info_dict, filename)`:
   - set `info_dict["requested_subtitles"] = {lang: sub}`;
   - note the downloader's scratch file, `Path(subtitles_filename(filename, lang, sub["ext"], info_dict.get("ext")) + ".part")` (`subtitles_filename` from `yt_dlp.utils`; `.part` is `FileDownloader.temp_name`), and whether it exists;
   - with `self.params["ignoreerrors"] = True` and `self.writing_subs = True`, call `super()._write_subtitles(info_dict, filename)`, then restore both in a `finally` (put back the old `ignoreerrors` value, or remove the key if it wasn't there);
-  - if `sub.get("filepath")` is an existing file: add the call's return value to the list this override returns, and append the path to `self.item_subs`;
+  - if `sub.get("filepath")` is an existing file: add the call's return value to the list this override returns, and append the path to `self.item_subs` only if no file was at that path before the call (`4d4f725`, Design 2);
   - otherwise: `sub.pop("filepath", None)`, delete the `.part` file if it wasn't there before, and append `(lang, reason)` to `self.item_subs_failed`.
 - Restore `info_dict["requested_subtitles"]` to the original dict in a `finally`, and return the collected list. Never return `None`: a failed language must not end `process_info`.
 
@@ -172,7 +172,11 @@ Class attributes: `writing_subs = False`. Instance state set in `__init__`: `sub
 
 ### 2. Cleanup of a failed item (`_Ydl.process_info`, D4)
 
-Add `drop_subs()`, like `drop_thumbs()`: delete each path in `item_subs` (`missing_ok=True`), then clear the list. Call it wherever `drop_thumbs()` is called: in the `except BaseException` branch and in the `if self.item_failed()` branch. Every file in `item_subs` is this run's: with `overwrites` unset, yt-dlp deleted any earlier copy before writing it (Findings).
+Add `drop_subs()`, like `drop_thumbs()`: delete each path in `item_subs` (`missing_ok=True`), then clear the list. Call it wherever `drop_thumbs()` is called: in the `except BaseException` branch and in the `if self.item_failed()` branch.
+
+A subtitle already on disk before the write is never deleted. With `overwrites` unset, yt-dlp deletes an earlier run's copy and writes it again (Findings), so the file after the call is this run's bytes, but it stands for one the user already had. `_write_subtitles` notes whether the path existed before the call and leaves such a file out of `item_subs` (`4d4f725`, found by the test-engineer: run 1 `-a -s` kept `Clip.en.vtt` next to `Clip.mp3`, run 2 `-s` failed on the video and took it). Only a subtitle file that didn't exist before this run's call is deleted with a failed item. This is spec 30's rule: never delete what this run didn't create.
+
+A subtitle that this run finished from a `.part` an earlier run left is counted as this run's: no file was at its final path before the call. If the item then fails, it's deleted with the item, and the earlier `.part` is gone with it (it became that file). Accepted by the test-engineer and QA: the finished file only exists because of this run, and the alternative, telling a resumed file from a fresh one, would need state yt-dlp doesn't expose. A `.part` that was there before a failed subtitle is kept (`test_a_subtitle_part_file_left_by_an_earlier_run_is_kept`).
 
 ### 3. Empty subtitle files (`_subtitle_packets`, `_SubtitlesSeen`, D3)
 
@@ -281,25 +285,25 @@ Fixtures (`tests/conftest.py`): `_SUBTITLES` gains `"header.vtt": "WEBVTT\n\n"`.
 
 The existing `subs-404`, `subs-empty`, `subs-garbage` and `subs-404-carousel` are reused.
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `test_a_failed_subtitle_no_longer_costs_the_video[subs-404|subs-empty|subs-short]` replaces `test_a_subtitle_404_still_aborts_a_single_video`. `-y -s`: exit 0, `names(out) == ["Clip.mp4"]`, exactly one `subs_failed` line, naming `Clip.mp4` and `en`, whose reason holds `404`, `data blocks` or `bytes` respectively. `t("subs_none", "es,en")` once, `t("done")` once, no leftovers, no line starting with `ERROR:` that mentions subtitles, one history row
-- [ ] **[fix]** `test_one_failed_language_keeps_the_others`. `-y -s` on `subs-404-two`: `Clip.mp4` and `Clip.en.vtt`, `subtitle_streams(Clip.mp4) == [("mov_text", "eng")]`, `subs_failed` for `es` only, no `subs_none`, no `subs_not_embedded`, exit 0
-- [ ] **[fix]** `test_single_mode_goes_on_past_a_failed_subtitle`. `-y -s` (no `-p`) on `subs-404-carousel`: both items saved, `subs_failed` naming item 1's file, exit 0
-- [ ] **[fix]** `test_a_cut_off_subtitle_is_not_a_failed_item_under_p`. `-y -p -s` on `subs-short`: exit 0, `Clip.mp4` saved, no `partial_result`, no `t("failed", url)`, no leftovers
-- [ ] **[fix]** `test_a_subtitle_404_in_playlist_mode_saves_the_video_and_says_so` gains one assertion: `subs_failed` names `01 - Clip [s1].mp4` and `en`. Its `subs_none` count of 1 stays (D2)
-- [ ] **[fix]** `test_an_empty_subtitle_is_not_embedded[subs-garbage|subs-header|subs-garbage-mkv]` extends `test_a_garbage_subtitle_file_never_fails_the_run` (the mkv row is `subs-garbage` with `--video-format mkv`). The video holds no subtitle stream, `Clip.en.vtt` is kept, `t("subs_empty", "Clip.en.vtt")` once, no `subs_not_embedded`, no `subs_none`, no `[EmbedSubtitle] Embedding` line, exit 0
-- [ ] **[fix]** `test_an_empty_language_leaves_the_good_one_embedded`. `-y -s` on `subs-garbage-two`: one `mov_text` `eng` stream, both files kept, `t("subs_empty", "Clip.es.vtt")` once, no `subs_not_embedded`
-- [ ] **[fix]** `test_audio_names_a_failed_or_empty_subtitle[subs-404|subs-garbage]`. `-y -a -s`: `Clip.mp3` saved, exit 0. On `subs-404`, `subs_failed` names `Clip.mp3`. On `subs-garbage`, `t("subs_empty", "Clip.en.vtt")` and the file is kept
-- [ ] **[fix]** `test_a_failed_video_leaves_no_subtitle_file[subs-novideo|subs-junk]`. `-y -s`: exit 1, `t("failed", url)`, no `.vtt` in `out`. `subs-junk` keeps only its junk body (row 46), `subs-novideo` leaves nothing
-- [ ] **[fix]** `test_a_failed_item_under_p_leaves_no_subtitle_file`. `-y -p -s` on `subs-novideo-carousel`: `names(out) == ["02 - Clip [s2].mp4"]`, `t("partial_result", 1, 2, 0, 1)`, exit 0
-- [ ] **[fix]** `test_a_subtitle_404_with_cookies_is_not_retried`. `-y -s --cookies brave` on `subs-404`: exit 0, `Clip.mp4`, `t("cookies_retry", "brave")` not in the output, `fake_site == [("brave",)]`
-- [ ] **[fix]** `test_wizard_with_subs_survives_a_failed_subtitle`. `-i -s` on `subs-404` with `SINGLE_WALK`: exit 0, `Clip.mp4`, `subs_failed` once
-- [ ] **[pin]** These pass unchanged: `test_one_broken_language_blocks_the_embed_but_keeps_every_file`, `test_an_embed_that_fails_after_starting_leaves_no_temp_file`, `test_a_container_that_cannot_hold_every_file_warns`, `test_subs_rerun_keeps_one_stream_per_language`, `test_subtitles_embed_in_the_converted_file`, `test_audio_keeps_subtitles_as_files_only`
-- [ ] **[fix]** `test_subtitle_failure_warnings_in_both_languages[es|en]`: `subs-404` and `subs-garbage` under each locale print the formatted `subs_failed` and `subs_empty`
-- [ ] Unit `test_downloader.py::test_subtitle_packets_by_what_ffprobe_says`: real ffprobe on `en.vtt` → 1, `garbage.vtt`, `empty.vtt`, `header.vtt` → 0, `en.ttml` and `tiny.mp4` → `None`. A missing ffprobe and a hung one (as `test_no_ffprobe_means_no_media` and `test_a_hung_ffprobe_is_given_up_on` do) → `None`
-- [ ] Unit `test_downloader.py::test_report_error_outside_subtitles_still_counts`: with `writing_subs` false, `report_error` appends to `errors` as today; with it true, it doesn't, and the message lands in `sub_reasons`
-- [ ] `subs_failed` and `subs_empty` exist in both blocks (`test_es_and_en_have_same_keys`)
-- [ ] `grep -n "never stops the video" README.md` matches line 15
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** `test_a_failed_subtitle_no_longer_costs_the_video[subs-404|subs-empty|subs-short]` replaces `test_a_subtitle_404_still_aborts_a_single_video`. `-y -s`: exit 0, `names(out) == ["Clip.mp4"]`, exactly one `subs_failed` line, naming `Clip.mp4` and `en`, whose reason holds `404`, `data blocks` or `bytes` respectively. `t("subs_none", "es,en")` once, `t("done")` once, no leftovers, no line starting with `ERROR:` that mentions subtitles, one history row
+- [x] **[fix]** `test_one_failed_language_keeps_the_others`. `-y -s` on `subs-404-two`: `Clip.mp4` and `Clip.en.vtt`, `subtitle_streams(Clip.mp4) == [("mov_text", "eng")]`, `subs_failed` for `es` only, no `subs_none`, no `subs_not_embedded`, exit 0
+- [x] **[fix]** `test_single_mode_goes_on_past_a_failed_subtitle`. `-y -s` (no `-p`) on `subs-404-carousel`: both items saved, `subs_failed` naming item 1's file, exit 0
+- [x] **[fix]** `test_a_cut_off_subtitle_is_not_a_failed_item_under_p`. `-y -p -s` on `subs-short`: exit 0, `Clip.mp4` saved, no `partial_result`, no `t("failed", url)`, no leftovers
+- [x] **[fix]** `test_a_subtitle_404_in_playlist_mode_saves_the_video_and_says_so` gains one assertion: `subs_failed` names `01 - Clip [s1].mp4` and `en`. Its `subs_none` count of 1 stays (D2)
+- [x] **[fix]** `test_an_empty_subtitle_is_not_embedded[subs-garbage|subs-header|subs-garbage-mkv]` extends `test_a_garbage_subtitle_file_never_fails_the_run` (the mkv row is `subs-garbage` with `--video-format mkv`). The video holds no subtitle stream, `Clip.en.vtt` is kept, `t("subs_empty", "Clip.en.vtt")` once, no `subs_not_embedded`, no `subs_none`, no `[EmbedSubtitle] Embedding` line, exit 0
+- [x] **[fix]** `test_an_empty_language_leaves_the_good_one_embedded`. `-y -s` on `subs-garbage-two`: one `mov_text` `eng` stream, both files kept, `t("subs_empty", "Clip.es.vtt")` once, no `subs_not_embedded`
+- [x] **[fix]** `test_audio_names_a_failed_or_empty_subtitle[subs-404|subs-garbage]`. `-y -a -s`: `Clip.mp3` saved, exit 0. On `subs-404`, `subs_failed` names `Clip.mp3`. On `subs-garbage`, `t("subs_empty", "Clip.en.vtt")` and the file is kept
+- [x] **[fix]** `test_a_failed_video_leaves_no_subtitle_file[subs-novideo|subs-junk]`. `-y -s`: exit 1, `t("failed", url)`, no `.vtt` in `out`. `subs-junk` keeps only its junk body (row 46), `subs-novideo` leaves nothing
+- [x] **[fix]** `test_a_failed_item_under_p_leaves_no_subtitle_file`. `-y -p -s` on `subs-novideo-carousel`: `names(out) == ["02 - Clip [s2].mp4"]`, `t("partial_result", 1, 2, 0, 1)`, exit 0
+- [x] **[fix]** `test_a_subtitle_404_with_cookies_is_not_retried`. `-y -s --cookies brave` on `subs-404`: exit 0, `Clip.mp4`, `t("cookies_retry", "brave")` not in the output, `fake_site == [("brave",)]`
+- [x] **[fix]** `test_wizard_with_subs_survives_a_failed_subtitle`. `-i -s` on `subs-404` with `SINGLE_WALK`: exit 0, `Clip.mp4`, `subs_failed` once
+- [x] **[pin]** These pass unchanged: `test_one_broken_language_blocks_the_embed_but_keeps_every_file`, `test_an_embed_that_fails_after_starting_leaves_no_temp_file`, `test_a_container_that_cannot_hold_every_file_warns`, `test_subs_rerun_keeps_one_stream_per_language`, `test_subtitles_embed_in_the_converted_file`, `test_audio_keeps_subtitles_as_files_only`
+- [x] **[fix]** `test_subtitle_failure_warnings_in_both_languages[es|en]`: `subs-404` and `subs-garbage` under each locale print the formatted `subs_failed` and `subs_empty`
+- [x] Unit `test_downloader.py::test_subtitle_packets_by_what_ffprobe_says`: real ffprobe on `en.vtt` → 1, `garbage.vtt`, `empty.vtt`, `header.vtt` → 0, `en.ttml` and `tiny.mp4` → `None`. A missing ffprobe and a hung one (as `test_no_ffprobe_means_no_media` and `test_a_hung_ffprobe_is_given_up_on` do) → `None`
+- [x] Unit `test_downloader.py::test_report_error_outside_subtitles_still_counts`: with `writing_subs` false, `report_error` appends to `errors` as today; with it true, it doesn't, and the message lands in `sub_reasons`
+- [x] `subs_failed` and `subs_empty` exist in both blocks (`test_es_and_en_have_same_keys`)
+- [x] `grep -n "never stops the video" README.md` matches line 15
 
 Expected flips among existing tests: only `test_a_subtitle_404_still_aborts_a_single_video`, which the first criterion replaces. Any other flip goes in the developer's report with the reason.
 
@@ -319,7 +323,7 @@ If this ships in 0.4.0, add to the review list in `PLAN.md`:
 2. D1: under `-p`, a cut-off or empty-bodied subtitle no longer turns a saved video into a failed item. When it was the only item, that was `Download failed`, exit 1, with the file on disk.
 3. D2: yt-dlp's `ERROR:` line for a subtitle failure is no longer printed; the new `subs_failed` warning replaces it, with yt-dlp's reason. Under `-p`, a failed subtitle is now named, where it was silent unless no item got a subtitle.
 4. D3: a subtitle file with no text (binary junk, a header with no cue, an empty inline subtitle) is no longer embedded as an empty track. It stays on disk and is named by `subs_empty`, in `-a` too.
-5. D4: subtitle files written for an item that counts as failed (the video 404s, a junk body, a failed post-processing step under `-p`, Ctrl-C mid-item) are now deleted, as the item's cover thumbnails already were. So is the `.part` file of a subtitle that failed.
+5. D4: subtitle files written for an item that counts as failed (the video 404s, a junk body, a failed post-processing step under `-p`, Ctrl-C mid-item) are now deleted, as the item's cover thumbnails already were. So is the `.part` file of a subtitle that failed. A subtitle file an earlier run saved at the same path is kept (`4d4f725`), and so is a `.part` an earlier run left next to a subtitle that fails again; a subtitle this run finished from such a `.part` goes with the failed item (Design 2).
 
 Release note: "With `-s`, a subtitle that can't be downloaded no longer costs the video: it's saved, and the run names the subtitle it couldn't get and why. A subtitle file with no text is kept but not embedded as an empty track. A download that fails no longer leaves its subtitle files behind."
 
@@ -358,7 +362,7 @@ All five were decided by the roles under the overnight delegation, each on the r
 
 | Option | Effect |
 | --- | --- |
-| **A. Delete the subtitle files this run wrote for an item that counts as failed, and a failed subtitle's own new `.part` file (recommended)** | Same rule and same places as `drop_thumbs`. Every file deleted is this run's (`overwrites` unset). The disk matches the report |
+| **A. Delete the subtitle files this run wrote for an item that counts as failed, and a failed subtitle's own new `.part` file (recommended)** | Same rule and same places as `drop_thumbs`. Every file deleted is one that wasn't on disk before this run's write (Design 2, after `4d4f725`). The disk matches the report |
 | B. Only when the media download itself failed | Keeps subtitles next to a junk body or a `-p -a` item whose extraction failed. Two rules for "failed" |
 | C. Leave them, as today | A `.vtt` with no video, after `Download failed` |
 
@@ -368,3 +372,34 @@ All five were decided by the roles under the overnight delegation, each on the r
 | --- | --- |
 | **A. One sentence on line 15 (recommended)** | Tells `-s` users the video is never lost to a subtitle |
 | B. No README change | The behaviour change is only in the release notes |
+
+## Validation
+
+On `main` at `e54e5c2` (merge `e447bea`, the first merge with `kind-edges` in it, then `.ai/` only: `git diff --stat e447bea e54e5c2 -- src tests README.md` is empty), yt-dlp 2026.10.26, ffmpeg n9.0.2, Python 3.14.9. GitHub CI on `e54e5c2` was still running when this was written.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on the merge `e447bea`: `All checks passed.`, exit 0, 2526 passed, 9 deselected, 11 xfailed. No file outside `.ai/` has changed since.
+- **Criteria tests:** a `pytest -k` selection over `test_e2e.py`, `test_downloader.py` and `test_i18n.py` covering every test the criteria name, `[fix]` and `[pin]`, plus the test-engineer's subtitle tests (`test_a_failed_video_never_takes_a_subtitle_an_earlier_run_saved`, `test_a_subtitle_part_file_left_by_an_earlier_run_is_kept`): 121 passed on `main`. `test_a_subtitle_404_still_aborts_a_single_video` and `test_a_garbage_subtitle_file_never_fails_the_run` are gone, replaced as the criteria ask. `grep -n "never stops the video" README.md` matches line 15. The revert proof of the `[fix]` tests is the developer's and the test-engineer's, not repeated (criteria preamble).
+- **Scope:** the merge touches exactly the Files table: `README.md`, `cli.py`, `cookies.py`, `downloader.py`, `i18n.py`, `conftest.py`, `test_downloader.py`, `test_e2e.py` (`test_i18n.py` needed nothing). No flag, default, path, dependency or version change.
+- **Console check:** `main`'s real console script, `.venv/bin/download-media`, under `env -i`, `LANG=en_US.UTF-8` (and `es_ES.UTF-8` where noted), `PATH=/usr/bin:/bin`, a fresh `HOME` and all four `XDG_*` folders per run in the scratchpad, `XDG_VIDEOS_DIR`/`XDG_MUSIC_DIR` unset, stdin from `/dev/null`, an absolute `-o`, no cookies. A scratch `http.server` on `127.0.0.1` served an ffmpeg-made `tiny.mp4`, a one-cue `en.vtt`, 184 random bytes as `garbage.vtt`, `cut.vtt` (`Content-Length: 500`, 41-byte body) and one `<video><track kind="subtitles" srclang="en">` page per case. Streams read with ffprobe. Everything was deleted afterwards.
+
+| Run | Output | Exit | Disk (streams), history |
+| --- | ------ | ---- | ----------------------- |
+| `-y -s`, subtitle 404 | `S404 (1).mp4: couldn't download the "en" subtitles (HTTP Error 404: File not found).`, `subs_none`, `Done.`; no `ERROR:` line | 0 | `S404 (1).mp4` (h264, aac), 1 row; on `bb65124` this was `Download failed`, nothing saved |
+| same, `es_ES.UTF-8` | `… no se pudieron descargar los subtítulos "en" (HTTP Error 404: File not found).` | 0 | the mp4 |
+| `-y -p -s`, cut-off subtitle | `subs_failed` with `[download] Got error: Downloaded 41 bytes, expected 500 bytes`, `subs_none`, `Done.`; no `partial_result`, no `Download failed` | 0 | `Scut (1).mp4` only, no `.part`, 1 row |
+| `-y -s`, junk `.vtt` | `Sgarb (1).en.vtt: the subtitle file holds no text; it's kept, but not embedded.`, `Done.`; no `[EmbedSubtitle] Embedding` | 0 | `Sgarb (1).mp4` (h264, aac, no subtitle stream), `Sgarb (1).en.vtt`, 1 row |
+| same, `--video-format mkv` | same warning | 0 | `Sgarb (1).mkv` (h264, aac), the `.vtt` |
+| same, `-a` | same warning | 0 | `Sgarb (1).mp3`, the `.vtt` |
+| same, `es_ES.UTF-8` | `… el archivo de subtítulos no contiene texto; se conserva, pero no se incrusta.` | 0 | the mp4, the `.vtt` |
+| `-y -s`, video 404 after its `en.vtt` was written | `ERROR: unable to download video data: HTTP Error 404 …`, `Download failed` | 1 | nothing, 0 rows; on `bb65124` the `.vtt` stayed |
+| same, `-y -p -s` | same | 1 | nothing, 0 rows |
+| Two runs, one folder: `-y -a -s`, then the video removed from the server, `-y -s` | run 1 `Done.`; run 2 `Deleting existing file …en.vtt`, `Download failed` | 0, 1 | after run 2: `Stwo (1).mp3`, `Stwo (1).en.vtt` (its cue intact). `4d4f725`'s case holds |
+
+- **Cases, tests only:** single mode on a carousel, one bad language next to a good one, `--cookies` with no retry, the wizard walk, `-p` on a carousel with a failed item, the empty-body and header-only subtitles, and the resumed `.part` are criterion or test-engineer tests in the selection above; they weren't run by hand here. The optional live smoke test (Live check) wasn't run: it isn't a gate, and the human is away.
+
+### Notes from review, no change made
+
+1. **Design 2 was out of date** after `4d4f725` ("every file in `item_subs` is this run's"). Corrected above, with the Findings row, Design 1's bullet and D4 A's effect.
+2. **The resumed `.part` judgement** (test-engineer, QA): a subtitle finished in this run from an earlier run's `.part` is deleted with a failed video. Recorded in Design 2 as accepted.
+3. **`subs_empty`'s wording under `-a`** (QA): `it's kept, but not embedded` reads as if embedding were an option, though `-a` never embeds (spec 21 D4). Seen in the console check. Wording only, both blocks; for the planner, next to `i18n-leftovers`.
+4. **A `getattr` inconsistency** (QA): `_EmbedSubtitles.run` reads `getattr(self._downloader, "item_subs_empty", ())` (`downloader.py:699`) while `_SubtitlesSeen.run` uses `self._downloader.item_subs_empty` directly (`:669`). Harmless, since `_Ydl.__init__` always sets it; a cleanup for whoever next edits the step.

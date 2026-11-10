@@ -96,8 +96,9 @@ download type).
 ## Execution modes
 
 - **Wizard (default):** runs when no URL is provided, or when a URL is provided
-  without any "intent flags" (`-a`, `-q`, `-f`, `--video-format`, `-o`, `-s`,
-  `--sub-langs`, `-p`, `-P`, `--playlist-items`, `--cookies`). It is probe-first:
+  without any "intent flags" (`-a`, `-q`, `-f`, `--video-format`, `-o`, `-l`,
+  `-s`, `--sub-langs`, `-p`, `-P`, `--playlist-items`, `--cookies`, in any form
+  argparse accepts: `-as`, `-q720`, `--aud`). It is probe-first:
   1. URL (clipboard detected if available), plus cookies up front for sites
      that always need them.
   2. Probe the URL with yt-dlp; on an auth failure, ask for cookies and
@@ -139,15 +140,20 @@ different playlist modes, or with different wizard choices, get one command
 each. Nothing is printed when the run was cancelled before downloading: a
 cancelled wizard only holds half-made choices.
 
-Exit status: 0 only when every URL given was saved (warnings allowed). 1 when
-any URL wasn't: it failed, the wizard refused it, or it was cancelled or
-declined at a prompt (`c`, `n`, EOF); also for a missing URL. 2 for a usage
-error. Ctrl-C never shows a traceback: it prints `Cancelled.` on a fresh line,
-or, during a download, the `interrupted` line naming the URL and the folder
-where unfinished files may be left, followed by the equivalent command for the
-URLs that reached the download. Later URLs don't run. Then `entry()` ends the
-process by SIGINT, so a shell shows 130 and a calling loop stops; `main()`
-returns 130 instead, so tests can call it in-process.
+`-l` lists the formats of every URL, in order, and exits. It downloads nothing
+and prints no command. Like any intent flag it skips the wizard. With no URL, or
+with `-i`, it only asks for the URLs, since listing needs nothing else, so a
+login wall needs `--cookies` on the command line.
+
+Exit status: 0 only when every URL given was saved (warnings allowed) (with
+`-l`, listed). 1 when any URL wasn't: it failed, the wizard refused it, or it
+was cancelled or declined at a prompt (`c`, `n`, EOF); also for a missing URL.
+2 for a usage error. Ctrl-C never shows a traceback: it prints `Cancelled.` on
+a fresh line, or, during a download, the `interrupted` line naming the URL and
+the folder where unfinished files may be left, followed by the equivalent
+command for the URLs that reached the download. Later URLs don't run. Then
+`entry()` ends the process by SIGINT, so a shell shows 130 and a calling loop
+stops; `main()` returns 130 instead, so tests can call it in-process.
 
 ## Development
 
