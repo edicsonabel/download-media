@@ -52,29 +52,21 @@ from .i18n import is_yes, t
 from .probe import is_auth_error
 from .ui import C, die, err, fmt_bytes, fmt_duration, info, ok, warn
 
-# Flags that signal "I know what I want; skip the wizard".
-_INTENT_FLAGS: frozenset[str] = frozenset(
-    {
-        "-a",
-        "--audio",
-        "-q",
-        "--quality",
-        "-f",
-        "--format",
-        "--video-format",
-        "-o",
-        "--output",
-        "-s",
-        "--subs",
-        "--sub-langs",
-        "-p",
-        "--playlist",
-        "-P",
-        "--no-playlist",
-        "--playlist-items",
-        "--cookies",
-    }
+# Options that signal "I know what I want; skip the wizard", by argparse dest.
+_INTENT_DESTS = (
+    "audio",
+    "quality",
+    "audio_format",
+    "video_format",
+    "output",
+    "playlist",
+    "no_playlist",
+    "playlist_items",
+    "subs",
+    "sub_langs",
+    "cookies_browser",
 )
+_UNSET = object()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -202,16 +194,12 @@ def options_from_args(args: argparse.Namespace) -> DownloadOptions:
 
 
 def has_intent_flags(argv: list[str]) -> bool:
-    """True if the user passed any "I know what I want" flag."""
-    for token in argv:
-        if token in _INTENT_FLAGS:
-            return True
-        # Handle --flag=value form
-        if "=" in token:
-            head = token.split("=", 1)[0]
-            if head in _INTENT_FLAGS:
-                return True
-    return False
+    """True if any "I know what I want" option was given, in any form argparse accepts."""
+    # argparse only fills a default when the namespace lacks the attribute, so whatever
+    # isn't the sentinel any more was set from the command line.
+    given = argparse.Namespace(**dict.fromkeys(_INTENT_DESTS, _UNSET))
+    build_parser().parse_args(argv, namespace=given)
+    return any(getattr(given, dest) is not _UNSET for dest in _INTENT_DESTS)
 
 
 def should_run_wizard(args: argparse.Namespace, argv: list[str]) -> bool:

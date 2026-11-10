@@ -6123,6 +6123,26 @@ def test_list_formats_still_walks_and_lists_only_the_first_url(
     assert VIDEO_B not in extracted
 
 
+@pytest.mark.parametrize(
+    ("flags", "audio"),
+    [(["-as"], True), (["-q720"], False), (["--aud"], True), (["--qual", "720"], False)],
+)
+def test_bundled_and_abbreviated_flags_skip_the_wizard(
+    wizard_urls: Any, home: Path, flags: list[str], audio: bool
+) -> None:
+    code, output, asked = wizard_urls([*flags, VIDEO], "")
+    assert asked == 1  # The preview.
+    assert t("wizard_title") not in output
+    assert code == 0
+    saved = [p.relative_to(home) for p in home.rglob("*") if p.is_file()]
+    if audio:
+        assert len(saved) == 1
+        assert saved[0].parent == Path("Music")
+        assert saved[0].suffix == ".mp3"
+    else:
+        assert saved == [Path("Videos/Clip.mp4")]
+
+
 # Several URLs, attacked: nothing a walk chose reaches the next one (spec 19, D3).
 def test_cookies_chosen_in_one_walk_are_not_the_next_walk_s_default(
     wizard_urls: Any, out: Path
