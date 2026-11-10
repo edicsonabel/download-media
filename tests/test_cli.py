@@ -759,3 +759,315 @@ def test_ctrl_c_ends_the_process_by_sigint_without_a_traceback() -> None:
 
 def test_module_entry_point_is_importable() -> None:
     import download_media.__main__  # noqa: F401
+
+
+# Ctrl-C on the real process, attacked (spec 23). Signals go only to the group a test started.
+_NOWHERE = "http://127.0.0.1:9/x"
+
+
+def _child_env(lang: str | None = None) -> dict[str, str]:
+    """The test's environment; without ``lang``, its $LANG too, so t() matches the child."""
+    import os
+
+    # Buffered, as a real pipe is: PYTHONUNBUFFERED would hide a lost line.
+    drop = {"WAYLAND_DISPLAY", "DISPLAY", "PYTHONUNBUFFERED"}
+    env = {name: value for name, value in os.environ.items() if name not in drop}
+    if lang is not None:
+        env.update(LANG=lang, LC_ALL=lang)
+    return env
+
+
+def _read_until(fd: int, marker: bytes, timeout: float = 30) -> bytes:
+    import os
+    import selectors
+    import time
+
+    seen = b""
+    deadline = time.monotonic() + timeout
+    with selectors.DefaultSelector() as selector:
+        selector.register(fd, selectors.EVENT_READ)
+        while marker not in seen and time.monotonic() < deadline:
+            if selector.select(timeout=1):
+                chunk = os.read(fd, 4096)
+                if not chunk:
+                    break
+                seen += chunk
+    assert marker in seen, seen
+    return seen
+
+
+def _spawn(argv: list[str], env: dict[str, str]):
+    import subprocess
+
+    return subprocess.Popen(
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        start_new_session=True,
+    )
+
+
+def _reap(proc) -> None:
+    import os
+    import signal
+
+    if proc.poll() is None:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+    for stream in (proc.stdin, proc.stdout, proc.stderr):
+        if stream is not None and not stream.closed:
+            stream.close()
+
+
+def _launchers() -> list:
+    import sys
+
+    script = Path(sys.executable).parent / "download-media"
+    return [
+        pytest.param([sys.executable, "-m", "download_media"], id="module"),
+        pytest.param(
+            [str(script)],
+            id="console-script",
+            marks=pytest.mark.skipif(not script.exists(), reason="no console script"),
+        ),
+    ]
+
+
+@pytest.mark.parametrize("launcher", _launchers())
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_ctrl_c_with_stdout_piped_keeps_its_line_on_a_line_of_its_own(
+    lang: str, launcher: list[str]
+) -> None:
+    import os
+    import signal
+
+    from download_media.i18n import _MESSAGES
+
+    messages = _MESSAGES[lang]
+    locale = {"es": "es_ES.UTF-8", "en": "en_US.UTF-8"}[lang]
+    proc = _spawn([*launcher, "-i", _NOWHERE], _child_env(locale))
+    try:
+        assert proc.stdout is not None
+        seen = _read_until(proc.stdout.fileno(), messages["ask_url"].encode())
+        os.killpg(proc.pid, signal.SIGINT)
+        rest, err = proc.communicate(timeout=30)
+    finally:
+        _reap(proc)
+    assert proc.returncode == -signal.SIGINT
+    # Lost without the flush before the self-kill; glued to the prompt without the fresh line.
+    assert messages["cancelled"] in (seen + rest).decode().splitlines()
+    assert "Traceback" not in err.decode()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="F1: entry() flushes stdout before its self-kill; with the pipe's reader gone, the "
+    "flush raises BrokenPipeError: a traceback, and exit 120 instead of death by SIGINT",
+)
+def test_ctrl_c_with_the_pipe_s_reader_gone_still_dies_by_sigint() -> None:
+    import os
+    import signal
+    import sys
+
+    from download_media.i18n import t
+
+    proc = _spawn([sys.executable, "-m", "download_media", "-i", _NOWHERE], _child_env())
+    try:
+        assert proc.stdout is not None and proc.stderr is not None
+        _read_until(proc.stdout.fileno(), t("ask_url").encode())
+        # `download-media ... | tee log`: the same Ctrl-C kills tee first.
+        proc.stdout.close()
+        os.killpg(proc.pid, signal.SIGINT)
+        err = proc.stderr.read()
+        proc.wait(timeout=30)
+    finally:
+        _reap(proc)
+    assert proc.returncode == -signal.SIGINT
+    assert b"Traceback" not in err
+
+
+# A reader that forwards up to the prompt and leaves, as `| tee log` does on the same Ctrl-C.
+_READER = """
+import os, sys
+marker, seen = sys.argv[1].encode(), b""
+while marker not in seen:
+    chunk = os.read(0, 4096)
+    if not chunk:
+        break
+    seen += chunk
+os.write(1, seen + b"\\nreader gone %d\\n" % os.getpid())
+"""
+
+
+def _wait_gone(pid: int, timeout: float = 30) -> None:
+    """Until ``pid`` has exited (a zombie has closed its files already)."""
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+        except (FileNotFoundError, ProcessLookupError):
+            return
+        if state in ("Z", "X"):
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"reader {pid} still running")
+
+
+@pytest.mark.parametrize(
+    "piped",
+    [
+        pytest.param(False, id="plain"),
+        pytest.param(
+            True,
+            id="reader-gone",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="F1: with the pipe's reader gone, entry()'s flush raises BrokenPipeError, "
+                "the tool exits 120 and bash runs the next iteration",
+            ),
+        ),
+    ],
+)
+def test_ctrl_c_stops_a_calling_bash_loop(piped: bool) -> None:
+    import os
+    import shlex
+    import shutil
+    import signal
+    import sys
+
+    from download_media.i18n import t
+
+    if shutil.which("bash") is None:
+        pytest.skip("no bash")
+    prompt = t("ask_url")
+    child = shlex.join([sys.executable, "-m", "download_media", "-i", _NOWHERE])
+    if piped:
+        child += " | " + shlex.join([sys.executable, "-c", _READER, prompt])
+    # A second iteration ends the loop at once, so a loop that goes on doesn't hang the test.
+    script = f'for i in 1 2; do [ "$i" = 2 ] && echo looped && exit 0; {child}; done'
+    proc = _spawn(["bash", "-c", script], _child_env())
+    try:
+        assert proc.stdout is not None
+        marker = b"reader gone" if piped else prompt.encode()
+        seen = _read_until(proc.stdout.fileno(), marker)
+        if piped:
+            while b"\n" not in seen.split(marker)[1]:
+                seen += _read_until(proc.stdout.fileno(), b"\n")
+            _wait_gone(int(seen.split(marker)[1].split()[0]))
+        os.killpg(proc.pid, signal.SIGINT)
+        rest, err = proc.communicate(timeout=30)
+    finally:
+        _reap(proc)
+    assert b"looped" not in seen + rest
+    # Bash ends itself by SIGINT only when its child did: that's what stops the loop.
+    assert proc.returncode == -signal.SIGINT
+    assert b"Traceback" not in err
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="F2: a second Ctrl-C while main() prints Cancelled. escapes main() and entry(): "
+    "Python prints a traceback before dying by SIGINT",
+)
+def test_a_second_ctrl_c_on_the_cancel_line_shows_no_traceback(monkeypatch) -> None:
+    import os
+    import signal
+    import sys
+
+    from download_media import cli
+    from download_media.i18n import t
+
+    def interrupted(opts):
+        raise KeyboardInterrupt
+
+    real_warn = cli.warn
+    pressed: list[str] = []
+
+    def warn(message: str) -> None:
+        if message == t("cancelled") and not pressed:
+            pressed.append(message)
+            raise KeyboardInterrupt  # The second press, while the line prints.
+        real_warn(message)
+
+    sent: list[int] = []
+    monkeypatch.setattr(sys, "argv", ["download-media"])
+    monkeypatch.setattr(cli.wizard, "run_all", interrupted)
+    monkeypatch.setattr(cli, "warn", warn)
+    monkeypatch.setattr(signal, "signal", lambda sig, handler: None)
+    monkeypatch.setattr(os, "kill", lambda pid, sig: sent.append(sig))
+    escaped = False
+    try:
+        cli.entry()
+    except SystemExit:
+        pass
+    except KeyboardInterrupt:  # Caught here: pytest would end the whole session on it.
+        escaped = True
+    assert pressed
+    assert not escaped
+    assert sent == [signal.SIGINT]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Out of scope (pre-existing): a Ctrl-C while Python imports yt-dlp, before main() "
+    "runs, still ends in a traceback; planner row",
+)
+def test_ctrl_c_while_the_tool_starts_shows_no_traceback(tmp_path: Path) -> None:
+    import signal
+    import subprocess
+    import sys
+
+    # Ctrl-C lands while `download_media.cli` imports yt-dlp, about 0.1 s after the launch.
+    (tmp_path / "sitecustomize.py").write_text(
+        "import os, signal, sys\n"
+        "class _Press:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name == 'yt_dlp':\n"
+        "            sys.meta_path.remove(self)\n"
+        "            os.kill(os.getpid(), signal.SIGINT)\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, _Press())\n",
+        encoding="utf-8",
+    )
+    env = {**_child_env(), "PYTHONPATH": str(tmp_path)}
+    proc = subprocess.run(
+        [sys.executable, "-m", "download_media", "-y", _NOWHERE],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        env=env,
+        timeout=60,
+        start_new_session=True,
+    )
+    assert proc.returncode == -signal.SIGINT  # Holds already: Python's own SIGINT exit.
+    assert b"Traceback" not in proc.stderr
+
+
+def test_ctrl_c_during_the_retry_without_cookies_is_a_download_ctrl_c(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    from yt_dlp.utils import DownloadError
+
+    from download_media import cli
+    from download_media.i18n import t
+
+    calls: list[str | None] = []
+
+    def download(url, opts):
+        calls.append(opts.cookies_browser)
+        if len(calls) == 1:
+            raise DownloadError("ERROR: [fake] x: This post is private")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "download", download)
+    code = cli.main(["-y", "--cookies", "firefox", "-o", str(tmp_path), "http://x"])
+    output = capsys.readouterr().out
+    assert code == cli.EXIT_INTERRUPTED
+    assert calls == ["firefox", None]
+    assert t("cookies_retry", "firefox") in output
+    assert t("interrupted", "http://x", tmp_path) in output.splitlines()
+    assert t("cancelled") not in output
+    assert f"download-media -y -o {tmp_path} --cookies firefox http://x" in output

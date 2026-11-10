@@ -8297,3 +8297,184 @@ def test_unexpected_errors_in_both_languages(
     code, output = run("-y", "-l", CRASH)
     assert code == 1
     assert said["unexpected_bug"].format(CRASH_BUG) in output
+
+
+# Ctrl-C and exit codes, attacked (spec 23).
+def test_ctrl_c_on_the_first_url_neither_runs_nor_lists_the_next(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    interrupt_dl(monkeypatch, lambda info: info["webpage_url"] == VIDEO)
+    code, output = run("-y", VIDEO, VIDEO_B)
+    assert code == cli.EXIT_INTERRUPTED
+    assert t("interrupted", VIDEO, out) in output.splitlines()
+    assert output.count(t("downloading")) == 1
+    assert VIDEO_B not in output
+    assert commands(output) == [f"download-media -y -o {out} {VIDEO}"]
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_ctrl_c_at_the_first_preview_neither_runs_nor_lists_the_next(
+    run: Any, out: Path, answers: Any
+) -> None:
+    prompts = answers(KeyboardInterrupt)
+    code, output = run(VIDEO, VIDEO_B)
+    assert code == cli.EXIT_INTERRUPTED
+    assert prompts == [t("ask_confirm")]
+    assert t("cancelled") in output.splitlines()
+    assert VIDEO_B not in output
+    assert commands(output) == []
+    assert names(out) == []
+
+
+def test_ctrl_c_mid_progress_line_starts_a_fresh_line(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from yt_dlp.downloader.common import FileDownloader
+
+    real = FileDownloader.report_progress
+
+    def report_progress(self: Any, status: dict[str, Any]) -> None:
+        real(self, status)
+        if status["status"] == "downloading":
+            raise KeyboardInterrupt  # Right after a progress line, which has no newline.
+
+    monkeypatch.setattr(FileDownloader, "report_progress", report_progress)
+    code, output = run("-y", VIDEO)
+    assert code == cli.EXIT_INTERRUPTED
+    assert "[download]" in output
+    assert "\n" + t("interrupted", VIDEO, out) + "\n" in output
+    assert [name for name in names(out) if name.endswith(".part")]  # Left for a rerun to resume.
+    assert history_rows() == []
+
+
+def test_a_second_ctrl_c_while_the_command_prints_still_ends_the_run(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def pressed_again(opts: Any) -> str:
+        raise KeyboardInterrupt
+
+    interrupt_dl(monkeypatch, lambda info: info["webpage_url"] == VIDEO_B)
+    monkeypatch.setattr(cli.equivalent, "build", pressed_again)
+    code, output = run("-y", VIDEO, VIDEO_B)
+    assert code == cli.EXIT_INTERRUPTED
+    assert t("interrupted", VIDEO_B, out) in output.splitlines()
+    assert t("cancelled") in output.splitlines()
+    assert "Traceback" not in output
+    assert names(out) == ["Clip.mp4"]
+    assert len(history_rows()) == 1
+
+
+@pytest.mark.parametrize(
+    ("flags", "said"),
+    [(("-y",), "interrupted"), ((), "cancelled")],
+    ids=["download", "preview"],
+)
+def test_ctrl_c_while_the_browser_s_cookies_load(
+    direct: Any, media_url: str, out: Path, monkeypatch: pytest.MonkeyPatch, flags: Any, said: str
+) -> None:
+    import yt_dlp.cookies
+
+    def stuck(*args: Any, **kwargs: Any) -> Any:
+        raise KeyboardInterrupt  # A keyring that never answers, and the user gives up.
+
+    chrome_cookie()
+    monkeypatch.setattr(yt_dlp.cookies, "extract_cookies_from_browser", stuck)
+    code, output = direct(*flags, "--cookies", "chrome", pages=("poster.html",))
+    url = f"{media_url}/poster.html"
+    assert code == cli.EXIT_INTERRUPTED
+    line = t("interrupted", url, out) if said == "interrupted" else t("cancelled")
+    assert line in output.splitlines()
+    assert "Traceback" not in output
+    assert names(out) == []
+    assert history_rows() == []
+    if said == "interrupted":
+        assert commands(output) == [f"download-media -y -o {out} --cookies chrome {url}"]
+    else:
+        assert commands(output) == []
+
+
+def test_ctrl_c_while_the_wizard_probe_loads_cookies(
+    generic: Any, home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import yt_dlp.cookies
+
+    def stuck(*args: Any, **kwargs: Any) -> Any:
+        raise KeyboardInterrupt
+
+    chrome_cookie()
+    monkeypatch.setattr(yt_dlp.cookies, "extract_cookies_from_browser", stuck)
+    code, output = generic("poster.html", "", flags=("-i", "--cookies", "chrome"))
+    assert code == cli.EXIT_INTERRUPTED
+    assert t("cancelled") in output.splitlines()
+    assert "Traceback" not in output
+    assert t("equiv_cmd") not in output
+    assert names(home / "Videos") == []
+
+
+def test_cancelling_the_list_formats_wizard_exits_1(wizard_urls: Any) -> None:
+    code, output, asked = wizard_urls(["-l", VIDEO], "", "c")
+    assert asked == 2
+    assert code == 1
+    assert t("cancelled") in output
+    assert "Available formats" not in output
+
+
+def test_a_lone_image_refused_by_the_list_formats_wizard_exits_1(wizard_urls: Any) -> None:
+    code, output, asked = wizard_urls(["-l", IMAGE], "")
+    assert asked == 1
+    assert code == 1
+    assert t("image_only_skipped") in output
+    assert "Available formats" not in output
+
+
+@pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
+def test_a_cancel_after_a_saved_walk_exits_1_and_saves_nothing(
+    wizard_urls: Any, out: Path, reply: Any
+) -> None:
+    # Two walks: the first complete, the second cancelled at its type step.
+    code, output, _ = wizard_urls([VIDEO, VIDEO_B], *walk_into(out, 6), "", reply)
+    assert code == 1
+    assert t("cancelled") in output
+    assert names(out) == []
+    assert commands(output) == []
+
+
+def test_every_url_saved_still_exits_0_in_every_mode(
+    run: Any, wizard_urls: Any, out: Path, answers: Any
+) -> None:
+    # The new rule must not turn a full success into a failure.
+    assert run("-y", VIDEO, VIDEO_B)[0] == 0
+    answers("")
+    assert run(VIDEO)[0] == 0  # The preview, confirmed.
+    code, _, _ = wizard_urls([VIDEO, VIDEO_B], *walk_into(out, 6), *walk_into(out, 6))
+    assert code == 0
+    assert names(out) == ["Clip [v2].mp4", "Clip.mp4"]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [("-i", VIDEO), (VIDEO,), (LIST_URL,)],
+    ids=["wizard", "preview", "playlist-question"],
+)
+def test_ctrl_c_at_a_prompt_puts_its_line_after_the_prompt_s_line(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, argv: tuple[str, ...]
+) -> None:
+    import builtins
+
+    asked: list[str] = []
+
+    def ctrl_c(prompt: str = "") -> str:
+        print(prompt, end="", flush=True)  # As input() does: the cursor stays after the prompt.
+        asked.append(prompt)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(builtins, "input", ctrl_c)
+    code, output = run(*argv)
+    assert len(asked) == 1
+    assert code == cli.EXIT_INTERRUPTED
+    assert asked[0] + "\n" in output
+    assert t("cancelled") in output.splitlines()
+    assert t("equiv_cmd") not in output
+    assert names(out) == []
+    assert history_rows() == []
