@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T03:09:04-04:00",
+  "updated": "2026-11-10T03:10:33-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2569,12 +2569,12 @@
     "fix/cancel-exits": {
       "type": "fix",
       "title": "Catch Ctrl-C and settle cancel and refusal exit codes and wording",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/23-cancel-exits.md",
       "branch": "fix/cancel-exits",
-      "worktree": ".worktrees/fix-cancel-exits",
+      "worktree": null,
       "commits": [
         "d81e78d",
         "eeefe62",
@@ -2585,7 +2585,8 @@
         "043c0b3",
         "6667735",
         "02346f3",
-        "5b41234"
+        "5b41234",
+        "f824b80"
       ],
       "review": {
         "approved": true,
@@ -2665,6 +2666,13 @@
           "result": "merged",
           "at": "2026-11-10T02:56:50-04:00",
           "note": "Merged as 5b41234; the two append-at-end test conflicts resolved by keeping both sides; no other conflict. Gate exit 0, 2339 passed + 7 xfailed. Main worktree's editable install refreshed for entry(). Undo: git revert -m 1 5b41234. Pushed by the orchestrator under the delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T03:10:33-04:00",
+          "note": "All 18 criteria hold; 48 criteria tests pass. Console runs through entry(): Ctrl-C at prompts (en/es) -2 with Cancelled.; mid-download interrupted line + command, .part left, rerun resumes and exits 0; wizard c exits 1; saved run 0. Merged tests: seven gone, each a deliberate rename by its own commit. Spec done with entry() guards and QA's ms window recorded; PLAN row 23 done; items 29-33 in the 0.4.0 list, D4/D5 first. CI on cf87835 pending at validation time. Worktree and branch removed."
         }
       ]
     },
