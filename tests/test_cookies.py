@@ -14,6 +14,7 @@ from yt_dlp.cookies import (
 )
 from yt_dlp.utils import DownloadError
 
+from download_media import i18n
 from download_media.config import BROWSERS
 from download_media.cookies import (
     _FLAG_FILES,
@@ -383,3 +384,60 @@ def test_undecrypted_cookies_get_the_keyring_hint_even_with_a_keyring_named(
     # A keyring error named by hand still gets none: spec 26's rule.
     report_failure("chrome+kwallet6", logged_failure("kwallet-query failed with return code 1."))
     assert t("cookies_keyring_hint", "chrome") not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("browser", BROWSERS)
+def test_every_offered_browser_gets_the_jar_rule_of_its_kind(
+    browser: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Only Firefox and Safari keep their cookies unencrypted; every other one is Chromium.
+    encrypted = browser not in ("firefox", "safari")
+    for spec in (browser, f"{browser}+basictext"):
+        undecrypted = jar_failure(spec, 1, False, False)
+        assert (undecrypted is not None) == encrypted
+        assert jar_failure(spec, 0, False, True) == (
+            UNDECRYPTED if encrypted else CookieFailure(True, "no cookies in the database")
+        )
+        assert jar_failure(spec, 0, False, False) == CookieFailure(
+            True, "no cookies in the database"
+        )
+        assert jar_failure(spec, 3, True, True) is None
+        if undecrypted:
+            report_failure(spec, undecrypted)
+            said = capsys.readouterr().out.splitlines()
+            notice = t("cookies_unreadable", browser, t("cookies_none_decrypted"))
+            assert said == [notice, t("cookies_keyring_hint", browser)]
+
+
+def test_an_empty_database_is_named_without_a_hint(capsys: pytest.CaptureFixture[str]) -> None:
+    for spec in ("chrome", "firefox", "brave+kwallet6"):
+        failure = jar_failure(spec, 0, False, False)
+        assert failure is not None
+        report_failure(spec, failure)
+        assert capsys.readouterr().out.splitlines() == [t("cookies_no_browser", browser_of(spec))]
+
+
+@pytest.mark.parametrize(
+    ("lang", "notice"),
+    [
+        (
+            "es",
+            "No se pudieron leer las cookies de chrome (no se pudo descifrar ninguna)."
+            " Se continúa sin cookies.",
+        ),
+        (
+            "en",
+            "Could not read the chrome cookies (none of them could be decrypted)."
+            " Going on without cookies.",
+        ),
+    ],
+)
+def test_the_undecrypted_notice_reads_in_each_language(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], lang: str, notice: str
+) -> None:
+    # Spec 67's wording, each half from its own block.
+    monkeypatch.setattr(i18n, "LANG", lang)
+    failure = jar_failure("chrome+basictext", 0, False, True)
+    assert failure is not None
+    report_failure("chrome+basictext", failure)
+    assert capsys.readouterr().out.splitlines()[0] == notice
