@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T09:03:26-04:00",
+  "updated": "2026-11-10T09:05:34-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3223,16 +3223,17 @@
     "fix/failure-leftovers": {
       "type": "fix",
       "title": "Remove what a failed or interrupted download leaves",
-      "stage": "development",
-      "status": "changes_requested",
-      "next_agent": "developer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/46-failure-leftovers.md",
       "branch": "fix/failure-leftovers",
       "worktree": ".worktrees/fix-failure-leftovers",
       "commits": [
         "1a4e349",
         "e829fbd",
-        "e9b7044"
+        "e9b7044",
+        "92e95d7"
       ],
       "review": {
         "approved": false,
@@ -3275,6 +3276,13 @@
           "result": "changes_requested",
           "at": "2026-11-10T08:37:14-04:00",
           "note": "Round 1. Gate exit 0 at e9b7044, 2958 passed + 15 xfailed. Many guards held (earlier files byte for byte, container step, merges, Ctrl-C, unexpected errors, multi-URL, wizard, counts and warnings). Mutation 9/9. One medium finding, reachable today only via an injected _TagSource failure, but breaks 'never delete an earlier run's file'. Four stale comments reworded."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T09:05:34-04:00",
+          "note": "Round 1 fixed in 92e95d7: _Ydl.post_process records the files beside the download when post-processing starts; drop_media skips any filepath already on that list. Strict xfail flipped; fails without the guard. Gate exit 0, 2960 passed + 13 xfailed."
         }
       ]
     }
