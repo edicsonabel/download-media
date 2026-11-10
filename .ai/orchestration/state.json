@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T07:24:13-04:00",
+  "updated": "2026-11-10T07:37:47-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3183,6 +3183,27 @@
           "result": "validated",
           "at": "2026-11-10T07:24:13-04:00",
           "note": "Criteria hold: 43 criteria tests pass; console reproduction fixed (no untagged for the failed item; subs_none once). Spec done; row-46 xfail reproduced on the console; PLAN row 69 done, review items 47-49. Worktree and branch removed. CI on 27f42a4 retried by the orchestrator after the apt timeout. CI run 42805905463 on 27f42a4 succeeded on attempt 2 (attempt 1 hit the apt timeout)."
+        }
+      ]
+    },
+    "fix/failure-leftovers": {
+      "type": "fix",
+      "title": "Remove what a failed or interrupted download leaves",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/46-failure-leftovers.md",
+      "branch": "fix/failure-leftovers",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T07:37:47-04:00",
+          "note": "Under the human's overnight delegation. Row 46 gathered several leftovers tonight, one where a failure reads as success on rerun (strict xfail test_a_rerun_does_not_take_a_failed_item_as_saved). Needs no human decision; spec written while ig-lone-images is in QA."
         }
       ]
     }
