@@ -504,7 +504,8 @@ def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(
 def test_a_failed_cover_removes_its_thumbnail_and_nothing_it_did_not_write(
     tmp_path: Path, media_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Driven directly: in a full run yt-dlp's metadata step takes the same temp name next.
+    # Driven directly: in a full run yt-dlp's metadata step goes first, writes to the same
+    # temp name and moves it over the audio, so a planted temp file is gone before the cover.
     from urllib.request import urlopen
 
     from yt_dlp.postprocessor import embedthumbnail
