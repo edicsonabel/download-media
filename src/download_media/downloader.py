@@ -202,8 +202,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         # Thumbnail files this run wrote for the current item, and whether it lost its cover.
         self.item_thumbs: list[str] = []
         self.item_no_cover = False
-        # Files of the current item kept as downloaded: named only if the item is saved.
+        # Files of the current item kept as downloaded, left untagged, or with subtitles not
+        # embedded, and whether it got any subtitle: named or counted only if the item is saved.
         self.item_not_converted: list[str] = []
+        self.item_untagged: list[str] = []
+        self.item_not_embedded: list[str] = []
+        self.item_subs_seen = False
         # Images saved, or found already saved. Post hooks never run for them.
         self.images: list[str] = []
         self.item_images: list[str] = []
@@ -255,7 +259,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     def process_info(self, info_dict: Any) -> Any:
         self.item_errors = len(self.errors)
         self.item_thumbs, self.item_no_cover, self.item_images = [], False, []
-        self.item_not_converted = []
+        self.item_not_converted, self.item_untagged, self.item_not_embedded = [], [], []
+        self.item_subs_seen = False
         self.item_subs, self.item_subs_failed, self.item_subs_empty = [], [], []
         try:
             result = super().process_info(info_dict)
@@ -655,16 +660,13 @@ class _SubtitlesSeen(PostProcessor):  # type: ignore[misc]
     """Record whether an item that reached post-processing got any subtitle file.
 
     Also notes the files that hold no subtitle text: the embed would make an empty track of them.
+    Needs ``_Ydl``, which records both for the current item.
     """
-
-    def __init__(self, seen: list[bool]) -> None:
-        super().__init__()
-        self._seen = seen
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
         files = _subtitle_files(info)
         if files:
-            self._seen.append(True)
+            self._downloader.item_subs_seen = True
         empty = [path for path in files if _subtitle_packets(path) == 0]
         self._downloader.item_subs_empty.extend(empty)
         return [], info
@@ -674,12 +676,12 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
     """Embed the subtitle files in the video, keep them, and never fail the item over it.
 
     yt-dlp's step raises on any ffmpeg error (a TTML track, say), which would report a
-    video already on disk as a failed download.
+    video already on disk as a failed download. Needs ``_Ydl``, which records the files
+    whose subtitles weren't all embedded.
     """
 
-    def __init__(self, downloader: Any, not_embedded: list[str]) -> None:
+    def __init__(self, downloader: Any) -> None:
         super().__init__(downloader, already_have_subtitle=True)
-        self._not_embedded = not_embedded
 
     @classmethod
     def pp_key(cls) -> str:
@@ -720,7 +722,7 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
         # Covers the failure above, containers that can't hold subtitles, srt in webm, json.
         streams = _subtitle_streams(info["filepath"]) if files else None
         if streams is not None and streams < len(files):
-            self._not_embedded.append(Path(info["filepath"]).name)
+            self._downloader.item_not_embedded.append(Path(info["filepath"]).name)
         return [], info
 
 
@@ -748,12 +750,9 @@ class _TagSource(FFmpegMetadataPP):  # type: ignore[misc]
     """yt-dlp's metadata step, except that a file ffmpeg can't tag still counts as saved.
 
     ffmpeg can read an .ogx, a .weba or a renamed file and still have no muxer for it, and
-    yt-dlp would report a file already on disk as a failed download.
+    yt-dlp would report a file already on disk as a failed download. Needs ``_Ydl``, which
+    records the files it couldn't tag.
     """
-
-    def __init__(self, downloader: Any, untagged: list[str]) -> None:
-        super().__init__(downloader)
-        self._untagged = untagged
 
     @classmethod
     def pp_key(cls) -> str:
@@ -777,7 +776,7 @@ class _TagSource(FFmpegMetadataPP):  # type: ignore[misc]
             # Asking ffprobe, not reading ffmpeg's error text: that varies by version.
             if not _has_media_streams(path):
                 raise
-            self._untagged.append(Path(path).name)
+            self._downloader.item_untagged.append(Path(path).name)
             return [], info
 
 
@@ -919,6 +918,8 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     not_converted: list[str] = []
     subs_failed: list[tuple[str, str, str]] = []
     subs_empty: list[str] = []
+    subs_seen: list[bool] = []
+    not_embedded: list[str] = []
     with _Ydl(ydl_opts) as ydl:
         load_browser_cookies(ydl, opts.cookies_browser)
         ydl.save_images = True
@@ -932,6 +933,10 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
                 name = Path(path).name
                 subs_failed.extend((name, lang, why) for lang, why in ydl.item_subs_failed)
                 subs_empty.extend(Path(sub).name for sub in ydl.item_subs_empty)
+                untagged.extend(ydl.item_untagged)
+                not_embedded.extend(ydl.item_not_embedded)
+                if ydl.item_subs_seen:
+                    subs_seen.append(True)
 
         ydl.add_post_hook(keep)
         container = None if opts.audio_only else opts.video_format
@@ -942,7 +947,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         # Appended after the params' postprocessors: audio extraction comes first.
         # Metadata before the cover, as yt-dlp's CLI orders them: the metadata step maps m4a
         # with -vn, which would drop a cover embedded before it.
-        ydl.add_post_processor(_TagSource(ydl, untagged), when="post_process")
+        ydl.add_post_processor(_TagSource(ydl), when="post_process")
         if ydl_opts.get("writethumbnail"):
             ydl.add_post_processor(_EmbedCover(ydl), when="post_process")
         final_ext = opts.audio_format if opts.audio_only else None
@@ -952,13 +957,11 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         ydl.count_entries = bool(items)
         if items:
             ydl.add_post_processor(_PlaylistCount(counts), when="playlist")
-        subs_seen: list[bool] = []
-        not_embedded: list[str] = []
         if opts.subs:
             # After the metadata step, so embedding keeps its source URL tag.
-            ydl.add_post_processor(_SubtitlesSeen(subs_seen), when="post_process")
+            ydl.add_post_processor(_SubtitlesSeen(), when="post_process")
             if not opts.audio_only:
-                ydl.add_post_processor(_EmbedSubtitles(ydl, not_embedded), when="post_process")
+                ydl.add_post_processor(_EmbedSubtitles(ydl), when="post_process")
         returncode = int(ydl.download([url]))
     saved += ydl.images
     # ignoreerrors turns a total failure into a bare return code.
