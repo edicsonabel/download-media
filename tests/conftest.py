@@ -239,6 +239,8 @@ def _write_generic_pages(root: Path, base: str) -> None:
         ),
         "partial-codec": f"<video>{codecs}</video>",
         "audio": f'<audio src="tiny.m4a"></audio>{og_image}',
+        "audio-video-m4a": f'<audio src="clip.m4a"></audio>{og_image}',
+        "audio-png-thumb": f'<audio src="tiny.m4a"></audio>{og("tiny.png")}',
         "audios": '<audio src="a1.m4a"></audio><audio src="a2.m4a"></audio>',
         "video-audio": '<video src="v1.mp4"></video><audio src="a1.m4a"></audio>',
         "jpg-video": '<video src="tiny.jpg"></video><video src="v1.mp4"></video>',
@@ -670,6 +672,17 @@ class FakeSiteIE(InfoExtractor):
             # A text body as the first item's thumbnail: -a can't embed it.
             thumb = f"{self.media_url}/typed/image/jpeg/en.vtt/t.jpg"
             entries = [{**self._video("t1"), "thumbnail": thumb}, self._video("t2")]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "cover-carousel":
+            # Mixed audio sources with working covers: an audio, a video with a PNG, an .m4a
+            # holding a video, and a video with no thumbnail at all.
+            m4a = {"format_id": "m", "url": f"{self.media_url}/clip.m4a", "ext": "m4a"}
+            entries = [
+                {**self._audio("a1"), "thumbnail": f"{self.media_url}/tiny.jpg"},
+                {**self._video("v1"), "thumbnail": f"{self.media_url}/tiny.png"},
+                {**self._with_formats("m1", m4a), "thumbnail": f"{self.media_url}/tiny.jpg"},
+                self._video("v2"),
+            ]
             return self.playlist_result(entries, "post", "Post")
         if page in ("junk-media-carousel", "junk-media-relative-carousel"):
             # Both items have a thumbnail; the first one's audio extraction fails.

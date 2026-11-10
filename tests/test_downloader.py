@@ -359,6 +359,49 @@ def test_metadata_step_is_added_in_download_not_in_the_options(audio_only: bool)
     assert "FFmpegMetadata" not in keys
 
 
+def post_process_steps(
+    opts: DownloadOptions, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> list[str]:
+    """The post_process chain download() hands to yt-dlp, without downloading anything."""
+    from download_media.downloader import _Ydl, download
+
+    steps: list[str] = []
+
+    def record(self: Any, urls: list[str]) -> int:
+        steps.extend(pp.pp_key() for pp in self._pps["post_process"])
+        return 0
+
+    monkeypatch.setattr(_Ydl, "download", record)
+    opts.output = tmp_path / "out"
+    download("http://x", opts)
+    return steps
+
+
+COVER_CHAIN = ["ExtractAudio", "Metadata", "EmbedThumbnail"]
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        ({"audio_only": True, "audio_format": "mp3"}, COVER_CHAIN),
+        ({"audio_only": True, "audio_format": "m4a"}, COVER_CHAIN),
+        ({"audio_only": True, "audio_format": "opus"}, COVER_CHAIN),
+        ({"audio_only": True, "audio_format": "wav"}, ["ExtractAudio", "Metadata"]),
+        ({"video_format": "mp4"}, ["VideoConvertor", "Metadata"]),
+        ({"video_format": "mkv"}, ["VideoRemuxer", "Metadata"]),
+        ({"video_format": "webm"}, ["VideoConvertor", "Metadata"]),
+    ],
+    ids=["mp3", "m4a", "opus", "wav", "video-mp4", "video-mkv", "video-webm"],
+)
+def test_audio_mode_tags_before_the_cover(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flags: dict[str, Any], expected: list[str]
+) -> None:
+    # yt-dlp's metadata step maps m4a with -vn, which drops a cover embedded before it.
+    # Video mode has no cover step, and tags the file in its final container.
+    opts = DownloadOptions(urls=["http://x"], **flags)
+    assert post_process_steps(opts, tmp_path, monkeypatch) == expected
+
+
 def fake_ffprobe(folder: Path, script: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Put an ``ffprobe`` running ``script`` first and alone on PATH."""
     folder.mkdir()
@@ -461,7 +504,8 @@ def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(
 def test_a_failed_cover_removes_its_thumbnail_and_nothing_it_did_not_write(
     tmp_path: Path, media_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Driven directly: in a full run yt-dlp's metadata step takes the same temp name next.
+    # Driven directly: in a full run yt-dlp's metadata step goes first, writes to the same
+    # temp name and moves it over the audio, so a planted temp file is gone before the cover.
     from urllib.request import urlopen
 
     from yt_dlp.postprocessor import embedthumbnail
