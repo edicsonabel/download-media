@@ -65,6 +65,8 @@ class Probe:
     needs_cookies: bool = False
     failed: bool = False
     may_hold_video: bool = False  # Audio by a label only: the file may hold a video.
+    # A lone image the download saves through its thumbnail; other lone images are refused.
+    saveable_image: bool = False
     error_message: str | None = None
     # The browser's cookies couldn't be loaded, so nothing was inspected.
     cookie_failure: CookieFailure | None = None
@@ -358,6 +360,7 @@ def _read_result(url: str, site: str, data: Any, errors: list[str]) -> Probe:
         filesize=data.get("filesize_approx") or data.get("filesize"),
         may_hold_video=kind == ContentKind.SINGLE_AUDIO
         and any(_audio_by_label_only(f) or _declared_video(f, data) for f in _formats(data)),
+        saveable_image=kind == ContentKind.SINGLE_IMAGE and is_saveable_image(data),
     )
 
 

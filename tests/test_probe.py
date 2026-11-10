@@ -956,6 +956,29 @@ def test_probe_does_not_ask_for_cookies_when_they_cannot_help(fake_site: Any, pa
     assert result.needs_cookies is False
 
 
+@pytest.mark.parametrize(
+    ("page", "cookies", "saveable"),
+    [
+        ("ig-lone-image", "firefox", True),
+        ("thumbnail-image", None, True),
+        ("ig-image", None, True),
+        ("image-format", None, False),
+    ],
+)
+def test_probe_tells_a_lone_image_it_can_save(
+    fake_site: Any, page: str, cookies: str | None, saveable: bool
+) -> None:
+    result = probe(f"https://fake.test/{page}", cookies)
+    assert result.failed is False
+    assert result.content_kind == IMAGE
+    assert result.saveable_image is saveable
+
+
+@pytest.mark.parametrize("page", ["video", "ig-carousel", "audio-carousel"])
+def test_probe_calls_nothing_else_a_saveable_image(fake_site: Any, page: str) -> None:
+    assert probe(f"https://fake.test/{page}").saveable_image is False
+
+
 def test_probe_drops_the_bug_report_request(fake_site: Any) -> None:
     result = probe("https://fake.test/extractor-bug")
     assert result.error_message == "Unable to extract video data"

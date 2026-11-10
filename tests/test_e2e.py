@@ -4086,7 +4086,7 @@ def test_split_streams_with_unknown_codecs_are_merged(run: Any, out: Path, answe
     assert streams(out / "Clip.mp4") == {"audio", "video"}
 
 
-@pytest.mark.parametrize("page", ["image-format", "ig-image"])
+@pytest.mark.parametrize("page", ["image-format"])
 def test_wizard_on_a_lone_format_without_streams_is_refused_as_an_image(
     run: Any, out: Path, answers: Any, page: str
 ) -> None:
@@ -5387,7 +5387,7 @@ def test_an_empty_entry_is_not_called_an_image(wizard_on: Any, out: Path) -> Non
     assert names(out) == ["01 - Clip [v2].mp4"]
 
 
-@pytest.mark.parametrize("page", ["ig-image", "image-format", "thumbnail-image"])
+@pytest.mark.parametrize("page", ["image-format"])
 def test_a_lone_image_is_refused_at_once(wizard_on: Any, out: Path, page: str) -> None:
     code, output = wizard_on(f"https://fake.test/{page}", "")
     assert code == 1
@@ -5898,7 +5898,7 @@ def test_wizard_does_not_ask_for_cookies_on_a_404_whose_id_is_a_login_word(
 
 
 # Several URLs in the wizard: one walk each, then every download (spec 19).
-IMAGE = "https://fake.test/ig-image"
+IMAGE = "https://fake.test/image-format"
 ONLY_IMAGES = "https://fake.test/only-images"
 BRAVE = str(BROWSERS.index("brave") + 2)
 
@@ -11187,3 +11187,54 @@ def test_the_preview_reads_a_carousel(run: Any, out: Path, answers: Any) -> None
     assert f"{t('p_title')}: Post" in before
     assert "ERROR:" not in before
     assert names(out) == IG_SINGLE
+
+
+@pytest.mark.parametrize("flags", [(), ("-a",)], ids=["video", "audio"])
+def test_wizard_with_cookies_walks_only_the_folder_for_a_lone_image(
+    wizard_on: Any, pasted: Any, out: Path, again: Path, flags: tuple[str, ...]
+) -> None:
+    # URL, folder, cookies.
+    code, output = wizard_on(LONE_IMAGE, "", "", "", flags=(*flags, *WITH_COOKIES))
+    assert code == 0
+    assert detected("kind_image") in output
+    for step in ("ask_type", "ask_quality", "ask_vformat", "ask_aformat"):
+        assert t(step) not in output
+    assert names(out) == [LONE_NAME]
+    assert t("image_alone_saved", LONE_NAME) in output
+    [line] = commands(output)
+    assert line == f"download-media -y -o {out} --cookies firefox {LONE_IMAGE}"
+    code, _ = pasted(line, again)
+    assert code == 0
+    assert names(again) == [LONE_NAME]
+
+
+@pytest.mark.parametrize("page", ["thumbnail-image", "ig-image"])
+def test_wizard_saves_another_site_s_lone_image(wizard_on: Any, out: Path, page: str) -> None:
+    # URL, folder, cookies.
+    code, output = wizard_on(f"https://fake.test/{page}", "", "", "")
+    assert code == 0
+    assert detected("kind_image") in output
+    assert t("image_only_skipped") not in output
+    assert names(out) == [LONE_NAME]
+    assert t("image_alone_saved", LONE_NAME) in output
+
+
+def test_wizard_in_list_mode_names_a_lone_image(wizard_on: Any, out: Path) -> None:
+    # URL, folder, cookies; then the listing.
+    code, output = wizard_on(LONE_IMAGE, "", "", "", flags=("-l", *WITH_COOKIES))
+    assert code == 0
+    assert t("item_image_skipped", "i1") in output
+    assert names(out) == []
+
+
+def test_wizard_saves_a_lone_image_among_other_urls(wizard_urls: Any, out: Path) -> None:
+    argv = ["-i", *WITH_COOKIES, "-o", str(out), VIDEO, LONE_IMAGE]
+    # Video: URL, type, quality, container, folder, cookies. Image: URL, folder, cookies.
+    code, output, asked = wizard_urls(argv, *[""] * 6, *[""] * 3)
+    assert asked == 9
+    assert code == 0
+    assert names(out) == sorted(["Clip.mp4", LONE_NAME])
+    assert t("wizard_skipped", LONE_IMAGE) not in output
+    assert commands(output) == [
+        f"download-media -y -o {out} --cookies firefox {VIDEO} {LONE_IMAGE}"
+    ]
