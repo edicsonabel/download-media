@@ -42,3 +42,11 @@ def test_not_converted_names_the_file_and_the_container() -> None:
         said = _MESSAGES[lang]["not_converted"].format("Clip.mkv", "webm")
         assert "Clip.mkv" in said
         assert "webm" in said
+
+
+def test_refusals_do_not_say_cancelling() -> None:
+    # Nothing is cancelled: the run goes on, the picker asks again, or direct mode fails.
+    for lang in ("es", "en"):
+        for key in ("image_only_skipped", "no_supported_items"):
+            assert "Cancel" not in _MESSAGES[lang][key]
+            assert "Cancelando" not in _MESSAGES[lang][key]

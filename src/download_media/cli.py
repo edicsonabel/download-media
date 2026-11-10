@@ -8,11 +8,13 @@ equivalent-command hint at the end.
 from __future__ import annotations
 
 import argparse
+import os
+import signal
 import sys
 import traceback
 from dataclasses import replace
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, NoReturn
 
 from yt_dlp.utils import DownloadError
 
@@ -323,6 +325,17 @@ class _Outcome(NamedTuple):
     mode: PlaylistMode | None  # None: cancelled before the download started.
 
 
+EXIT_INTERRUPTED = 130  # What a shell reports for a process ended by SIGINT.
+
+
+class _Interrupted(KeyboardInterrupt):
+    """Ctrl-C during a download: that URL's outcome, for the equivalent command."""
+
+    def __init__(self, outcome: _Outcome) -> None:
+        super().__init__()
+        self.outcome = outcome
+
+
 def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
     """Run the full per-URL pipeline."""
     # Wizard mode already resolved playlist + items in opts.
@@ -369,8 +382,9 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         _hint_for_download_error(str(exc), opts)
         return _Outcome(False, False, pmode)
     except KeyboardInterrupt:
-        warn(t("cancelled"))
-        raise
+        print()  # The cursor may sit at the end of yt-dlp's progress line.
+        warn(t("interrupted", url, effective.resolve_output()))
+        raise _Interrupted(_Outcome(False, False, pmode)) from None
     except OutputUnusable as exc:
         err(t("output_unusable", exc.path, exc.reason))
         warn(t("failed", url))
@@ -534,6 +548,15 @@ def _print_equivalent(runs: list[tuple[str, DownloadOptions]], outcomes: list[_O
 # main
 # ---------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    except KeyboardInterrupt:
+        print()  # Ctrl-C at a prompt leaves the cursor after it.
+        warn(t("cancelled"))
+        return EXIT_INTERRUPTED
+
+
+def _main(argv: list[str] | None) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = build_parser().parse_args(raw_argv)
     opts = options_from_args(args)
@@ -545,18 +568,15 @@ def main(argv: list[str] | None = None) -> int:
             result = wizard.run(opts)
             if result is None:
                 warn(t("cancelled"))
-                return 0
+                return 1
             opts = result
         else:
             walked = wizard.run_all(opts)
             if walked is None:
                 warn(t("cancelled"))
-                return 0
+                return 1
             runs = [(url, walk) for url, walk in walked if walk is not None]
             refused = [url for url, walk in walked if walk is None]
-            if not runs:
-                warn(t("cancelled"))
-                return 0
 
     if runs is None:
         # Direct mode without URL: try clipboard once (no prompt — just use it if found)
@@ -574,14 +594,53 @@ def main(argv: list[str] | None = None) -> int:
 
         runs = [(url, opts) for url in opts.urls]
 
-    outcomes = [_download_one(url, url_opts) for url, url_opts in runs]
+    outcomes: list[_Outcome] = []
+    interrupted = False
+    for url, url_opts in runs:
+        try:
+            outcomes.append(_download_one(url, url_opts))
+        except _Interrupted as exc:
+            outcomes.append(exc.outcome)
+            interrupted = True
+            break
+        except KeyboardInterrupt:
+            print()
+            warn(t("cancelled"))
+            outcomes.append(_Outcome(False, False, None))
+            interrupted = True
+            break
+    outcomes += [_Outcome(False, False, None)] * (len(runs) - len(outcomes))
     for url in refused:
         warn(t("wizard_skipped", url))
     _print_equivalent(runs, outcomes)
-    # A URL the wizard refused never reached the download, so it doesn't count.
-    return 0 if all(outcome.ok for outcome in outcomes) else 1
+    if interrupted:
+        return EXIT_INTERRUPTED
+    # 0 only when every URL given was saved: a refused one wasn't.
+    return 0 if outcomes and not refused and all(outcome.ok for outcome in outcomes) else 1
+
+
+def entry() -> NoReturn:
+    """The console script: after Ctrl-C, end by SIGINT, so a calling shell loop stops too."""
+    try:
+        code = main()
+    except KeyboardInterrupt:  # A second Ctrl-C while main() printed its cancel line.
+        code = EXIT_INTERRUPTED
+    if code == EXIT_INTERRUPTED:
+        # Without the flush, output still buffered for a pipe dies with the process.
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                stream.flush()
+            except OSError:
+                # The pipe's reader died from the same Ctrl-C (`| tee log`). Point the stream
+                # at devnull, so Python's shutdown has nothing left to fail on.
+                devnull = os.open(os.devnull, os.O_WRONLY)
+                os.dup2(devnull, stream.fileno())
+                os.close(devnull)
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        os.kill(os.getpid(), signal.SIGINT)
+    sys.exit(code)
 
 
 # Re-export the build helper so tests / callers can introspect what we'd pass
 # to yt-dlp without actually downloading.
-__all__ = ["build_parser", "build_ydl_opts", "main", "options_from_args"]
+__all__ = ["build_parser", "build_ydl_opts", "entry", "main", "options_from_args"]

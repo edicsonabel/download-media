@@ -108,6 +108,16 @@ download-media -P <url>                   # force single video (ignore playlist)
 -h, --help                 Show help
 ```
 
+## Exit status
+
+- **0:** every URL given was saved (warnings allowed).
+- **1:** any URL wasn't saved: it failed, the wizard couldn't save it, or it was cancelled or
+  declined at a prompt (`c`, `n`, end of input). Also a missing URL.
+- **2:** invalid options.
+- **130:** Ctrl-C (the process ends by SIGINT, so a calling script loop stops too). A download
+  interrupted this way names its folder, since unfinished files may be left there, and the
+  printed equivalent command resumes it.
+
 ## History
 
 Every successful download is appended to `~/.local/state/download-media/history.log` as TSV:
