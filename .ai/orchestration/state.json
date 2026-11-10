@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:56:51-04:00",
+  "updated": "2026-11-10T05:03:23-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2679,12 +2679,12 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
-      "worktree": ".worktrees/fix-subs-failures",
+      "worktree": null,
       "commits": [
         "1ddf169",
         "26980ac",
@@ -2693,7 +2693,8 @@
         "88121be",
         "4d4f725",
         "1a841c7",
-        "e447bea"
+        "e447bea",
+        "9e1f396"
       ],
       "review": {
         "approved": true,
@@ -2781,6 +2782,13 @@
           "result": "merged",
           "at": "2026-11-10T04:56:51-04:00",
           "note": "Merged as e447bea, no conflicts (tree identical to QA's merge-tree). Gate exit 0 (first with kind-edges + this item), 2526 passed + 11 xfailed. Undo: git revert -m 1 e447bea. Pushed by the orchestrator under the delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T05:03:23-04:00",
+          "note": "Criteria hold: 121 criteria tests pass; console runs (404, cut under -p, junk .vtt in mp4/mkv/-a, failed video single and -p, two runs keeping the earlier subtitle) in en/es match. Spec done, Design 2 fixed to 4d4f725, .part judgement recorded, QA minors noted; PLAN row 36 done, review items 38-42. CI on e54e5c2 pending at validation. Worktree and branch removed."
         }
       ]
     },
