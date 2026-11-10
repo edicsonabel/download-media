@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T00:18:28-04:00",
+  "updated": "2026-11-10T00:31:42-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "qa_review",
-      "status": "in_review",
-      "next_agent": "qa-reviewer",
+      "stage": "testing",
+      "status": "in_progress",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2242,7 +2242,9 @@
       ],
       "review": {
         "approved": true,
-        "findings": []
+        "findings": [
+          "minor tests/test_e2e.py test_an_item_that_failed_is_not_named_as_untagged: reason says pre-existing on main, but with the rotated fixture it passes on main; an unrotated silent video fails on both"
+        ]
       },
       "history": [
         {
@@ -2335,6 +2337,20 @@
           "result": "done",
           "at": "2026-11-10T00:13:45-04:00",
           "note": "Round 2 closed in real runs (rotated mov with and without audio, per-item naming in -p, --playlist-items over 3 URLs es, wizard). Mutation 7/8, survivor equivalent. Gate exit 0 at 95533c9, 2194 passed + 4 xfailed. Pre-existing on main, strict xfail in 95533c9, planner row: under -a -p an item that fails audio extraction is named in untagged next to 1 failed."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "qa-reviewer",
+          "result": "approved",
+          "at": "2026-11-10T00:31:42-04:00",
+          "note": "Re-check of 4360f86..95533c9 approved. Gate exit 0, 2194 passed + 4 xfailed es/en. All 8 new commits pass lint/mypy and targeted tests alone; xfails flip as stated. QA mutations 4/4. Real runs: rotated mov/mp4 in every container, ffprobe-unable in single/-p/wizard, ordinary runs, en and es, match disk, history, summary, command. One minor on the out-of-scope xfail's fixture. Seen on main: text body as .webm tagged into a subtitle-only .webm, Done.; empty stdin at preview (cancel-exits' area)."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T00:31:42-04:00",
+          "note": "Merge under the human's earlier approval (fix minor 1, then merge and push) and the overnight delegation. First the test-engineer moves the out-of-scope xfail to an unrotated silent video (tests only); the tech-lead's gate on the merged tree covers it."
         }
       ]
     },
