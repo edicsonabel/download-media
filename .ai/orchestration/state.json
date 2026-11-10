@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T23:39:52-04:00",
+  "updated": "2026-11-09T23:40:00-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2348,6 +2348,27 @@
           "result": "approved",
           "at": "2026-11-09T23:39:52-04:00",
           "note": "Spec approved under the human's overnight delegation, every recommended option (D1 swap, D2 no on-disk check, D3 accept ID3v2.3, D4 order pinned in a unit test plus one manual mutagen run). Not breaking. For the 0.4.0 review list: m4a gains a covr stream; mp3 ID3v2.4 to v2.3; with mutagen, opus keeps its tags and loses the untagged warning; log order. Development starts after container-choice merges."
+        }
+      ]
+    },
+    "fix/cookies-undecrypted": {
+      "type": "fix",
+      "title": "Say so when the browser's cookies load but none decrypt",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/67-cookies-undecrypted.md",
+      "branch": "fix/cookies-undecrypted",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-09T23:40:00-04:00",
+          "note": "Next P2 in PLAN.md's order, under the human's overnight delegation. Spec written in parallel; development waits its turn."
         }
       ]
     }
