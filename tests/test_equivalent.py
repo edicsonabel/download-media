@@ -201,3 +201,18 @@ def test_custom_output_path_emitted() -> None:
     cmd = build(DownloadOptions(urls=["https://x"], output=Path("/tmp/abc")))
     assert "-o" in cmd
     assert "/tmp/abc" in cmd
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="pre-existing: build() never emits '--', so a URL that starts with '-' is "
+    "printed as a flag and the command no longer repeats the run",
+)
+@pytest.mark.parametrize("url", ["-a", "-x"])
+def test_a_url_that_starts_with_a_dash_round_trips(url: str) -> None:
+    # `download-media -y -- -a` reaches the download (spec 22 sends `-- -a` to the wizard).
+    cmd = build(DownloadOptions(urls=[url]))
+    try:
+        assert parse_back(cmd).urls == [url], cmd
+    except SystemExit:
+        pytest.fail(f"usage error: {cmd}")
