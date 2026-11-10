@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:14:42-04:00",
+  "updated": "2026-11-10T04:24:17-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2754,9 +2754,9 @@
     "fix/kind-edges": {
       "type": "fix",
       "title": "Close the remaining media-kind edge cases",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/37-kind-edges.md",
       "branch": "fix/kind-edges",
       "worktree": ".worktrees/fix-kind-edges",
@@ -2765,7 +2765,8 @@
         "1f852cc",
         "ae4adf9",
         "ec60e65",
-        "ad5a4fe"
+        "ad5a4fe",
+        "8930354"
       ],
       "review": {
         "approved": true,
@@ -2827,6 +2828,13 @@
           "result": "approved",
           "at": "2026-11-10T04:07:44-04:00",
           "note": "Merge and push under the overnight delegation."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-10T04:24:17-04:00",
+          "note": "Merged as 8930354, clean. Gate exit 0, 2440 passed + 11 xfailed es/en. Undo: git revert -m 1 8930354. Pushed by the orchestrator under the delegation."
         }
       ]
     },
