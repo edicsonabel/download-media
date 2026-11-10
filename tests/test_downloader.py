@@ -390,6 +390,12 @@ def fake_ffprobe(folder: Path, script: str, monkeypatch: pytest.MonkeyPatch) -> 
         # streams again, after a blank row), and an MPEG-TS (its program does the same).
         ("printf 'video,\\ndata\\n\\nvideo,\\naudio\\ndata\\n'", True),
         ("printf 'video\\naudio\\n\\nvideo\\naudio\\n\\n\\n'", True),
+        # Blank rows hold no stream: with nothing else, the file holds none either.
+        ("printf '\\n\\n'", False),
+        ("printf 'subtitle,\\n\\ndata,\\n'", False),
+        # Past a blank row, a word ffprobe never prints still means no answer.
+        ("printf 'video\\n\\ngarbage\\n'", None),
+        ("printf 'video,\\n\\ngarbage,\\n'", None),
     ],
 )
 def test_media_streams_by_what_ffprobe_says(

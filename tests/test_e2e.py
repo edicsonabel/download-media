@@ -8493,6 +8493,44 @@ def test_an_item_that_failed_is_not_named_as_not_converted(
 
 
 @pytest.mark.parametrize(
+    ("flags", "replies", "prefix"),
+    [
+        (("-y",), (), ""),
+        (("-y", "-p"), (), "0{} - "),
+        (("-y", "--playlist-items", "1,2"), (), "0{} - "),
+        ((), PICKER_WALK, "0{} - "),
+    ],
+    ids=["single", "-p", "--playlist-items", "wizard"],
+)
+def test_every_item_kept_as_downloaded_is_named_once(
+    generic: Any,
+    home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flags: tuple[str, ...],
+    replies: tuple[str, ...],
+    prefix: str,
+) -> None:
+    # Each item notes its own name: one that took the last item's, or kept the earlier
+    # ones, would drop a name or say one twice.
+    folder = home / "Videos"
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("missing"))
+        code, output = generic("webm-and-attached.html", *replies, flags=flags)
+    kept = [
+        f"{prefix.format(n)}webm-and-attached ({n}) [webm-and-attached-{n}].{ext}"
+        for n, ext in ((1, "webm"), (2, "mkv"))
+    ]
+    assert code == 0
+    assert names(folder) == kept
+    for name in kept:
+        assert output.count(t("not_converted", name, "mp4")) == 1
+    assert output.count(t("not_converted", "", "")[:4]) == 2
+    assert not said_partial_result(output)
+    assert container_steps(output) == 0
+    assert t("done") in output
+
+
+@pytest.mark.parametrize(
     ("flags", "saved"),
     [
         ((), ["Clip [v1].mp4", "Clip [x1].mkv"]),
