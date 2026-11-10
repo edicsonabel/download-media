@@ -193,8 +193,18 @@ def _audio_by_label_only(fmt: dict[str, Any]) -> bool:
     # A Content-Type or an <audio> tag says 'none' and names no audio codec:
     # nothing looked at the stream, and the container can hold a video.
     ext = fmt.get("ext")
-    ext = ext.lower() if isinstance(ext, str) else ext  # yt-dlp keeps the URL's case.
     return fmt.get("vcodec") == "none" and fmt.get("acodec") is None and not _ext_says_audio(ext)
+
+
+def _declared_video(fmt: dict[str, Any], info: dict[str, Any]) -> bool:
+    # On a page, <audio> sets vcodec 'none' over a type that declared a video, and that type
+    # still sets ext (common.py:3363, :3450). Site extractors read manifests: not them.
+    ext = str(fmt.get("ext") or "").lower()
+    return (
+        info.get("extractor_key") == "HTML5MediaEmbed"
+        and fmt.get("vcodec") == "none"
+        and ext in MEDIA_EXTENSIONS.video
+    )
 
 
 def _format_kind(fmt: dict[str, Any]) -> ContentKind:
@@ -210,7 +220,7 @@ def _format_kind(fmt: dict[str, Any]) -> ContentKind:
     ext = fmt.get("ext")
     if _ext_says_audio(ext):
         return ContentKind.SINGLE_AUDIO
-    if ext in MEDIA_EXTENSIONS.thumbnails:
+    if str(ext or "").lower() in MEDIA_EXTENSIONS.thumbnails:
         return ContentKind.UNKNOWN  # Offered, never refused: a direct .jpg downloads.
     return ContentKind.SINGLE_VIDEO
 
@@ -274,6 +284,14 @@ def _has_thumbnail(info: dict[str, Any]) -> bool:
     return bool(info.get("thumbnails") or info.get("thumbnail"))
 
 
+def _only_storyboards(info: dict[str, Any]) -> bool:
+    # A preview of a video yt-dlp couldn't get, not an image: its format selection fails it.
+    formats = _formats(info)
+    return bool(formats) and all(
+        str(f.get("ext") or "").lower() in MEDIA_EXTENSIONS.storyboards for f in formats
+    )
+
+
 def _classify_single(data: dict[str, Any]) -> ContentKind:
     kind = _media_kind(data)
     if kind is not None:
@@ -291,6 +309,8 @@ class _ProbeYdl(_Ydl):
     """
 
     def process_video_result(self, info_dict: dict[str, Any], download: bool = True) -> Any:
+        if _only_storyboards(info_dict):
+            return super().process_video_result(info_dict, download=download)
         kind = _media_kind(info_dict)
         known = info_dict.get("playlist_index") or _has_thumbnail(info_dict)
         if kind == ContentKind.SINGLE_IMAGE or (kind is None and known):
@@ -337,7 +357,7 @@ def _read_result(url: str, site: str, data: Any, errors: list[str]) -> Probe:
         duration=_seconds(data),
         filesize=data.get("filesize_approx") or data.get("filesize"),
         may_hold_video=kind == ContentKind.SINGLE_AUDIO
-        and any(_audio_by_label_only(f) for f in _formats(data)),
+        and any(_audio_by_label_only(f) or _declared_video(f, data) for f in _formats(data)),
     )
 
 

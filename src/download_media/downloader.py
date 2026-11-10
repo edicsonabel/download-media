@@ -44,12 +44,20 @@ from .selection import missing_items
 
 # yt-dlp lists these as audio, yet they can hold a video it would keep. A wrong
 # "audio" converts and deletes that video; a wrong "video" only keeps the raw file.
-# .m4a isn't one: yt-dlp's metadata step already strips video from it.
+# .m4a isn't one: yt-dlp's metadata step already strips video from it, though only
+# from an extension written "m4a".
 _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO = frozenset({"asf", "m4b", "ogg", "ogx", "wma"})
 
 
 def _ext_says_audio(ext: Any) -> bool:
-    return ext in MEDIA_EXTENSIONS.audio and ext not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO
+    if not isinstance(ext, str):
+        return False
+    low = ext.lower()  # yt-dlp keeps the URL's case.
+    # yt-dlp's metadata step strips the video only from an extension written "m4a"
+    # (target_ext == 'm4a'): an .M4A keeps it, like an .m4b.
+    if low == "m4a" and ext != "m4a":
+        return False
+    return low in MEDIA_EXTENSIONS.audio and low not in _AUDIO_LISTED_BUT_MAY_HOLD_VIDEO
 
 
 # The generic extractor leaves an image's codecs unknown, so yt-dlp's own guard lets it through.
@@ -58,6 +66,8 @@ _IMAGE_EXTS = frozenset({*MEDIA_EXTENSIONS.thumbnails, "gif", "jpeg"})
 
 def _converts(info: dict[str, Any]) -> bool:
     """What the probe calls video: the container choice applies to it."""
+    # Lowercased first, so an .M4A stays raw: converting an uppercase name doubles its
+    # extension (yt-dlp's replace_extension only replaces a lowercase one).
     ext = (info.get("ext") or "").lower()
     vcodec = info.get("vcodec")
     if vcodec == "none" or ext in _IMAGE_EXTS:

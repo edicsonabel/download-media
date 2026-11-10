@@ -214,6 +214,15 @@ IMAGE, AUDIO, VIDEO, UNKNOWN = (
         ({"vcodec": None, "acodec": "mp4a.40.2", "ext": "mp4"}, VIDEO),
         ({"ext": "mp4"}, VIDEO),
         ({}, VIDEO),
+        # yt-dlp keeps the URL's case: an uppercase extension reads as its lowercase form...
+        *(
+            ({"vcodec": None, "acodec": None, "ext": e}, AUDIO)
+            for e in ("MP3", "FLAC", "WAV", "AAC", "Opus")
+        ),
+        *(({"vcodec": None, "acodec": None, "ext": e}, UNKNOWN) for e in ("JPG", "PNG", "WebP")),
+        *(({"vcodec": None, "acodec": None, "ext": e}, VIDEO) for e in ("OGG", "WMA")),
+        # ...but yt-dlp strips the video only from an extension written "m4a".
+        *(({"vcodec": None, "acodec": None, "ext": e}, VIDEO) for e in ("M4A", "M4a")),
     ],
 )
 @pytest.mark.parametrize(
@@ -340,6 +349,8 @@ def may_hold_video(*formats: dict[str, Any]) -> bool:
             ([{"vcodec": None, "acodec": None, "ext": e}], False)
             for e in EXT_MAY_HOLD_VIDEO + EXT_SAYS_AUDIO
         ),
+        # yt-dlp's metadata step keeps the video of an .M4A: only "m4a" loses it.
+        *(([{"vcodec": "none", "acodec": None, "ext": e}], True) for e in ("M4A", "M4a")),
         ([{"vcodec": "none", "acodec": "opus", "ext": "webm"}], False),
         ([{"vcodec": "none", "acodec": "none", "ext": "mp4"}], False),
         # An HLS audio rendition next to its video variants: the result is a video.
@@ -408,9 +419,53 @@ def test_a_url_only_result_whose_extension_says_audio_is_not_flagged(ext: str) -
     assert result.may_hold_video is False
 
 
-@pytest.mark.parametrize("ext", ["MP3", "M4A", "WAV", "FLAC", "Opus"])
+@pytest.mark.parametrize("ext", ["MP3", "WAV", "FLAC", "Opus"])
 def test_an_uppercase_extension_that_says_audio_is_not_flagged(ext: str) -> None:
     assert may_hold_video({"vcodec": "none", "acodec": None, "ext": ext}) is False
+
+
+def flagged_from(extractor_key: str | None, *formats: dict[str, Any]) -> bool:
+    data: dict[str, Any] = {"id": "i", "title": "t", "formats": list(formats)}
+    if extractor_key is not None:
+        data["extractor_key"] = extractor_key
+    return _read_result("http://x/f", "generic", data, []).may_hold_video
+
+
+PAGE_PARSER = "HTML5MediaEmbed"
+
+
+@pytest.mark.parametrize("ext", ["ogv", "mp4", "webm", "MP4"])
+@pytest.mark.parametrize("acodec", ["vorbis", "mp4a.40.2", "opus", None])
+def test_an_audio_tag_declaring_a_video_container_is_flagged(ext: str, acodec: str | None) -> None:
+    assert flagged_from(PAGE_PARSER, {"vcodec": "none", "acodec": acodec, "ext": ext}) is True
+
+
+@pytest.mark.parametrize(
+    "ext,acodec", [("ogg", "vorbis"), ("oga", "vorbis"), ("m4a", "mp4a.40.2"), ("mp3", "mp3")]
+)
+def test_an_audio_tag_on_an_audio_container_with_a_named_codec_is_not_flagged(
+    ext: str, acodec: str
+) -> None:
+    assert flagged_from(PAGE_PARSER, {"vcodec": "none", "acodec": acodec, "ext": ext}) is False
+
+
+@pytest.mark.parametrize("extractor_key", ["Generic", "Youtube", "FakeSite", None])
+@pytest.mark.parametrize("ext,acodec", [("webm", "opus"), ("mp4", "mp4a.40.2"), ("ogv", "vorbis")])
+def test_a_named_codec_on_a_video_container_from_elsewhere_is_not_flagged(
+    extractor_key: str | None, ext: str, acodec: str
+) -> None:
+    fmt = {"vcodec": "none", "acodec": acodec, "ext": ext}
+    assert flagged_from(extractor_key, fmt) is False
+
+
+def test_a_declared_video_flags_neither_a_playlist_nor_a_video_result() -> None:
+    declared = {"vcodec": "none", "acodec": "vorbis", "ext": "ogv"}
+    entry = {"id": "e", "extractor_key": PAGE_PARSER, "formats": [declared]}
+    data = {"id": "p", "extractor_key": PAGE_PARSER, "entries": [entry]}
+    playlist = _read_result("http://x/f", "generic", data, [])
+    assert playlist.is_playlist
+    assert playlist.may_hold_video is False
+    assert flagged_from(PAGE_PARSER, declared, {"vcodec": "theora", "ext": "ogv"}) is False
 
 
 KINDS_WEAKEST_FIRST = [
@@ -1050,6 +1105,41 @@ def test_an_entry_that_really_failed_is_not_handed_back(
     assert result.error_message == reason
     assert [item.kind for item in result.items] == [VIDEO, ContentKind.UNKNOWN]
     assert [item.supported for item in result.items] == [True, False]
+
+
+@pytest.mark.parametrize(
+    "formats,handed_to_yt_dlp",
+    [
+        ([STORYBOARD], True),
+        ([STORYBOARD, {**STORYBOARD, "format_id": "sb1", "ext": "MHTML"}], True),
+        ([{"vcodec": "none", "acodec": "none", "ext": "jpg", "format_note": "thumbnail"}], False),
+        # Only a result made of storyboards alone goes: an image next to one stays an image,
+        # and so does a result with no formats at all.
+        (
+            [STORYBOARD, {"vcodec": "none", "acodec": "none", "ext": "jpg", "format_id": "t"}],
+            False,
+        ),
+        ([], False),
+    ],
+    ids=["storyboard", "storyboards", "image-format", "storyboard-and-image", "no-formats"],
+)
+def test_a_storyboard_only_result_goes_to_yt_dlp(
+    monkeypatch: pytest.MonkeyPatch, formats: list[dict[str, Any]], handed_to_yt_dlp: bool
+) -> None:
+    from download_media.downloader import _Ydl
+
+    seen: list[dict[str, Any]] = []
+
+    def process(self: Any, info_dict: dict[str, Any], download: bool = True) -> Any:
+        seen.append(info_dict)
+        return None
+
+    monkeypatch.setattr(_Ydl, "process_video_result", process)
+    info = {"id": "s", "formats": formats, "thumbnails": [{"url": "http://x/i.jpg"}]}
+    with _ProbeYdl({"quiet": True}) as ydl:
+        returned = ydl.process_video_result(info, download=False)
+    assert seen == ([info] if handed_to_yt_dlp else [])
+    assert (returned is info) is not handed_to_yt_dlp
 
 
 def test_failures_are_read_at_their_own_position(fake_site: Any) -> None:

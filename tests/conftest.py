@@ -284,6 +284,14 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "video-m4b": '<video src="clip.m4b"></video>',
         "video-wma": '<video src="clip.wma"></video>',
         "video-m4a": '<video src="clip.m4a"></video>',
+        # yt-dlp keeps the URL's case in ext, and fills no acodec in from an uppercase one.
+        "video-upper-mp3": '<video src="typed/audio/mpeg/tiny.mp3/TINY.MP3"></video>',
+        "video-upper-flac": '<video src="typed/audio/flac/tiny.flac/TINY.FLAC"></video>',
+        "video-upper-wav": '<video src="typed/audio/x-wav/tiny.wav/TINY.WAV"></video>',
+        "video-upper-opus": '<video src="typed/audio/ogg/tiny.opus/TINY.OPUS"></video>',
+        "video-upper-jpg": '<video src="typed/image/jpeg/tiny.jpg/TINY.JPG"></video>',
+        "video-mixed-png": '<video src="typed/image/png/tiny.png/Tiny.Png"></video>',
+        "video-upper-m4a-video": '<video src="typed/video/mp4/clip.m4a/CLIP.M4A"></video>',
         "og-video-ogg": f'<meta property="og:video" content="{base}/theora.ogg">',
         "video-tag-audio-ogg": '<video src="tiny.ogg"></video>',
         "video-tag-audio-m4b": '<video src="tiny.m4b"></video>',
@@ -294,6 +302,23 @@ def _write_generic_pages(root: Path, base: str) -> None:
         "audio-no-ext": '<audio src="typed/audio/mpeg/tiny.mp3/stream"></audio>',
         "audio-source-vorbis": """<audio><source src="tiny.ogg" type='audio/ogg; codecs="vorbis"'></audio>""",
         "audio-source-ogg": """<audio><source src="theora.ogg" type="audio/ogg"></audio>""",
+        # The <audio> tag sets vcodec 'none' over the codecs its type names; the type sets ext.
+        "audio-source-theora-videotype": (
+            """<audio><source src="theora.ogg" type='video/ogg; codecs="theora, vorbis"'></audio>"""
+        ),
+        "audio-source-mp4-videotype": f"<audio>{codecs}</audio>",
+        "audio-source-webm-videotype": (
+            """<audio><source src="tiny.webm" type='video/webm; codecs="vp8, vorbis"'></audio>"""
+        ),
+        # Real audio first, then a declared video: either source can be the one saved.
+        "audio-sources-audio-then-video": (
+            """<audio><source src="tiny.ogg" type='audio/ogg; codecs="vorbis"'>"""
+            f"{codecs}</audio>"
+        ),
+        # An audio type naming a video codec: the same formats as real Vorbis.
+        "audio-source-theora-audiotype": (
+            """<audio><source src="theora.ogg" type='audio/ogg; codecs="theora, vorbis"'></audio>"""
+        ),
         "audio-hls": '<audio src="tiny.m3u8"></audio>',
         "audios-theora-and-vorbis": '<audio src="theora.ogg"></audio><audio src="tiny.ogg"></audio>',
         "ogg-video-and-audio": '<video src="theora.ogg"></video><audio src="tiny.ogg"></audio>',
@@ -638,6 +663,11 @@ class FakeSiteIE(InfoExtractor):
             return self._with_formats("a1", self._storyboard(), audio)
         if page == "storyboard-only":
             return self._with_formats("s1", self._storyboard())
+        if page == "storyboard-carousel":
+            # YouTube's shape when it skipped every stream: only storyboards, and thumbnails.
+            thumbnail = {"url": f"{self.media_url}/tiny.jpg", "width": 64, "height": 64}
+            storyboard = {**self._with_formats("s1", self._storyboard()), "thumbnails": [thumbnail]}
+            return self.playlist_result([storyboard, self._video("v1")], "post", "Post")
         if page == "thumbnail-video":
             return self._with_formats("v1", self._thumbnail_format(), plain_video)
         if page == "thumbnail-audio":
@@ -709,6 +739,10 @@ class FakeSiteIE(InfoExtractor):
         if page == "site-audio-named":
             named = {"format_id": "a", "url": f"{self.media_url}/tiny.ogg", "ext": "ogg"}
             return self._with_formats("a1", {**named, "vcodec": "none", "acodec": "vorbis"})
+        if page == "site-audio-video-ext":
+            # A DASH audio rendition: the shape an <audio> declaring a video leaves on a page.
+            rendition = {"format_id": "a", "url": f"{self.media_url}/audio.webm", "ext": "webm"}
+            return self._with_formats("a1", {**rendition, "vcodec": "none", "acodec": "vorbis"})
         if page == "split-streams":
             video_only = {**plain_video, "acodec": "none"}
             return self._with_formats("v1", video_only, audio)
