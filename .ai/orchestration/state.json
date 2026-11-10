@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T18:09:23-04:00",
+  "updated": "2026-11-09T23:09:24-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "qa_review",
-      "status": "awaiting_human",
-      "next_agent": "human",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2296,6 +2296,13 @@
           "result": "approved",
           "at": "2026-11-09T18:09:23-04:00",
           "note": "Gate exit 0 at 4360f86, 2163 passed + 2 xfailed es/en, 98.91%. 3938c1f, 862f4df, 29e4302 each pass alone. 29 changed tests follow from the spec. Real runs in en and es, each container, wizard, -p, -a, -l match disk, history, summary and command. All four departures judged needed or safe (narrower clash check measured: image not saved yet Done.). Three minor findings. Wikimedia live check left to validation."
+        },
+        {
+          "stage": "qa_review",
+          "agent": "human",
+          "result": "approved",
+          "at": "2026-11-09T23:09:24-04:00",
+          "note": "Human: fix QA minor 1 first (ffprobe failure must not skip the conversion silently; warn with the existing not_converted), then merge and push. Minors 2 and 3 go to the planner or stay. Departures accepted, including 'tiny [tiny].jpg'."
         }
       ]
     }
