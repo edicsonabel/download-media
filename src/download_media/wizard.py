@@ -35,6 +35,7 @@ from .probe import (
     Probe,
     ProbeItem,
     detect_site,
+    is_image_post_error,
     probe,
     site_likely_needs_cookies,
 )
@@ -388,12 +389,14 @@ def _build_post_probe_plan(probe_result: Probe, cookies_asked: bool) -> list[str
     steps: list[str] = []
     if probe_result.is_playlist:
         steps.append("select")
-    # SINGLE_AUDIO sources don't get a video/audio choice, unless only a label says audio.
-    if probe_result.content_kind != ContentKind.SINGLE_AUDIO or probe_result.may_hold_video:
-        steps.append("type")
-    # We list both branches; the runner skips the inapplicable one based on
-    # opts.audio_only at run-time.
-    steps.extend(["quality", "container", "aformat"])
+    # An image is saved as it is: no type, quality, container or audio format applies.
+    if probe_result.content_kind != ContentKind.SINGLE_IMAGE:
+        # SINGLE_AUDIO sources don't get a video/audio choice, unless only a label says audio.
+        if probe_result.content_kind != ContentKind.SINGLE_AUDIO or probe_result.may_hold_video:
+            steps.append("type")
+        # We list both branches; the runner skips the inapplicable one based on
+        # opts.audio_only at run-time.
+        steps.extend(["quality", "container", "aformat"])
     steps.append("output")
     if not cookies_asked:
         steps.append("cookies")
@@ -604,7 +607,10 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
         info(t("probing"))
         probe_result = probe(opts.urls[0])
     if probe_result.needs_cookies and not opts.cookies_browser:
-        warn(t("auth_needed_retry", probe_result.error_message))
+        if is_image_post_error(probe_result.error_message or ""):
+            warn(t("image_post_needs_login"))
+        else:
+            warn(t("auth_needed_retry", probe_result.error_message))
         try:
             step_cookies(opts)
         except _Cancel:
@@ -623,7 +629,8 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
 
     # ---- Phase 2.5: handle special outcomes ----
     if not probe_result.failed:
-        if probe_result.content_kind == ContentKind.SINGLE_IMAGE:
+        kind = probe_result.content_kind
+        if kind == ContentKind.SINGLE_IMAGE and not probe_result.saveable_image:
             warn(t("image_only_skipped"))
             raise _Refused
         if probe_result.error_message:
@@ -636,6 +643,9 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
             warn(t("audio_may_hold_video"))
         elif probe_result.content_kind == ContentKind.SINGLE_AUDIO:
             opts.audio_only = True
+        elif probe_result.saveable_image:
+            # Saved as an image: audio mode would skip it.
+            opts.audio_only = False
     else:
         warn(t("probe_failed", probe_result.error_message or "unknown"))
         if probe_result.needs_cookies and opts.cookies_browser:

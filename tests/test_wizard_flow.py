@@ -232,6 +232,31 @@ def test_single_image_cancels(walk: Any) -> None:
     assert walk(image, "") is None
 
 
+def saveable_image() -> Probe:
+    return Probe(
+        url=URL, site="generic", content_kind=ContentKind.SINGLE_IMAGE, saveable_image=True
+    )
+
+
+def test_a_saveable_image_plans_only_the_folder_and_cookies() -> None:
+    assert wizard._build_post_probe_plan(saveable_image(), False) == ["output", "cookies"]
+    assert wizard._build_post_probe_plan(saveable_image(), True) == ["output"]
+
+
+@pytest.mark.parametrize("audio_only", [False, True], ids=["video", "audio-flag"])
+def test_a_saveable_image_asks_the_folder_and_cookies_and_is_saved_as_an_image(
+    walk: Any, audio_only: bool
+) -> None:
+    # URL, folder, cookies.
+    opts = walk(
+        saveable_image(), "", "", FIREFOX, opts=DownloadOptions(urls=[URL], audio_only=audio_only)
+    )
+    assert opts is not None
+    assert opts.audio_only is False
+    assert opts.playlist_mode == "no"
+    assert opts.cookies_browser == "firefox"
+
+
 def test_single_audio_skips_type_step(walk: Any) -> None:
     audio = Probe(url=URL, site="generic", content_kind=ContentKind.SINGLE_AUDIO)
     opts = walk(audio, "", "", "", "")

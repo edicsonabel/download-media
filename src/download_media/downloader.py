@@ -107,6 +107,8 @@ class DownloadResult:
     subs_failed: tuple[tuple[str, str, str], ...] = ()
     # Subtitle files that hold no subtitle text; kept, never embedded.
     subs_empty: tuple[str, ...] = ()
+    # Images saved, or found already saved, for a URL whose only result was the image.
+    lone_images: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -186,10 +188,12 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
     count_entries = False
-    # Take list items that are images past yt-dlp's "No video formats found!", in every mode:
-    # one behind a link reaches the match_filter only after that check, and the filter
+    # Take images past yt-dlp's "No video formats found!", in every mode: a lone result, or a
+    # list item behind a link, reaches the match_filter only after that check, and the filter
     # decides whether it's saved (-a and -l skip it).
     save_images = False
+    # The image path took a result with no list around it: the URL's only result.
+    lone_image = False
     # len(errors) when the current item started.
     item_errors = 0
     # Errors beyond the first of an item that failed in several steps.
@@ -239,11 +243,10 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         return _WholeBody(response) if self.fetching_image else response
 
     def process_video_result(self, info_dict: Any, download: bool = True) -> Any:
-        image = (
-            self.save_images and info_dict.get("playlist_index") and is_saveable_image(info_dict)
-        )
-        if not image:
+        if not (self.save_images and is_saveable_image(info_dict)):
             return super().process_video_result(info_dict, download=download)
+        if not info_dict.get("playlist_index"):
+            self.lone_image = True
         # The entry is already extracted, so no extractor reads ignore_no_formats_error here.
         previous = {key: self.params[key] for key in _IMAGE_PARAMS if key in self.params}
         self.params.update(_IMAGE_PARAMS)
@@ -587,8 +590,8 @@ class _AvoidNameClash(PostProcessor):  # type: ignore[misc]
 
     def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
         # Carousel items share both title and webpage_url, so the check below
-        # can't tell them apart.
-        if info.get("playlist_index"):
+        # can't tell them apart. Nor can it read an image's source: no tag is written to it.
+        if info.get("playlist_index") or is_saveable_image(info):
             info["_name_suffix"] = f" [{info.get('id')}]"
             return [], info
         path = Path(self._downloader.prepare_filename(info))
@@ -869,27 +872,31 @@ class _EmbedCover(EmbedThumbnailPP):  # type: ignore[misc]
 
 
 def _skip_items_without_media(
-    skipped: list[str], *, keep_images: bool
+    skipped: list[str], *, keep_images: bool, saving_image: Callable[[], bool] = lambda: False
 ) -> Callable[..., str | None]:
     """``match_filter`` dropping carousel items with nothing to fetch.
 
     yt-dlp downloads carousels even with ``noplaylist``, so without this the
     first such item would abort a single-mode run. Images (no formats, a
-    thumbnail) pass when ``keep_images``, for ``_Ydl`` to save. yt-dlp also
-    calls this with the playlist's own metadata (no ``id``) and for lone URLs
-    (no ``playlist_index``); those must pass, so a lone URL with no formats
-    still fails as an error.
+    thumbnail) pass when ``keep_images``, for ``_Ydl`` to save, and are skipped
+    otherwise. yt-dlp also calls this with the playlist's own metadata (no
+    ``id``) and for lone URLs (no ``playlist_index``); those must pass, so a lone
+    URL with nothing to fetch still fails as an error. A lone URL's own image is
+    the exception, told by ``saving_image``, not by the missing index: yt-dlp
+    also checks a list's raw entries without one, then each again with it.
     """
 
     def match_filter(info: Any, *, incomplete: Any = False) -> str | None:
         item = info.get("id")
-        if not (incomplete and item and info.get("playlist_index")):
+        if not (incomplete and item and (info.get("playlist_index") or saving_image())):
             return None
         if is_saveable_image(info):
             if keep_images:
                 return None
             skipped.append(str(item))
             return t("item_image_skipped", item)
+        if not info.get("playlist_index"):
+            return None
         if info.get("_type", "video") != "video" or info.get("formats") or info.get("url"):
             return None
         skipped.append(str(item))
@@ -912,7 +919,10 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     saved: list[str] = []
     skipped: list[str] = []
     ydl_opts = build_ydl_opts(opts, output_dir)
-    ydl_opts["match_filter"] = _skip_items_without_media(skipped, keep_images=not opts.audio_only)
+    # Read once the instance below exists: only it knows when a lone image is on its image path.
+    ydl_opts["match_filter"] = _skip_items_without_media(
+        skipped, keep_images=not opts.audio_only, saving_image=lambda: ydl.saving_image
+    )
     untagged: list[str] = []
     no_cover: list[str] = []
     not_converted: list[str] = []
@@ -983,6 +993,8 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         not_converted=tuple(not_converted),
         subs_failed=tuple(subs_failed),
         subs_empty=tuple(subs_empty),
+        # A lone URL has one result, so the images saved are its own.
+        lone_images=tuple(Path(path).name for path in ydl.images) if ydl.lone_image else (),
     )
 
 
@@ -990,7 +1002,9 @@ def list_formats(url: str, opts: DownloadOptions) -> int:
     """Print available formats for a URL (equivalent to ``yt-dlp -F``)."""
     ydl_opts: dict[str, Any] = {
         "listformats": True,
-        "match_filter": _skip_items_without_media([], keep_images=False),
+        "match_filter": _skip_items_without_media(
+            [], keep_images=False, saving_image=lambda: ydl.saving_image
+        ),
     }
     if opts.cookies_browser:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)

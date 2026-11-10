@@ -281,11 +281,29 @@ def test_carousel_items_always_get_their_id(tmp_path: Path) -> None:
     assert pp.run(info)[1]["_name_suffix"] == " [A]"
 
 
-def _filtered(keep_images: bool = True, **info) -> tuple[str | None, list[str]]:
+def test_a_lone_image_always_gets_its_id(tmp_path: Path) -> None:
+    from yt_dlp import YoutubeDL
+
+    from download_media import downloader
+
+    pp = downloader._AvoidNameClash(None)
+    pp.set_downloader(YoutubeDL({"outtmpl": str(tmp_path / "%(title)s.%(ext)s"), "quiet": True}))
+    image = {"id": "A", "title": "t", "formats": [], "thumbnails": IMAGE_THUMBS}
+    assert pp.run(image)[1]["_name_suffix"] == " [A]"
+    # Nothing is at its name, and a video there would keep the plain one.
+    video = {"id": "B", "title": "t", "ext": "mp4", "formats": [{"url": "u"}]}
+    assert "_name_suffix" not in pp.run(video)[1]
+
+
+def _filtered(
+    keep_images: bool = True, saving_image: bool = False, **info
+) -> tuple[str | None, list[str]]:
     from download_media.downloader import _skip_items_without_media
 
     skipped: list[str] = []
-    match_filter = _skip_items_without_media(skipped, keep_images=keep_images)
+    match_filter = _skip_items_without_media(
+        skipped, keep_images=keep_images, saving_image=lambda: saving_image
+    )
     return match_filter(info, incomplete=True), skipped
 
 
@@ -316,10 +334,37 @@ def test_filter_passes_playlist_metadata(keep_images: bool) -> None:
     assert _filtered(keep_images, playlist="Post", playlist_id="p") == (None, [])
 
 
+@pytest.mark.parametrize("saving_image", [True, False])
 @pytest.mark.parametrize("keep_images", [True, False])
-def test_filter_passes_lone_urls(keep_images: bool) -> None:
+def test_filter_passes_a_lone_url_with_nothing_to_fetch(
+    keep_images: bool, saving_image: bool
+) -> None:
+    # yt-dlp's own error then ends it.
+    assert _filtered(keep_images, saving_image, id="a", formats=[]) == (None, [])
+    assert _filtered(keep_images, saving_image, id="a") == (None, [])
+
+
+def test_filter_passes_a_lone_image_when_images_are_kept() -> None:
+    assert _filtered(True, True, id="a", formats=[], thumbnails=IMAGE_THUMBS) == (None, [])
+
+
+@pytest.mark.parametrize("extra", [{"thumbnails": IMAGE_THUMBS}, {"thumbnail": "http://x/i.jpg"}])
+def test_filter_skips_a_lone_image_as_an_image_in_audio_and_list_modes(
+    extra: dict[str, Any],
+) -> None:
+    reason, skipped = _filtered(False, True, id="a", formats=[], **extra)
+    assert reason == t("item_image_skipped", "a")
+    assert skipped == ["a"]
+
+
+@pytest.mark.parametrize("keep_images", [True, False])
+def test_filter_leaves_a_list_s_raw_entries_to_the_check_with_their_index(
+    keep_images: bool,
+) -> None:
+    # yt-dlp checks each raw entry silently first: counting it there would count it twice.
+    image = {"id": "a", "formats": [], "thumbnails": IMAGE_THUMBS}
+    assert _filtered(keep_images, **image) == (None, [])
     assert _filtered(keep_images, id="a", formats=[]) == (None, [])
-    assert _filtered(keep_images, id="a", formats=[], thumbnails=IMAGE_THUMBS) == (None, [])
 
 
 @pytest.mark.parametrize("keep_images", [True, False])

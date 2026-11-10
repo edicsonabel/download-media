@@ -65,6 +65,8 @@ class Probe:
     needs_cookies: bool = False
     failed: bool = False
     may_hold_video: bool = False  # Audio by a label only: the file may hold a video.
+    # A lone image the download saves through its thumbnail; other lone images are refused.
+    saveable_image: bool = False
     error_message: str | None = None
     # The browser's cookies couldn't be loaded, so nothing was inspected.
     cookie_failure: CookieFailure | None = None
@@ -141,6 +143,9 @@ _AUTH_ERROR_HINTS = (
     "premium",
     "http error 401",
 )
+# instagram.py's logged-out answer for a post holding one image (raise_no_formats at the end of
+# InstagramIE._real_extract). Logged in, yt-dlp returns the post, and the download saves it.
+_IMAGE_POST_HINTS = ("there is no video in this post",)
 # The generic extractor's id is the URL's last segment, unquoted, so it can hold spaces or
 # ": ", which is why yt-dlp's own opening is looked for first. At the floor it has no id at
 # all, and "Unable to download webpage: " is the site's sentence.
@@ -163,10 +168,16 @@ def _site_words(message: str) -> str:
     return _ADDRESS.sub("", "\n".join(kept)).lower()
 
 
+def is_image_post_error(message: str) -> bool:
+    """Whether this yt-dlp error may be an image post the site only shows to logged-in users."""
+    words = _site_words(message)
+    return any(hint in words for hint in _IMAGE_POST_HINTS)
+
+
 def is_auth_error(message: str) -> bool:
     """Whether browser cookies are the user's next move after this yt-dlp error."""
     words = _site_words(message)
-    if any(hint in words for hint in _LOGIN_HINTS):
+    if any(hint in words for hint in _LOGIN_HINTS) or is_image_post_error(message):
         return True
     if any(hint in words for hint in _NOT_AUTH_ERRORS):
         return False
@@ -358,6 +369,7 @@ def _read_result(url: str, site: str, data: Any, errors: list[str]) -> Probe:
         filesize=data.get("filesize_approx") or data.get("filesize"),
         may_hold_video=kind == ContentKind.SINGLE_AUDIO
         and any(_audio_by_label_only(f) or _declared_video(f, data) for f in _formats(data)),
+        saveable_image=kind == ContentKind.SINGLE_IMAGE and is_saveable_image(data),
     )
 
 

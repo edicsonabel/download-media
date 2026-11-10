@@ -18,7 +18,7 @@ from typing import NamedTuple, NoReturn
 
 from yt_dlp.utils import DownloadError
 
-from . import __version__, equivalent, history, selection, wizard
+from . import __version__, downloader, equivalent, history, selection, wizard
 from .clipboard import read_clipboard
 from .config import (
     AUDIO_FORMATS,
@@ -49,7 +49,7 @@ from .downloader import (
     load_browser_cookies,
 )
 from .i18n import is_yes, t
-from .probe import is_auth_error
+from .probe import is_auth_error, is_image_post_error
 from .ui import C, die, err, fmt_bytes, fmt_duration, info, ok, warn
 
 # Options that signal "I know what I want; skip the wizard", by argparse dest.
@@ -226,8 +226,6 @@ def _show_preview(url: str, opts: DownloadOptions) -> _Preview:
     info(t("fetching"))
     from typing import Any
 
-    from yt_dlp import YoutubeDL
-
     ydl_opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
@@ -238,8 +236,11 @@ def _show_preview(url: str, opts: DownloadOptions) -> _Preview:
         ydl_opts["cookiesfrombrowser"] = ydl_cookies(opts.cookies_browser)
     cookies_failed = False
     try:
-        with YoutubeDL(ydl_opts) as ydl:
+        # Through the module: the download's own subclass, which reads images instead of
+        # failing on them. Nothing is written: extract_info doesn't download.
+        with downloader._Ydl(ydl_opts) as ydl:
             load_browser_cookies(ydl, opts.cookies_browser)
+            ydl.save_images = True
             data = ydl.extract_info(url, download=False)
     except CookiesUnavailable as exc:
         # Said before the user confirms; the download then goes on without them.
@@ -247,7 +248,8 @@ def _show_preview(url: str, opts: DownloadOptions) -> _Preview:
         cookies_failed = True
         del ydl_opts["cookiesfrombrowser"]
         try:
-            with YoutubeDL(ydl_opts) as ydl:
+            with downloader._Ydl(ydl_opts) as ydl:
+                ydl.save_images = True
                 data = ydl.extract_info(url, download=False)
         except Exception:
             data = None
@@ -402,6 +404,8 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         warn(t("not_converted", name, effective.video_format))
     for name in result.no_cover:
         warn(t("no_cover", name))
+    for name in result.lone_images:
+        warn(t("image_alone_saved", name))
     if result.subs_missing:
         warn(t("subs_none", effective.sub_langs))
     ok(t("done"))
@@ -464,6 +468,12 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
     msg = message.lower()
     if "secretstorage" in msg:
         secretstorage_hint()
+    elif is_image_post_error(message):
+        if opts.cookies_browser:
+            # The run they were sent with still got the logged-out answer.
+            warn(t("auth_still_needed", browser_of(opts.cookies_browser)))
+        else:
+            warn(t("image_post_hint"))
     elif is_auth_error(message) and not opts.cookies_browser:
         warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
     if opts.cookies_browser and uses_keyring(opts.cookies_browser):

@@ -121,7 +121,10 @@ download type).
 
 Multi-entry URLs: images (no formats, a thumbnail, like Instagram's) are saved
 through yt-dlp's thumbnail writer, with three yt-dlp params scoped to them
-(`_Ydl.process_video_result`). Items with nothing to fetch are still skipped by a
+(`_Ydl.process_video_result`), whether they are carousel items or the URL's only
+result. A lone image is always named `<title> [<id>].<ext>`, since no tag tells
+one post's image from another's, and a notice says yt-dlp found only that image;
+`-a` skips it and `-l` names it. Items with nothing to fetch are still skipped by a
 `match_filter`, not by `ignoreerrors`, so a single-mode failure still raises and
 reaches the cookie fallback. yt-dlp downloads carousels even with `noplaylist`,
 so single mode names their items with `[id]`. A run only counts as done if
