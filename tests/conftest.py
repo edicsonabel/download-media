@@ -418,6 +418,10 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     # An attachment stream, which ffmpeg can't put in an mp4: by stream copy, no new encoder.
     attach = ["-attach", str(root / "en.vtt"), "-metadata:s:t", "mimetype=text/plain"]
     subprocess.run([*source, *attach, "-c", "copy", str(root / "attached.mkv")], check=True)
+    # A phone video: ffprobe prints "video," for a stream carrying a display matrix.
+    rotate = ["ffmpeg", "-v", "error", "-display_rotation", "90", "-i", str(root / "tiny.mp4")]
+    for ext in ("mov", "mp4"):
+        subprocess.run([*rotate, "-c", "copy", str(root / f"rotated.{ext}")], check=True)
     # Enough for imghdr to say webp, and for ffmpeg to fail on it.
     (root / "webp-signature.bin").write_bytes(b"RIFF\0\0\0\0WEBP")
     handler = functools.partial(_QuietHandler, directory=str(root))

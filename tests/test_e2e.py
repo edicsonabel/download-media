@@ -8414,6 +8414,31 @@ def test_wizard_names_a_video_ffprobe_cannot_read(
     assert len(history_rows()) == 1
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="ffprobe prints 'video,' for a stream with side data: read as no answer",
+)
+@pytest.mark.parametrize(
+    ("page", "flags", "saved"),
+    [
+        ("rotated.mov", (), "rotated.mp4"),
+        ("rotated.mp4", ("--video-format", "mkv"), "rotated.mkv"),
+    ],
+    ids=["mov-default", "mp4-to-mkv"],
+)
+def test_a_rotated_video_is_converted(
+    generic: Any, out: Path, page: str, flags: tuple[str, ...], saved: str
+) -> None:
+    # A phone video carries a display matrix; ffmpeg converts it like any other video.
+    code, output = generic(page, flags=("-y", *flags, "-o", str(out)))
+    assert code == 0
+    assert t("done") in output
+    assert t("not_converted", page, saved.rsplit(".")[-1]) not in output
+    assert names(out) == [saved]
+    assert codecs(out / saved) == {"video": "h264", "audio": "aac"}
+
+
 @pytest.mark.parametrize(
     ("flags", "saved"),
     [

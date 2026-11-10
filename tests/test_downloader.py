@@ -381,6 +381,15 @@ def fake_ffprobe(folder: Path, script: str, monkeypatch: pytest.MonkeyPatch) -> 
         # ffprobe failed, or printed something it never prints: no answer either way.
         ("echo video; exit 1", None),
         ("echo garbage", None),
+        # What ffprobe 9 prints for a stream carrying side data, like a phone's display matrix.
+        *(
+            pytest.param(
+                script,
+                True,
+                marks=pytest.mark.xfail(strict=True, reason="'video,' read as no answer"),
+            )
+            for script in ("printf 'video,\\naudio\\n'", "printf 'video,\\n'")
+        ),
     ],
 )
 def test_media_streams_by_what_ffprobe_says(
