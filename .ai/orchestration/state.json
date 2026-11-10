@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:33:51-04:00",
+  "updated": "2026-11-10T01:42:49-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2442,16 +2442,17 @@
     "fix/cookies-undecrypted": {
       "type": "fix",
       "title": "Say so when the browser's cookies load but none decrypt",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/67-cookies-undecrypted.md",
       "branch": "fix/cookies-undecrypted",
       "worktree": ".worktrees/fix-cookies-undecrypted",
       "commits": [
         "24354d6",
         "feb1576",
-        "d01cbcf"
+        "d01cbcf",
+        "cfc7c54"
       ],
       "review": {
         "approved": true,
@@ -2506,6 +2507,13 @@
           "result": "approved",
           "at": "2026-11-10T01:28:06-04:00",
           "note": "Merge and push under the human's overnight delegation. Tech-lead launched once the planner's PLAN.md commit lands, so the merge runs on a clean main."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-10T01:42:49-04:00",
+          "note": "Merged as cfc7c54, no conflicts. Gate exit 0 on the merged tree (first with container-choice), 2264 passed + 4 xfailed es/en. Undo: git revert -m 1 cfc7c54. Pushed by the orchestrator under the delegation."
         }
       ]
     },
