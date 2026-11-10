@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T05:25:40-04:00",
+  "updated": "2026-11-10T05:39:54-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2890,14 +2890,19 @@
     "feature/ig-lone-images": {
       "type": "feature",
       "title": "Save a lone Instagram image post when cookies are given",
-      "stage": "development",
+      "stage": "testing",
       "status": "in_progress",
-      "next_agent": "developer",
+      "next_agent": "test-engineer",
       "doc": ".ai/specs/61-ig-lone-images.md",
       "branch": "feature/ig-lone-images",
       "worktree": ".worktrees/feature-ig-lone-images",
       "commits": [
-        "f2cb5e7"
+        "f2cb5e7",
+        "25c3cc5",
+        "375265b",
+        "878d0a9",
+        "ec3985a",
+        "5ee7b45"
       ],
       "review": null,
       "history": [
@@ -2928,6 +2933,13 @@
           "result": "approved",
           "at": "2026-11-10T04:49:55-04:00",
           "note": "Development starts from main e447bea (cancel-exits, kind-edges and subs-failures merged; subs-failures' merge gate still running, base kept if it passes)."
+        },
+        {
+          "stage": "development",
+          "agent": "developer",
+          "result": "done",
+          "at": "2026-11-10T05:39:54-04:00",
+          "note": "Five commits (downloader, preview, wizard, cookies hint, docs). Gate exit 0 at 5ee7b45, 2588 passed + 11 xfailed. Each commit's tests fail without its src. yt-dlp's real InstagramIE on a canned logged-in answer saved one 96x120 jpg in -y/-p/mkv/preview; -a skips (exit 1); -l names (exit 0). Deviation: match_filter gets a saving_image callable, since yt-dlp also filters raw list entries without playlist_index (the spec's rule double-counted carousel images under -a). AGENTS.md 'three params' stale (five). Live check open for the human."
         }
       ]
     },
