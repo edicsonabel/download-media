@@ -2807,9 +2807,117 @@ def test_cancelling_after_the_thumbnail_leaves_none(
 
     # Ctrl-C while the media downloads, after the thumbnail was written.
     monkeypatch.setattr(yt_dlp.YoutubeDL, "dl", interrupted)
-    with pytest.raises(KeyboardInterrupt):
-        cli.main(["-y", "-a", "-o", str(out), f"{media_url}/audio.html"])
+    code = cli.main(["-y", "-a", "-o", str(out), f"{media_url}/audio.html"])
+    assert code == cli.EXIT_INTERRUPTED
     assert names(out) == []
+
+
+def interrupt_dl(monkeypatch: pytest.MonkeyPatch, when: Callable[[dict[str, Any]], bool]) -> None:
+    """Ctrl-C when yt-dlp starts downloading a media file that ``when`` picks."""
+    real = YoutubeDL.dl
+
+    def dl(self: Any, name: str, info: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
+        if when(info):
+            raise KeyboardInterrupt
+        return real(self, name, info, *args, **kwargs)
+
+    monkeypatch.setattr(YoutubeDL, "dl", dl)
+
+
+def test_ctrl_c_at_a_wizard_prompt_downloads_nothing(wizard_on: Any, out: Path) -> None:
+    code, output = wizard_on(VIDEO, "", KeyboardInterrupt)
+    assert code == cli.EXIT_INTERRUPTED
+    assert t("cancelled") in output.splitlines()
+    assert names(out) == []
+    assert history_rows() == []
+    assert t("equiv_cmd") not in output
+    assert "Traceback" not in output
+
+
+def test_ctrl_c_during_the_wizard_probe_downloads_nothing(
+    wizard_on: Any, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def interrupted(*args: Any, **kwargs: Any) -> Probe:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(wizard, "probe", interrupted)
+    code, output = wizard_on(VIDEO, "")
+    assert code == cli.EXIT_INTERRUPTED
+    assert t("cancelled") in output.splitlines()
+    assert names(out) == []
+    assert history_rows() == []
+    assert t("equiv_cmd") not in output
+    assert "Traceback" not in output
+
+
+def test_ctrl_c_mid_download_keeps_earlier_urls_and_prints_their_command(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    interrupt_dl(monkeypatch, lambda info: info["webpage_url"] == VIDEO_B)
+    code, output = run("-y", VIDEO, VIDEO_B)
+    assert code == cli.EXIT_INTERRUPTED
+    assert names(out) == ["Clip.mp4"]
+    [row] = history_rows()
+    assert VIDEO in row.split("\t")
+    assert t("interrupted", VIDEO_B, out) in output.splitlines()
+    assert t("cancelled") not in output
+    assert "Traceback" not in output
+    [line] = commands(output)
+    argv = shlex.split(line)
+    assert argv[-2:] == [VIDEO, VIDEO_B]
+    assert "-y" in argv
+    assert argv[argv.index("-o") + 1] == str(out)
+
+
+def test_ctrl_c_at_the_second_preview_prints_the_first_url_s_command(
+    run: Any, out: Path, answers: Any
+) -> None:
+    answers("", KeyboardInterrupt)
+    code, output = run(VIDEO, VIDEO_B)
+    assert code == cli.EXIT_INTERRUPTED
+    assert t("cancelled") in output.splitlines()
+    assert names(out) == ["Clip.mp4"]
+    [line] = commands(output)
+    assert shlex.split(line)[-1] == VIDEO
+    assert VIDEO_B not in shlex.split(line)
+    assert "Traceback" not in output
+
+
+def test_ctrl_c_mid_playlist_stops_the_run(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    interrupt_dl(monkeypatch, lambda info: info["id"] == "v2")
+    code, output = run("-y", "-p", CAROUSEL)
+    assert code == cli.EXIT_INTERRUPTED
+    assert names(out) == ["02 - Clip [v1].mp4"]
+    assert t("interrupted", CAROUSEL, out) in output.splitlines()
+    assert t("partial_result", *"\0" * 4).split("\0")[2] not in output  # " items downloaded ("
+    assert t("done") not in output
+    assert history_rows() == []
+    [line] = commands(output)
+    assert "-p" in shlex.split(line)
+    assert "Traceback" not in output
+
+
+def test_ctrl_c_during_post_processing_says_files_may_be_left(
+    media_url: str, out: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    from yt_dlp.postprocessor import FFmpegExtractAudioPP
+
+    def interrupted(*args: Any, **kwargs: Any) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(FFmpegExtractAudioPP, "run_ffmpeg", interrupted)
+    url = f"{media_url}/audio.html"
+    code = cli.main(["-y", "-a", "-o", str(out), url])
+    captured = capfd.readouterr()
+    assert code == cli.EXIT_INTERRUPTED
+    assert t("interrupted", url, out) in captured.out.splitlines()
+    assert t("done") not in captured.out
+    assert history_rows() == []
+    assert "Traceback" not in captured.err
+    # The tool doesn't delete what yt-dlp leaves: the downloaded source is still there.
+    assert any(name.endswith(".m4a") for name in names(out))
 
 
 @pytest.mark.parametrize(

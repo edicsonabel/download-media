@@ -33,6 +33,10 @@ def test_pkgbuild_declares_runtime_dependencies() -> None:
         assert f"'{package}'" in depends.group(1)
 
 
+def test_the_console_script_runs_the_interrupt_aware_entry() -> None:
+    assert 'download-media = "download_media.cli:entry"' in PYPROJECT
+
+
 def test_pyproject_requests_impersonation_support() -> None:
     assert '"yt-dlp[curl-cffi]' in PYPROJECT
 

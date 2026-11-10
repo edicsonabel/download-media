@@ -44,7 +44,7 @@ Source = "https://github.com/edicsonabel/download-media"
 Issues = "https://github.com/edicsonabel/download-media/issues"
 
 [project.scripts]
-download-media = "download_media.cli:main"
+download-media = "download_media.cli:entry"
 
 [project.optional-dependencies]
 dev = [

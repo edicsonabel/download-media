@@ -39,6 +39,9 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "invalid_retry": "Opción inválida. Intenta de nuevo.",
         "url_required": "Falta la URL.",
         "cancelled": "Cancelado.",
+        "interrupted": (
+            "Interrumpido mientras se descargaba {0}. Pueden quedar archivos sin terminar en {1}."
+        ),
         "probing": "Inspeccionando contenido...",
         "carousel_hdr": "Carrusel/Playlist con {} items:",
         "item_video": "video",
@@ -139,6 +142,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "invalid_retry": "Invalid option. Try again.",
         "url_required": "Missing URL.",
         "cancelled": "Cancelled.",
+        "interrupted": "Interrupted while downloading {0}. Unfinished files may be left in {1}.",
         "probing": "Inspecting content...",
         "carousel_hdr": "Carousel/Playlist with {} items:",
         "item_video": "video",

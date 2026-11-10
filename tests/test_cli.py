@@ -399,17 +399,21 @@ def test_high_quality_mp4_warns_about_h264_cap(monkeypatch, capsys, tmp_path) ->
     assert t("mp4_h264_cap", "2160") in capsys.readouterr().out
 
 
-def test_interrupt_propagates_after_cancel_message(monkeypatch, tmp_path) -> None:
-    import pytest
-
+def test_ctrl_c_mid_download_names_the_url_and_folder(monkeypatch, tmp_path, capsys) -> None:
     from download_media import cli
+    from download_media.i18n import t
 
     def interrupted(url, opts):
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cli, "download", interrupted)
-    with pytest.raises(KeyboardInterrupt):
+    with pytest.raises(cli._Interrupted) as exc:
         cli._download_one("http://x", parse(["-y", "-o", str(tmp_path), "http://x"]))
+    assert isinstance(exc.value, KeyboardInterrupt)
+    assert exc.value.outcome == cli._Outcome(False, False, "no")
+    output = capsys.readouterr().out
+    assert "\n" + t("interrupted", "http://x", tmp_path) in output
+    assert t("cancelled") not in output
 
 
 @pytest.mark.parametrize("flags", [[], ["--cookies", "firefox"]])
@@ -665,6 +669,92 @@ def test_main_cancelled_wizard_exits_clean(monkeypatch, capsys) -> None:
     monkeypatch.setattr(cli.wizard, "run_all", lambda opts: None)
     assert cli.main([]) == 0
     assert t("cancelled") in capsys.readouterr().out
+
+
+def test_main_returns_the_interrupt_status_after_ctrl_c_in_the_wizard(monkeypatch, capsys) -> None:
+    from download_media import cli
+    from download_media.i18n import t
+
+    def interrupted(opts):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli.wizard, "run_all", interrupted)
+    assert cli.main([]) == cli.EXIT_INTERRUPTED == 130
+    captured = capsys.readouterr()
+    assert t("cancelled") in captured.out.splitlines()
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.parametrize("code", [0, 1, 130])
+def test_entry_dies_by_sigint_after_an_interrupt(monkeypatch, code: int) -> None:
+    import os
+    import signal
+
+    from download_media import cli
+
+    calls: list[tuple[str, int, object]] = []
+    monkeypatch.setattr(cli, "main", lambda: code)
+    monkeypatch.setattr(
+        signal, "signal", lambda sig, handler: calls.append(("signal", sig, handler))
+    )
+    monkeypatch.setattr(os, "kill", lambda pid, sig: calls.append(("kill", pid, sig)))
+    with pytest.raises(SystemExit) as exc:
+        cli.entry()
+    if code == 130:
+        assert calls == [
+            ("signal", signal.SIGINT, signal.SIG_DFL),
+            ("kill", os.getpid(), signal.SIGINT),
+        ]
+    else:
+        assert calls == []
+        assert exc.value.code == code
+
+
+def test_ctrl_c_ends_the_process_by_sigint_without_a_traceback() -> None:
+    import os
+    import selectors
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    from download_media.i18n import t
+
+    # Same $LANG as this process, so t() matches what the child prints.
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    for name in ("WAYLAND_DISPLAY", "DISPLAY"):
+        env.pop(name, None)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "download_media", "-i", "http://127.0.0.1:9/x"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        assert proc.stdout is not None
+        seen = b""
+        prompt = t("ask_url").encode()
+        deadline = time.monotonic() + 30
+        with selectors.DefaultSelector() as selector:
+            selector.register(proc.stdout, selectors.EVENT_READ)
+            while prompt not in seen and time.monotonic() < deadline:
+                if selector.select(timeout=1):
+                    chunk = os.read(proc.stdout.fileno(), 4096)
+                    if not chunk:
+                        break
+                    seen += chunk
+        assert prompt in seen, seen
+        os.killpg(proc.pid, signal.SIGINT)
+        rest, err = proc.communicate(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    assert proc.returncode == -signal.SIGINT
+    assert t("cancelled") in (seen + rest).decode()
+    assert "Traceback" not in err.decode()
 
 
 def test_module_entry_point_is_importable() -> None:
