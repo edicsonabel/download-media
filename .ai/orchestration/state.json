@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T05:17:50-04:00",
+  "updated": "2026-11-10T05:25:40-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3017,13 +3017,15 @@
     "fix/untagged-per-item": {
       "type": "fix",
       "title": "Name only saved items as untagged",
-      "stage": "planning",
+      "stage": "development",
       "status": "in_progress",
-      "next_agent": "architect",
+      "next_agent": "developer",
       "doc": ".ai/specs/69-untagged-per-item.md",
       "branch": "fix/untagged-per-item",
-      "worktree": null,
-      "commits": [],
+      "worktree": ".worktrees/fix-untagged-per-item",
+      "commits": [
+        "a1c8379"
+      ],
       "review": null,
       "history": [
         {
@@ -3032,6 +3034,20 @@
           "result": "approved",
           "at": "2026-11-10T05:17:50-04:00",
           "note": "Planner's recommendation after 61 and 22 (cfff3e9), under the human's overnight delegation. Highest open item needing no human decision; strict xfail already pins it."
+        },
+        {
+          "stage": "planning",
+          "agent": "architect",
+          "result": "done",
+          "at": "2026-11-10T05:25:40-04:00",
+          "note": "Spec a1c8379, PLAN row 69 to spec. Reproduced on 43ef19a: -a -p / --playlist-items name a failed .oga as untagged next to 1 failed. Same flaw in subs_not_embedded and subs_none (new with spec 36). D1-D4. No collisions expected. Planner: row 46 side finding (_EmbedSubtitles rewrites a failed item's body under -p -s)."
+        },
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T05:25:40-04:00",
+          "note": "Spec approved under the overnight delegation, every recommended option (D1 all three lists, D2 per-item names on _Ydl added when saved, D3 unit test to _Ydl, D4 subs_none when only failed items had subtitles). Not breaking. Three review items. Development starts now in parallel."
         }
       ]
     }
