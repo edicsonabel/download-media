@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T07:14:48-04:00",
+  "updated": "2026-11-10T07:24:13-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3010,12 +3010,12 @@
     "fix/intent-flags": {
       "type": "fix",
       "title": "Make -l and bundled or abbreviated flags skip the wizard, and -l list every URL",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/22-intent-flags.md",
       "branch": "fix/intent-flags",
-      "worktree": ".worktrees/fix-intent-flags",
+      "worktree": null,
       "commits": [
         "0d1af00",
         "f02d63b",
@@ -3023,7 +3023,8 @@
         "5904676",
         "773e93f",
         "cc29c90",
-        "8ff961c"
+        "8ff961c",
+        "5fa6e23"
       ],
       "review": {
         "approved": true,
@@ -3089,23 +3090,31 @@
           "result": "merged",
           "at": "2026-11-10T06:53:28-04:00",
           "note": "Merged as 8ff961c, no conflicts. Gate exit 0, 2898 passed + 15 xfailed es/en. Undo: git revert -m 1 8ff961c. Pushed by the orchestrator under the delegation; validation after the untagged-per-item merge gate (one gate on main at a time). CI run 42802950238 on 590fc9b succeeded (attempt 1)."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T07:24:13-04:00",
+          "note": "Criteria hold: 87 criteria tests pass; console runs (R1, R2, R6, R7, R10, -q720/-as/--aud direct, -i -l, EOF/c, lone image) match. Spec done; stdout-order xfail to row 52; '--' xfail needs a planner decision; QA minors noted; PLAN row 22 done, review items 43-46. Worktree and branch removed."
         }
       ]
     },
     "fix/untagged-per-item": {
       "type": "fix",
       "title": "Name only saved items as untagged",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/69-untagged-per-item.md",
       "branch": "fix/untagged-per-item",
-      "worktree": ".worktrees/fix-untagged-per-item",
+      "worktree": null,
       "commits": [
         "a1c8379",
         "8d4926f",
         "cb87f6a",
-        "e070f3a"
+        "e070f3a",
+        "b326559"
       ],
       "review": {
         "approved": true,
@@ -3167,6 +3176,13 @@
           "result": "merged",
           "at": "2026-11-10T07:14:48-04:00",
           "note": "Merged as e070f3a, no conflicts. Gate exit 0 (intent-flags + this item), 2920 passed + 15 xfailed es/en; no XPASS. Undo: git revert -m 1 e070f3a. Pushed by the orchestrator under the delegation."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T07:24:13-04:00",
+          "note": "Criteria hold: 43 criteria tests pass; console reproduction fixed (no untagged for the failed item; subs_none once). Spec done; row-46 xfail reproduced on the console; PLAN row 69 done, review items 47-49. Worktree and branch removed. CI on 27f42a4 retried by the orchestrator after the apt timeout."
         }
       ]
     }
