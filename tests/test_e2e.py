@@ -695,7 +695,7 @@ def test_wizard_on_a_single_video(run: Any, out: Path, answers: Any) -> None:
 def test_wizard_cancelled_downloads_nothing(run: Any, out: Path, answers: Any) -> None:
     answers("", "c")
     code, output = run("-i", "https://fake.test/video")
-    assert code == 0
+    assert code == 1
     assert t("cancelled") in output
     assert names(out) == []
     assert t("equiv_cmd") not in output
@@ -813,7 +813,7 @@ def test_detected_keyring_reaches_wizard_probe(
 def test_wizard_with_nothing_supported_prints_no_command(run: Any, answers: Any) -> None:
     answers("")
     code, output = run("-i", "https://fake.test/only-images")
-    assert code == 0
+    assert code == 1
     assert t("equiv_cmd") not in output
 
 
@@ -1455,7 +1455,7 @@ def test_items_flag_survives_a_failed_wizard_probe(
 def test_cancelled_wizard_with_the_items_flag_prints_nothing(run: Any, answers: Any) -> None:
     answers("", "c")
     code, output = run("-i", "--playlist-items", "2", CAROUSEL)
-    assert code == 0
+    assert code == 1
     assert t("equiv_cmd") not in output
 
 
@@ -1978,7 +1978,7 @@ def test_wizard_tags_known_audio_with_a_duration_as_audio(
 def test_wizard_keeps_refusing_a_carousel_of_only_images(run: Any, out: Path, answers: Any) -> None:
     answers("")
     code, output = run("-i", "https://fake.test/only-images")
-    assert code == 0
+    assert code == 1
     assert t("no_supported_items") in output
     assert t("equiv_cmd") not in output
     assert names(out) == []
@@ -3481,7 +3481,7 @@ def test_back_at_the_type_step_of_a_labelled_file_asks_it_again(generic: Any, ho
 
 def test_cancel_at_the_type_step_of_a_labelled_file_saves_nothing(generic: Any, home: Path) -> None:
     code, output = generic("theora.ogg", "", "c")
-    assert code == 0
+    assert code == 1
     assert t("ask_type") in output
     assert t("cancelled") in output
     assert names(home / "Videos") == []
@@ -3626,7 +3626,7 @@ def test_wizard_on_a_lone_format_without_streams_is_refused_as_an_image(
 ) -> None:
     prompts = answers("")
     code, output = run("-i", f"https://fake.test/{page}")
-    assert code == 0
+    assert code == 1
     assert len(prompts) == 1
     assert t("image_only_skipped") in output
     assert t("done") not in output
@@ -4369,7 +4369,7 @@ def test_wizard_says_why_a_gated_video_failed_when_cookies_are_declined(
 @pytest.mark.parametrize("reply", ["c", EOFError], ids=["cancel", "eof"])
 def test_cancelling_at_the_cookie_retry_ends_the_run(wizard_on: Any, reply: Any) -> None:
     code, output = wizard_on(GATED, "", reply)
-    assert code == 0
+    assert code == 1
     assert asked_for_login(LOGIN_REQUIRED) in output
     assert t("equiv_cmd") not in output
 
@@ -4503,7 +4503,7 @@ def test_cancelling_at_the_url_prompt_after_backing_twice_ends_the_run(
     wizard_on: Any, out: Path, reply: Any
 ) -> None:
     code, output = wizard_on(X_CAROUSEL, *BACK_TWICE, reply)
-    assert code == 0
+    assert code == 1
     assert t("cancelled") in output
     assert t("equiv_cmd") not in output
     assert names(out) == []
@@ -4595,7 +4595,7 @@ def test_cancelling_the_prompt_before_the_probe_after_going_back_ends_the_run(
     wizard_on: Any, out: Path, backs: int, reply: Any
 ) -> None:
     code, output = wizard_on(X_CAROUSEL, *("", "b") * backs, "", reply)
-    assert code == 0
+    assert code == 1
     assert output.count(t("auth_needed_pre")) == backs + 1
     assert t("cancelled") in output
     assert t("probing") not in output
@@ -4863,7 +4863,7 @@ def test_an_empty_entry_is_not_called_an_image(wizard_on: Any, out: Path) -> Non
 @pytest.mark.parametrize("page", ["ig-image", "image-format", "storyboard-only", "thumbnail-image"])
 def test_a_lone_image_is_refused_at_once(wizard_on: Any, out: Path, page: str) -> None:
     code, output = wizard_on(f"https://fake.test/{page}", "")
-    assert code == 0
+    assert code == 1
     assert t("image_only_skipped") in output
     assert names(out) == []
     assert history_rows() == []
@@ -5058,7 +5058,7 @@ def test_cancelling_the_retry_of_a_carousel_saves_nothing(
     wizard_on: Any, out: Path, page: str, reply: Any
 ) -> None:
     code, output = wizard_on(f"https://fake.test/{page}", "", reply)
-    assert code == 0
+    assert code == 1
     assert t("equiv_cmd") not in output
     assert names(out) == []
     assert history_rows() == []
@@ -5086,7 +5086,7 @@ def test_cancelling_the_second_prompt_of_a_cookie_hungry_site_ends_the_run(
     wizard_on: Any, reply: Any
 ) -> None:
     code, output = wizard_on(COOKIE_HUNGRY, "", NO_COOKIES, reply)
-    assert code == 0
+    assert code == 1
     assert t("equiv_cmd") not in output
 
 
@@ -5189,7 +5189,7 @@ def test_cookies_that_break_a_partial_carousel_are_explained_without_a_loop(
 
 def test_a_refusal_after_a_decline_says_why_first(wizard_on: Any, out: Path) -> None:
     code, output = wizard_on("https://fake.test/images-and-gated", "", NO_COOKIES)
-    assert code == 0
+    assert code == 1
     assert output.index(partly_inspected(LOGIN_REQUIRED)) < output.index(t("no_supported_items"))
     assert names(out) == []
     assert history_rows() == []
@@ -5492,7 +5492,7 @@ def test_wizard_asks_for_cookies_on_the_second_url_s_login_wall(
 def test_wizard_skips_a_refused_url_and_says_so_at_the_end(wizard_urls: Any, out: Path) -> None:
     code, output, asked = wizard_urls([VIDEO, IMAGE], *walk_into(out, 6), "")
     assert asked == 7
-    assert code == 0
+    assert code == 1
     assert names(out) == ["Clip.mp4"]
     assert t("image_only_skipped") in output
     assert output.rindex(t("wizard_skipped", IMAGE)) > output.index(t("done"))
@@ -5502,7 +5502,7 @@ def test_wizard_skips_a_refused_url_and_says_so_at_the_end(wizard_urls: Any, out
 def test_wizard_with_every_url_refused_is_cancelled(wizard_urls: Any, out: Path) -> None:
     code, output, asked = wizard_urls([IMAGE, ONLY_IMAGES], "", "")
     assert asked == 2
-    assert code == 0
+    assert code == 1
     assert t("image_only_skipped") in output
     assert t("no_supported_items") in output
     assert t("cancelled") in output
@@ -5514,7 +5514,7 @@ def test_cancel_in_the_second_walk_cancels_the_whole_run(wizard_urls: Any, out: 
     # The second walk: URL, then c at the picker.
     code, output, asked = wizard_urls([VIDEO, CAROUSEL], *walk_into(out, 6), "", "c")
     assert asked == 8
-    assert code == 0
+    assert code == 1
     assert names(out) == []
     assert history_rows() == []
     assert t("cancelled") in output
@@ -5683,7 +5683,7 @@ def test_cancel_at_any_prompt_of_a_later_walk_downloads_nothing(
     second = [*[""] * at, stop]
     code, output, asked = wizard_urls([VIDEO, VIDEO_B], *walk_into(out, 6), *second)
     assert asked == 6 + at + 1
-    assert code == 0
+    assert code == 1
     assert t("cancelled") in output
     assert t("downloading") not in output
     assert names(out) == []
@@ -5705,7 +5705,7 @@ def test_cancel_at_a_later_walk_s_cookie_prompts_downloads_nothing(
 ) -> None:
     code, output, asked = wizard_urls([VIDEO, url], *walk_into(out, 6), *second)
     assert asked == 6 + len(second)
-    assert code == 0
+    assert code == 1
     assert t("cancelled") in output
     assert names(out) == []
     assert history_rows() == []
@@ -5762,7 +5762,7 @@ def test_cancel_after_a_refusal_skips_nothing_and_downloads_nothing(
 ) -> None:
     code, output, asked = wizard_urls([IMAGE, VIDEO], "", "", "c")
     assert asked == 3
-    assert code == 0
+    assert code == 1
     assert t("image_only_skipped") in output
     assert t("cancelled") in output
     assert t("wizard_skipped", IMAGE) not in output
@@ -5772,10 +5772,10 @@ def test_cancel_after_a_refusal_skips_nothing_and_downloads_nothing(
 
 
 # Partial outcomes in other orders (D5, D6).
-def test_a_refusal_before_a_saved_url_still_exits_clean(wizard_urls: Any, out: Path) -> None:
+def test_a_refusal_before_a_saved_url_still_exits_1(wizard_urls: Any, out: Path) -> None:
     code, output, asked = wizard_urls([IMAGE, VIDEO], "", *walk_into(out, 6))
     assert asked == 7
-    assert code == 0
+    assert code == 1
     assert names(out) == ["Clip.mp4"]
     assert f"{t('wizard_title')} (2/2)" in output
     assert output.rindex(t("wizard_skipped", IMAGE)) > output.index(t("done"))
@@ -5868,7 +5868,7 @@ def test_the_counter_and_the_skipped_url_in_both_languages(
 ) -> None:
     monkeypatch.setattr(i18n, "LANG", lang)
     code, output, _ = wizard_urls([VIDEO, IMAGE], *walk_into(out, 6), "")
-    assert code == 0
+    assert code == 1
     assert second_title in output
     assert f"{skipped}{IMAGE}" in output
 
@@ -7928,7 +7928,7 @@ def test_a_login_wall_after_a_missing_browser_up_front_asks_once_more_only(
 
 def test_cancelling_after_a_missing_browser_downloads_nothing(generic: Any, home: Path) -> None:
     code, output = generic("poster.html", "", "c", flags=("-i", "--cookies", "chrome"))
-    assert code == 0
+    assert code == 1
     assert output.count(no_browser()) == 1
     assert t("cancelled") in output
     assert t("equiv_cmd") not in output

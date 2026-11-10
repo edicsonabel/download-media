@@ -662,12 +662,12 @@ def test_main_without_url_or_clipboard_dies(monkeypatch) -> None:
     assert exc.value.code != 0
 
 
-def test_main_cancelled_wizard_exits_clean(monkeypatch, capsys) -> None:
+def test_main_cancelled_wizard_exits_1(monkeypatch, capsys) -> None:
     from download_media import cli
     from download_media.i18n import t
 
     monkeypatch.setattr(cli.wizard, "run_all", lambda opts: None)
-    assert cli.main([]) == 0
+    assert cli.main([]) == 1
     assert t("cancelled") in capsys.readouterr().out
 
 

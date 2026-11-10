@@ -566,18 +566,18 @@ def _main(argv: list[str] | None) -> int:
             result = wizard.run(opts)
             if result is None:
                 warn(t("cancelled"))
-                return 0
+                return 1
             opts = result
         else:
             walked = wizard.run_all(opts)
             if walked is None:
                 warn(t("cancelled"))
-                return 0
+                return 1
             runs = [(url, walk) for url, walk in walked if walk is not None]
             refused = [url for url, walk in walked if walk is None]
             if not runs:
                 warn(t("cancelled"))
-                return 0
+                return 1
 
     if runs is None:
         # Direct mode without URL: try clipboard once (no prompt — just use it if found)
@@ -616,8 +616,8 @@ def _main(argv: list[str] | None) -> int:
     _print_equivalent(runs, outcomes)
     if interrupted:
         return EXIT_INTERRUPTED
-    # A URL the wizard refused never reached the download, so it doesn't count.
-    return 0 if all(outcome.ok for outcome in outcomes) else 1
+    # 0 only when every URL given was saved: a refused one wasn't.
+    return 0 if outcomes and not refused and all(outcome.ok for outcome in outcomes) else 1
 
 
 def entry() -> NoReturn:
