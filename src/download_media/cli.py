@@ -49,7 +49,7 @@ from .downloader import (
     load_browser_cookies,
 )
 from .i18n import is_yes, t
-from .probe import is_auth_error
+from .probe import is_auth_error, is_image_post_error
 from .ui import C, die, err, fmt_bytes, fmt_duration, info, ok, warn
 
 # Flags that signal "I know what I want; skip the wizard".
@@ -479,6 +479,12 @@ def _hint_for_download_error(message: str, opts: DownloadOptions) -> None:
     msg = message.lower()
     if "secretstorage" in msg:
         secretstorage_hint()
+    elif is_image_post_error(message):
+        if opts.cookies_browser:
+            # The run they were sent with still got the logged-out answer.
+            warn(t("auth_still_needed", browser_of(opts.cookies_browser)))
+        else:
+            warn(t("image_post_hint"))
     elif is_auth_error(message) and not opts.cookies_browser:
         warn("  → try again with --cookies <browser> (firefox, brave, chrome, ...)")
     if opts.cookies_browser and uses_keyring(opts.cookies_browser):

@@ -23,6 +23,7 @@ from download_media.probe import (
     _short_reason,
     detect_site,
     is_auth_error,
+    is_image_post_error,
     probe,
     site_likely_needs_cookies,
 )
@@ -615,6 +616,8 @@ RATE_LIMIT_REASON = (
         f"[youtube] x: Private video. Sign in if you've been granted access to this video. {HINT}",
         "[youtube] x: Join this channel to get access to members-only content like this video.",
         "[TikTok] 1: Fresh cookies (not necessarily logged in) are needed",
+        # Logged in, Instagram returns the image post behind it (spec 61).
+        "[Instagram] x: There is no video in this post",
         "[generic] s401: Unable to download webpage: HTTP Error 401: Unauthorized "
         "(caused by <HTTPError 401: Unauthorized>)",
     ],
@@ -640,7 +643,6 @@ def test_one_signal_alone_is_enough_to_offer_cookies(message: str) -> None:
 @pytest.mark.parametrize(
     "message",
     [
-        "[Instagram] x: There is no video in this post",
         "[youtube] x: This content isn't available, try again later. The current session has "
         "been rate-limited by YouTube for up to an hour.",
         "[bilibili] 1: You have exceeded the rate limit. Try again later",
@@ -945,9 +947,7 @@ def test_probe_asks_for_cookies_on_a_login_error(fake_site: Any, page: str, reas
     assert result.error_message == reason
 
 
-@pytest.mark.parametrize(
-    "page", ["rate-limited", "geo", "geo-metadata", "drm", "no-video-post", "extractor-bug"]
-)
+@pytest.mark.parametrize("page", ["rate-limited", "geo", "geo-metadata", "drm", "extractor-bug"])
 def test_probe_does_not_ask_for_cookies_when_they_cannot_help(fake_site: Any, page: str) -> None:
     result = probe(f"https://fake.test/{page}")
     assert result.failed is True
@@ -977,6 +977,52 @@ def test_probe_tells_a_lone_image_it_can_save(
 @pytest.mark.parametrize("page", ["video", "ig-carousel", "audio-carousel"])
 def test_probe_calls_nothing_else_a_saveable_image(fake_site: Any, page: str) -> None:
     assert probe(f"https://fake.test/{page}").saveable_image is False
+
+
+IMAGE_POST = "There is no video in this post"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        f"[Instagram] x: {IMAGE_POST}",
+        f"ERROR: [Instagram] C0abcDEFghi: {IMAGE_POST}",
+        IMAGE_POST,
+    ],
+)
+def test_instagram_s_post_with_no_video_may_be_an_image_cookies_can_save(message: str) -> None:
+    assert is_image_post_error(message) is True
+    assert is_auth_error(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Login required",
+        "[fakesite] i1: No video formats found!",
+        "[generic] there-is-no-video-in-this-post: Unable to download webpage: HTTP Error 404",
+        f"[youtube] x: {RATE_LIMIT_REASON}",
+    ],
+)
+def test_other_errors_are_not_an_image_post(message: str) -> None:
+    assert is_image_post_error(message) is False
+
+
+@pytest.mark.parametrize("page", ["ig-lone-image", "no-video-post"])
+def test_probe_asks_for_cookies_on_a_post_with_no_video(fake_site: Any, page: str) -> None:
+    result = probe(f"https://fake.test/{page}")
+    assert result.failed is True
+    assert result.needs_cookies is True
+    assert result.error_message == IMAGE_POST
+
+
+def test_instagram_still_says_there_is_no_video_in_this_post() -> None:
+    # The hint rests on one extractor's sentence: a reworded yt-dlp fails here, not silently.
+    import inspect
+
+    from yt_dlp.extractor.instagram import InstagramIE
+
+    assert IMAGE_POST in inspect.getsource(InstagramIE._real_extract)
 
 
 def test_probe_drops_the_bug_report_request(fake_site: Any) -> None:

@@ -35,6 +35,7 @@ from .probe import (
     Probe,
     ProbeItem,
     detect_site,
+    is_image_post_error,
     probe,
     site_likely_needs_cookies,
 )
@@ -591,7 +592,10 @@ def _walk_url(opts: DownloadOptions) -> DownloadOptions | None:
         info(t("probing"))
         probe_result = probe(opts.urls[0])
     if probe_result.needs_cookies and not opts.cookies_browser:
-        warn(t("auth_needed_retry", probe_result.error_message))
+        if is_image_post_error(probe_result.error_message or ""):
+            warn(t("image_post_needs_login"))
+        else:
+            warn(t("auth_needed_retry", probe_result.error_message))
         try:
             step_cookies(opts)
         except _Cancel:

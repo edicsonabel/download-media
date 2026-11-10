@@ -143,6 +143,9 @@ _AUTH_ERROR_HINTS = (
     "premium",
     "http error 401",
 )
+# instagram.py's logged-out answer for a post holding one image (raise_no_formats at the end of
+# InstagramIE._real_extract). Logged in, yt-dlp returns the post, and the download saves it.
+_IMAGE_POST_HINTS = ("there is no video in this post",)
 # The generic extractor's id is the URL's last segment, unquoted, so it can hold spaces or
 # ": ", which is why yt-dlp's own opening is looked for first. At the floor it has no id at
 # all, and "Unable to download webpage: " is the site's sentence.
@@ -165,10 +168,16 @@ def _site_words(message: str) -> str:
     return _ADDRESS.sub("", "\n".join(kept)).lower()
 
 
+def is_image_post_error(message: str) -> bool:
+    """Whether this yt-dlp error may be an image post the site only shows to logged-in users."""
+    words = _site_words(message)
+    return any(hint in words for hint in _IMAGE_POST_HINTS)
+
+
 def is_auth_error(message: str) -> bool:
     """Whether browser cookies are the user's next move after this yt-dlp error."""
     words = _site_words(message)
-    if any(hint in words for hint in _LOGIN_HINTS):
+    if any(hint in words for hint in _LOGIN_HINTS) or is_image_post_error(message):
         return True
     if any(hint in words for hint in _NOT_AUTH_ERRORS):
         return False

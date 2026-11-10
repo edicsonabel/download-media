@@ -567,6 +567,25 @@ def test_every_auth_error_hints_cookies_only_without_them(capsys, message: str) 
     assert _hint(capsys, message, ["--cookies", "firefox"]) == ""
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "ERROR: [Instagram] C0abcDEFghi: There is no video in this post",
+        "[fakesite] ig-lone-image: There is no video in this post",
+    ],
+)
+def test_a_post_with_no_video_says_cookies_may_save_the_image(capsys, message: str) -> None:
+    from download_media.i18n import t
+
+    without = _hint(capsys, message, [])
+    assert t("image_post_hint") in without
+    assert "→ try again with --cookies <browser>" not in without
+    with_cookies = _hint(capsys, message, ["--cookies", "firefox"])
+    assert t("auth_still_needed", "firefox") in with_cookies
+    assert t("image_post_hint") not in with_cookies
+    assert "→ try again with --cookies <browser>" not in with_cookies
+
+
 def test_hint_stays_quiet_for_unrelated_errors(capsys) -> None:
     assert _hint(capsys, "HTTP Error 500", []) == ""
 

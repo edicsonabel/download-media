@@ -11238,3 +11238,67 @@ def test_wizard_saves_a_lone_image_among_other_urls(wizard_urls: Any, out: Path)
     assert commands(output) == [
         f"download-media -y -o {out} --cookies firefox {VIDEO} {LONE_IMAGE}"
     ]
+
+
+GENERIC_COOKIES_HINT = "→ try again with --cookies <browser>"
+
+
+@pytest.mark.parametrize("flags", [(), ("-p",), ("-l",)], ids=["single", "playlist", "list"])
+def test_a_lone_image_without_cookies_says_cookies_may_save_it(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, LONE_IMAGE)
+    assert code == 1
+    assert "There is no video in this post" in output
+    assert t("failed", LONE_IMAGE) in output
+    assert t("image_post_hint") in output
+    assert GENERIC_COOKIES_HINT not in output
+    assert names(out) == []
+
+
+def test_cookies_that_do_not_log_in_say_so_on_an_image_post(run: Any, out: Path) -> None:
+    url = "https://fake.test/no-video-post"
+    code, output = run("-y", *WITH_COOKIES, url)
+    assert code == 1
+    assert t("cookies_retry", "firefox") in output
+    assert t("failed", url) in output
+    assert t("auth_still_needed", "firefox") in output
+    assert t("image_post_hint") not in output
+    assert GENERIC_COOKIES_HINT not in output
+    assert names(out) == []
+
+
+def test_wizard_asks_for_cookies_on_a_lone_image_and_saves_it(
+    wizard_on: Any, pasted: Any, out: Path
+) -> None:
+    firefox = str(BROWSERS.index("firefox") + 2)
+    # URL, cookies, folder.
+    code, output = wizard_on(LONE_IMAGE, "", firefox, "")
+    assert code == 0
+    assert t("image_post_needs_login") in output
+    assert asked_for_login("There is no video in this post") not in output
+    assert detected("kind_image") in output
+    for step in ("ask_type", "ask_quality", "ask_vformat"):
+        assert t(step) not in output
+    assert names(out) == [LONE_NAME]
+    [line] = commands(output)
+    assert line == f"download-media -y -o {out} --cookies firefox {LONE_IMAGE}"
+    before = (out / LONE_NAME).stat().st_mtime_ns
+    code, _ = pasted(line)
+    assert code == 0
+    assert names(out) == [LONE_NAME]
+    assert (out / LONE_NAME).stat().st_mtime_ns == before
+
+
+def test_wizard_declining_cookies_on_a_lone_image_still_walks_the_manual_flow(
+    wizard_on: Any, out: Path
+) -> None:
+    # URL, cookies (none), type, quality, container, folder, then the preview. Row 38's to cut.
+    code, output = wizard_on(LONE_IMAGE, "", NO_COOKIES, *VIDEO_STEPS, "")
+    assert code == 1
+    assert t("image_post_needs_login") in output
+    assert t("probe_failed", "There is no video in this post") in output
+    assert t("failed", LONE_IMAGE) in output
+    assert t("image_post_hint") in output
+    assert names(out) == []
+    assert history_rows() == []
