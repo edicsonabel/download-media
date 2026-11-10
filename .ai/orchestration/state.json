@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:06:22-04:00",
+  "updated": "2026-11-10T01:09:09-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,12 +2216,12 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "validation",
-      "status": "merged",
-      "next_agent": "architect",
+      "stage": "complete",
+      "status": "validated",
+      "next_agent": null,
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
-      "worktree": ".worktrees/fix-container-choice",
+      "worktree": null,
       "commits": [
         "fea87ca",
         "3938c1f",
@@ -2240,7 +2240,8 @@
         "e903168",
         "95533c9",
         "77a8689",
-        "09075a2"
+        "09075a2",
+        "f05efc3"
       ],
       "review": {
         "approved": true,
@@ -2365,6 +2366,13 @@
           "result": "merged",
           "at": "2026-11-10T00:53:45-04:00",
           "note": "Merged as 09075a2, no conflicts. Gate exit 0 on the merged code (run at 0d91c52, same src/tests), 2194 passed + 4 xfailed es/en. Undo: git revert -m 1 09075a2. Pushed by the orchestrator under the human's approval."
+        },
+        {
+          "stage": "validation",
+          "agent": "architect",
+          "result": "validated",
+          "at": "2026-11-10T01:09:09-04:00",
+          "note": "21 criteria hold on main; reproduction fixed in direct mode and the wizard; revert copy fails 19/27. Live Wikimedia: default .mp4 h264+aac in 4.8 s, mkv .mkv vp9+opus in 2.8 s, disk/summary/history agree. Spec done with six post-approval changes recorded; PLAN row 30 done. Planner: 0.4.0 review list needs spec 30's changes plus a fifth (a default run next to a same-named file in another container keeps both); Next paragraph; row for the untagged xfail; row for VP9/AV1 in .mp4 and HDR/high bit depth. Worktree and branch removed."
         }
       ]
     },
