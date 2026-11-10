@@ -605,6 +605,9 @@ class FakeSiteIE(InfoExtractor):
             return self._instagram_image("i1")
         if page == "ig-lone-image-b":
             return self._instagram_image("i9")
+        if page == "ig-lone-link":
+            # A page that only points at the post: yt-dlp follows the link to a lone result.
+            return self.url_result("https://fake.test/ig-lone-image")
         if page == "ig-lone-broken":
             broken = {"url": f"{self.media_url}/status/404/i1.jpg", "width": 64, "height": 64}
             return {**self._instagram_image("i1"), "thumbnails": [broken]}

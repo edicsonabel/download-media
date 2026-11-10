@@ -11302,3 +11302,200 @@ def test_wizard_declining_cookies_on_a_lone_image_still_walks_the_manual_flow(
     assert t("image_post_hint") in output
     assert names(out) == []
     assert history_rows() == []
+
+
+LONE_LINK = "https://fake.test/ig-lone-link"
+
+
+def lone_notice() -> str:
+    """t("image_alone_saved") without the file name."""
+    return t("image_alone_saved", "\0").partition("\0")[2]
+
+
+@pytest.mark.parametrize("flags", [(), ("-p",)], ids=["single", "playlist"])
+@pytest.mark.parametrize("url", [IG_CAROUSEL, LINKED], ids=["carousel", "linked"])
+def test_a_list_s_images_are_never_called_the_url_s_only_result(
+    run: Any, out: Path, url: str, flags: tuple[str, ...]
+) -> None:
+    # LINKED's image page is a lone image on its own; inside the list it's an item.
+    code, output = run("-y", *flags, *WITH_COOKIES, url)
+    assert code == 0
+    assert jpgs(out)
+    assert lone_notice() not in output
+
+
+@pytest.mark.parametrize("flags", [(), ("-p",)], ids=["single", "playlist"])
+def test_audio_mode_counts_each_carousel_image_once(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    # yt-dlp also runs the match_filter on each raw entry, without its index, after the item.
+    code, output = run("-y", "-a", *flags, *WITH_COOKIES, IG_CAROUSEL)
+    assert code == 0
+    assert jpgs(out) == []
+    assert output.count(t("item_image_skipped", "i1")) == 1
+    assert output.count(t("item_image_skipped", "i2")) == 1
+    saved = len(names(out))
+    assert t("partial_result", saved, saved + 2, 2, 0) in output
+
+
+@pytest.mark.parametrize("flags", [(), ("-p",)], ids=["single", "playlist"])
+def test_a_lone_image_reached_through_a_link_is_still_the_url_s_only_result(
+    run: Any, out: Path, tiny_jpg: bytes, flags: tuple[str, ...]
+) -> None:
+    code, output = run("-y", *flags, *WITH_COOKIES, LONE_LINK)
+    assert code == 0
+    assert names(out) == [LONE_NAME]
+    assert (out / LONE_NAME).read_bytes() == tiny_jpg
+    assert t("image_alone_saved", LONE_NAME) in output
+    assert t("done") in output
+    code, output = run("-y", LONE_LINK)
+    assert code == 1
+    assert t("image_post_hint") in output
+    assert names(out) == [LONE_NAME]
+
+
+def test_wizard_follows_a_link_to_a_lone_image(wizard_on: Any, out: Path) -> None:
+    # URL, folder, cookies.
+    code, output = wizard_on(LONE_LINK, "", "", "", flags=WITH_COOKIES)
+    assert code == 0
+    assert detected("kind_image") in output
+    assert t("ask_type") not in output
+    assert names(out) == [LONE_NAME]
+    assert t("image_alone_saved", LONE_NAME) in output
+
+
+def test_direct_mode_names_each_lone_image_among_other_urls(run: Any, out: Path) -> None:
+    code, output = run("-y", *WITH_COOKIES, VIDEO, LONE_IMAGE_B, LONE_IMAGE)
+    assert code == 0
+    assert names(out) == ["Clip [i1].jpg", "Clip [i9].jpg", "Clip.mp4"]
+    assert output.count(lone_notice()) == 2
+    assert t("image_alone_saved", "Clip [i9].jpg") in output
+    assert t("image_alone_saved", LONE_NAME) in output
+    # Each notice follows its own URL's download, never the video's.
+    video_part = output[: output.index(LONE_IMAGE_B)]
+    assert lone_notice() not in video_part
+    assert kinds_and_urls() == [["video", VIDEO], ["video", LONE_IMAGE_B], ["video", LONE_IMAGE]]
+    assert commands(output) == [
+        f"download-media -y -o {out} --cookies firefox {VIDEO} {LONE_IMAGE_B} {LONE_IMAGE}"
+    ]
+
+
+def test_direct_mode_without_cookies_saves_the_video_and_hints_at_the_image(
+    run: Any, out: Path
+) -> None:
+    code, output = run("-y", VIDEO, LONE_IMAGE)
+    assert code == 1
+    assert names(out) == ["Clip.mp4"]
+    assert output.count(t("image_post_hint")) == 1
+    assert t("failed", LONE_IMAGE) in output
+    assert t("failed", VIDEO) not in output
+    assert lone_notice() not in output
+    assert kinds_and_urls() == [["video", VIDEO]]
+    assert commands(output) == [f"download-media -y -o {out} {VIDEO} {LONE_IMAGE}"]
+
+
+@pytest.mark.parametrize("lang", ["es", "en"])
+def test_the_lone_image_messages_speak_the_user_s_language(
+    run: Any, out: Path, answers: Any, monkeypatch: pytest.MonkeyPatch, lang: str
+) -> None:
+    monkeypatch.setattr(i18n, "LANG", lang)
+    monkeypatch.setattr(wizard, "LANG", lang)
+    said = i18n._MESSAGES[lang]
+    other = i18n._MESSAGES["en" if lang == "es" else "es"]
+    code, output = run("-y", LONE_IMAGE)
+    assert code == 1
+    assert said["image_post_hint"] in output
+    assert other["image_post_hint"] not in output
+    code, output = run("-y", *WITH_COOKIES, LONE_IMAGE)
+    assert code == 0
+    assert said["image_alone_saved"].format(LONE_NAME) in output
+    assert other["image_alone_saved"].format(LONE_NAME) not in output
+    # URL, cookies, folder.
+    prompts = answers("", str(BROWSERS.index("firefox") + 2), "")
+    code, output = run("-i", LONE_IMAGE)
+    assert len(prompts) == 3
+    assert code == 0
+    assert said["image_post_needs_login"] in output
+    assert other["image_post_needs_login"] not in output
+    assert names(out) == [LONE_NAME]
+
+
+def test_the_preview_in_audio_mode_reads_a_lone_image_then_skips_it(
+    run: Any, out: Path, answers: Any
+) -> None:
+    prompts = answers("")
+    code, output = run("-a", *WITH_COOKIES, LONE_IMAGE)
+    assert prompts == [t("ask_confirm")]
+    assert f"{t('p_title')}: Clip" in output
+    assert "ERROR:" not in output
+    assert t("item_image_skipped", "i1") in output
+    assert t("no_supported_items") in output
+    assert code == 1
+    assert names(out) == []
+    assert history_rows() == []
+
+
+def test_the_preview_reads_a_lone_image_after_the_browser_s_cookies_fail_to_load(
+    run: Any, out: Path, answers: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unreadable(ydl: Any, spec: str | None) -> None:
+        if spec:
+            raise CookiesUnavailable(spec, CookieFailure(missing=True, reason="no database"))
+
+    # Only the preview's load: the download's own one is a no-op on fake_site.
+    monkeypatch.setattr(cli, "load_browser_cookies", unreadable)
+    prompts = answers("")
+    code, output = run(*WITH_COOKIES, "https://fake.test/thumbnail-image")
+    assert prompts == [t("ask_confirm")]
+    before = output[: output.index(t("downloading"))]
+    assert f"{t('p_title')}: Clip" in before
+    assert "ERROR:" not in before
+    assert code == 0
+    assert names(out) == [LONE_NAME]
+
+
+def test_wizard_saves_a_lone_image_in_the_video_folder_even_with_the_audio_flag(
+    wizard_urls: Any, home: Path
+) -> None:
+    from download_media.config import xdg_dir
+
+    # URL, folder, cookies.
+    code, output, asked = wizard_urls(["-i", "-a", *WITH_COOKIES, LONE_IMAGE], "", "", "")
+    assert asked == 3
+    assert code == 0
+    videos, music = xdg_dir("VIDEOS", "Videos"), xdg_dir("MUSIC", "Music")
+    assert names(videos) == [LONE_NAME]
+    assert names(music) == []
+    [line] = commands(output)
+    assert " -a " not in f"{line} "
+
+
+def test_wizard_asks_cookies_for_a_lone_image_after_a_video(wizard_urls: Any, out: Path) -> None:
+    firefox = str(BROWSERS.index("firefox") + 2)
+    argv = ["-i", "-o", str(out), VIDEO, LONE_IMAGE]
+    # Video: URL, type, quality, container, folder, cookies. Image: URL, cookies, folder.
+    code, output, asked = wizard_urls(argv, *[""] * 6, "", firefox, "")
+    assert asked == 9
+    assert code == 0
+    assert names(out) == sorted(["Clip.mp4", LONE_NAME])
+    assert output.count(t("image_post_needs_login")) == 1
+    assert output.count(lone_notice()) == 1
+    assert kinds_and_urls() == [["video", VIDEO], ["video", LONE_IMAGE]]
+    assert commands(output) == [
+        f"download-media -y -o {out} {VIDEO}",
+        f"download-media -y -o {out} --cookies firefox {LONE_IMAGE}",
+    ]
+
+
+def test_wizard_with_cookies_that_do_not_log_in_says_so_on_an_image_post(
+    wizard_on: Any, out: Path
+) -> None:
+    url = "https://fake.test/no-video-post"
+    # URL, type, quality, container, folder, cookies, then the preview. Row 38's to cut.
+    code, output = wizard_on(url, "", *VIDEO_STEPS, "", "", flags=WITH_COOKIES)
+    assert code == 1
+    assert t("image_post_needs_login") not in output
+    assert t("probe_failed", "There is no video in this post") in output
+    assert t("auth_still_needed", "firefox") in output
+    assert t("image_post_hint") not in output
+    assert names(out) == []
