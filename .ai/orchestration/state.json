@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T05:11:12-04:00",
+  "updated": "2026-11-10T05:17:50-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3011,6 +3011,27 @@
           "result": "done",
           "at": "2026-11-10T05:11:12-04:00",
           "note": "f02d63b intent detection by a sentinel-namespace parse; 7b9720a -l as intent flag, every URL listed, ask_urls, AGENTS.md. Gate exit 0 at 7b9720a, 2565 passed + 11 xfailed. Reverting cli.py and wizard.py fails 36 [fix] tests. Console runs match. Shared IMAGE parameter with ig-lone-images: whichever lands second updates it."
+        }
+      ]
+    },
+    "fix/untagged-per-item": {
+      "type": "fix",
+      "title": "Name only saved items as untagged",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/69-untagged-per-item.md",
+      "branch": "fix/untagged-per-item",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T05:17:50-04:00",
+          "note": "Planner's recommendation after 61 and 22 (cfff3e9), under the human's overnight delegation. Highest open item needing no human decision; strict xfail already pins it."
         }
       ]
     }
