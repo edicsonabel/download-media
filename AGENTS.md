@@ -13,7 +13,7 @@ Arch Linux (AUR).
 
 - **Language:** Python ≥ 3.10. Package source at `src/download_media/`, entry
   point exposed as the `download-media` console script
-  (`download_media.cli:main`).
+  (`download_media.cli:entry`, which wraps `main`).
 - **Runtime deps:** `yt-dlp` (used as a library — `from yt_dlp import
   YoutubeDL`, never shelled out), `ffmpeg` (audio extraction + merging quality
   streams), `secretstorage` (decrypting Chromium-family browser cookies on
@@ -135,6 +135,16 @@ otherwise omits flags whose values match the defaults. URLs that ended in
 different playlist modes, or with different wizard choices, get one command
 each. Nothing is printed when the run was cancelled before downloading: a
 cancelled wizard only holds half-made choices.
+
+Exit status: 0 only when every URL given was saved (warnings allowed). 1 when
+any URL wasn't: it failed, the wizard refused it, or it was cancelled or
+declined at a prompt (`c`, `n`, EOF); also for a missing URL. 2 for a usage
+error. Ctrl-C never shows a traceback: it prints `Cancelled.` on a fresh line,
+or, during a download, the `interrupted` line naming the URL and the folder
+where unfinished files may be left, followed by the equivalent command for the
+URLs that reached the download. Later URLs don't run. Then `entry()` ends the
+process by SIGINT, so a shell shows 130 and a calling loop stops; `main()`
+returns 130 instead, so tests can call it in-process.
 
 ## Development
 
