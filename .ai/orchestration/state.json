@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T06:53:28-04:00",
+  "updated": "2026-11-10T07:14:48-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -3088,23 +3088,24 @@
           "agent": "tech-lead",
           "result": "merged",
           "at": "2026-11-10T06:53:28-04:00",
-          "note": "Merged as 8ff961c, no conflicts. Gate exit 0, 2898 passed + 15 xfailed es/en. Undo: git revert -m 1 8ff961c. Pushed by the orchestrator under the delegation; validation after the untagged-per-item merge gate (one gate on main at a time)."
+          "note": "Merged as 8ff961c, no conflicts. Gate exit 0, 2898 passed + 15 xfailed es/en. Undo: git revert -m 1 8ff961c. Pushed by the orchestrator under the delegation; validation after the untagged-per-item merge gate (one gate on main at a time). CI run 42802950238 on 590fc9b succeeded (attempt 1)."
         }
       ]
     },
     "fix/untagged-per-item": {
       "type": "fix",
       "title": "Name only saved items as untagged",
-      "stage": "integration",
-      "status": "approved",
-      "next_agent": "tech-lead",
+      "stage": "validation",
+      "status": "merged",
+      "next_agent": "architect",
       "doc": ".ai/specs/69-untagged-per-item.md",
       "branch": "fix/untagged-per-item",
       "worktree": ".worktrees/fix-untagged-per-item",
       "commits": [
         "a1c8379",
         "8d4926f",
-        "cb87f6a"
+        "cb87f6a",
+        "e070f3a"
       ],
       "review": {
         "approved": true,
@@ -3159,6 +3160,13 @@
           "result": "approved",
           "at": "2026-11-10T06:43:02-04:00",
           "note": "Merge and push under the overnight delegation, after the intent-flags merge gate finishes on main (a merge mid-gate would change the tree under test)."
+        },
+        {
+          "stage": "integration",
+          "agent": "tech-lead",
+          "result": "merged",
+          "at": "2026-11-10T07:14:48-04:00",
+          "note": "Merged as e070f3a, no conflicts. Gate exit 0 (intent-flags + this item), 2920 passed + 15 xfailed es/en; no XPASS. Undo: git revert -m 1 e070f3a. Pushed by the orchestrator under the delegation."
         }
       ]
     }
