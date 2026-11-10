@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T04:32:02-04:00",
+  "updated": "2026-11-10T04:34:14-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2679,9 +2679,9 @@
     "fix/subs-failures": {
       "type": "fix",
       "title": "Stop a bad subtitle aborting the video, warn on empty tracks, clean up after failures",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "qa_review",
+      "status": "in_review",
+      "next_agent": "qa-reviewer",
       "doc": ".ai/specs/36-subs-failures.md",
       "branch": "fix/subs-failures",
       "worktree": ".worktrees/fix-subs-failures",
@@ -2691,13 +2691,12 @@
         "c369973",
         "da03a4a",
         "88121be",
-        "4d4f725"
+        "4d4f725",
+        "1a841c7"
       ],
       "review": {
-        "approved": false,
-        "findings": [
-          "medium downloader.py:340 / drop_subs :354-359 D4 deletes a subtitle file an earlier run saved under the same name (yt-dlp rewrites it, the video fails, drop_subs removes it); main keeps it. Strict xfail test_a_failed_video_never_takes_a_subtitle_an_earlier_run_saved"
-        ]
+        "approved": true,
+        "findings": []
       },
       "history": [
         {
@@ -2748,6 +2747,13 @@
           "result": "done",
           "at": "2026-11-10T04:14:42-04:00",
           "note": "Round 1 fixed in 4d4f725: only subtitle files that weren't on disk before the write join item_subs. Strict xfail flipped; fails without the fix. Gate exit 0 (second run; the first overlapped another gate and was stopped), 2418 passed + 7 xfailed. Unmeasured edge: a subtitle finished from an earlier run's .part is deleted if the video then fails."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "done",
+          "at": "2026-11-10T04:34:14-04:00",
+          "note": "Round 1 closed in real runs. Resumed earlier .part finished then deleted with the failed video: judged acceptable (the finished file is this run's; keeping it is the orphan D4 removes), pinned by a test. Seven tests in 1a841c7; mutation 4/4. Gate exit 0, 2425 passed + 7 xfailed."
         }
       ]
     },
