@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09T23:40:00-04:00",
+  "updated": "2026-11-09T23:43:18-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2216,9 +2216,9 @@
     "fix/container-choice": {
       "type": "fix",
       "title": "Make the container choice hold on single-format sources",
-      "stage": "testing",
-      "status": "in_progress",
-      "next_agent": "test-engineer",
+      "stage": "development",
+      "status": "changes_requested",
+      "next_agent": "developer",
       "doc": ".ai/specs/30-container-choice.md",
       "branch": "fix/container-choice",
       "worktree": ".worktrees/fix-container-choice",
@@ -2231,14 +2231,16 @@
         "29e4302",
         "597d135",
         "4360f86",
-        "3a7fdd7"
+        "3a7fdd7",
+        "ed681ad",
+        "55f001a",
+        "857efbf"
       ],
       "review": {
-        "approved": true,
+        "approved": false,
         "findings": [
-          "minor downloader.py:641 ffprobe failing or over 15 s makes _has_media_streams return False, so the conversion is skipped with no warning and the summary names the wrong container",
-          "minor downloader.py:655 yt-dlp's '(pass -k to keep)' now shows on most non-mp4 single-format video downloads; no -k in the tool (planner)",
-          "minor 862f4df typed fix while adding a user-facing message (feat per AGENTS.md); defensible"
+          "major downloader.py:587 ffprobe 9 prints 'video,' for a stream with side data (phone display matrix); since 3a7fdd7 that reads as no answer, so a rotated .mov stays .mov under the default mp4 and a rotated mp4 isn't remuxed or converted; worked at 4360f86. Strict xfails test_a_rotated_video_is_converted, test_media_streams_by_what_ffprobe_says",
+          "minor downloader.py:654 under -p/--playlist-items with ffprobe unable to answer, a junk body named in not_converted then fails in the metadata step; warning says kept, count says failed. Strict xfail test_an_item_that_failed_is_not_named_as_not_converted"
         ]
       },
       "history": [
@@ -2311,6 +2313,13 @@
           "result": "done",
           "at": "2026-11-09T23:25:56-04:00",
           "note": "QA minor 1 fixed in 3a7fdd7: _has_media_streams returns None when ffprobe can't answer; the step warns not_converted straight away (no conversion, nothing deleted). Junk body still fails. 4 e2e cases fail without it. Gate exit 0, 2169 passed + 2 xfailed. Developer soft-reset an unreviewed, unpushed 683ce45 into 3a7fdd7. Open question: under -p a junk item ffprobe can't read stays in not_converted after failing."
+        },
+        {
+          "stage": "testing",
+          "agent": "test-engineer",
+          "result": "changes_requested",
+          "at": "2026-11-09T23:43:18-04:00",
+          "note": "Round 2 (after round 1 and the human-requested QA minor). Gate exit 0 at 857efbf, 2172 passed + 8 xfailed. Mutation 9/9. Wizard None-path test added in es and en. One major regression from 3a7fdd7 (rotated videos), one minor (developer's open note reproduced). 'couldn't be converted' slightly off on the None path (no conversion tried)."
         }
       ]
     },
