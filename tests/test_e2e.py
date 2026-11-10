@@ -10609,6 +10609,80 @@ def test_a_failed_video_never_takes_a_subtitle_an_earlier_run_saved(run: Any, ou
     assert names(out) == ["Clip.en.vtt", "Clip.mp3"]
 
 
+def test_a_failed_video_never_takes_a_saved_manual_subtitle_for_an_auto_caption(
+    run: Any, out: Path
+) -> None:
+    # An auto-caption and a manual subtitle in the same language share the file name.
+    code, _ = run("-y", "-a", "-s", "https://fake.test/subs-en")
+    assert code == 0
+    url = "https://fake.test/subs-auto-novideo"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == ["Clip.en.vtt", "Clip.mp3"]
+
+
+def test_a_failed_video_takes_its_new_auto_caption(run: Any, out: Path) -> None:
+    url = "https://fake.test/subs-auto-novideo"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []
+
+
+def test_a_failed_video_takes_only_its_own_language(run: Any, out: Path) -> None:
+    code, _ = run("-y", "-a", "-s", "--sub-langs", "fr", "https://fake.test/subs-fr")
+    assert code == 0
+    assert names(out) == ["Clip.fr.vtt", "Clip.mp3"]
+    code, _ = run("-y", "-s", "--sub-langs", "fr,en", "https://fake.test/subs-novideo")
+    assert code == 1
+    assert names(out) == ["Clip.fr.vtt", "Clip.mp3"]
+
+
+def test_a_rerun_still_takes_a_subtitle_that_is_new_this_time(run: Any, out: Path) -> None:
+    # Run 1 saved the audio without subtitles: run 2's subtitle is its own, and goes.
+    code, _ = run("-y", "-a", "https://fake.test/subs-en")
+    assert code == 0
+    assert names(out) == ["Clip.mp3"]
+    code, _ = run("-y", "-s", "https://fake.test/subs-novideo")
+    assert code == 1
+    assert names(out) == ["Clip.mp3"]
+
+
+def test_a_subtitle_finished_from_an_earlier_part_goes_with_the_failed_video(
+    run: Any, out: Path
+) -> None:
+    # yt-dlp resumes (or restarts) the earlier scratch file and renames it: the subtitle file
+    # is this run's, and must not stay next to "Download failed" with no video.
+    out.mkdir()
+    (out / "Clip.en.vtt.part").write_text("WEBVTT\n\n00:00", encoding="utf-8")
+    url = "https://fake.test/subs-novideo"
+    code, output = run("-y", "-s", url)
+    assert code == 1
+    assert t("failed", url) in output
+    assert names(out) == []
+
+
+def test_a_failed_item_under_p_takes_only_its_own_subtitle(run: Any, out: Path) -> None:
+    # Both items are "Clip": item 2's cleanup must not reach item 1's subtitle.
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-carousel-novideo-last")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert names(out) == ["01 - Clip [s1].en.vtt", "01 - Clip [s1].mp4"]
+    assert subtitle_streams(out / "01 - Clip [s1].mp4") == [("mov_text", "eng")]
+
+
+def test_a_failed_item_under_p_keeps_the_subtitle_an_earlier_run_saved(run: Any, out: Path) -> None:
+    code, _ = run("-y", "-p", "-a", "-s", "https://fake.test/subs-carousel-both")
+    assert code == 0
+    first = ["01 - Clip [s1].en.vtt", "01 - Clip [s1].mp3", "02 - Clip [s2].en.vtt"]
+    assert names(out) == [*first, "02 - Clip [s2].mp3"]
+    code, output = run("-y", "-p", "-s", "https://fake.test/subs-carousel-novideo-last")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert names(out) == sorted([*first, "01 - Clip [s1].mp4", "02 - Clip [s2].mp3"])
+
+
 @pytest.mark.parametrize("flags", [("-p",), ()], ids=["-p", "single"])
 def test_an_empty_subtitle_is_named_for_its_own_item_only(
     run: Any, out: Path, flags: tuple[str, ...]

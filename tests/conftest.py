@@ -1092,6 +1092,19 @@ class FakeSiteIE(InfoExtractor):
                 **self._video("v1", path="missing.mp4", page=page),
                 "subtitles": self._tracks(en="en.vtt", es="es.vtt"),
             }
+        if page == "subs-auto-novideo":  # Only an auto-caption, then the video 404s.
+            return {
+                **self._video("v1", path="missing.mp4", page=page),
+                "automatic_captions": self._tracks(en="en.vtt"),
+            }
+        if page in ("subs-carousel-both", "subs-carousel-novideo-last"):
+            # Same items, so the same names; in the second, item 2's video 404s.
+            last = "missing.mp4" if page.endswith("last") else "tiny.mp4"
+            entries = [
+                {**self._video("s1"), "subtitles": self._tracks(en="en.vtt")},
+                {**self._video("s2", path=last), "subtitles": self._tracks(en="en.vtt")},
+            ]
+            return self.playlist_result(entries, "post", "Post")
         if page == "subs-404-carousel":
             entries = [
                 {**self._video("s1"), "subtitles": self._tracks(en="missing.vtt")},
