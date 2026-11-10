@@ -8344,6 +8344,56 @@ def test_a_video_that_cannot_be_converted_is_kept(
     assert len(history_rows()) == 1
 
 
+def _broken_ffprobe(fault: str) -> Callable[..., Any]:
+    """subprocess.run, with every ffprobe call failing the way ``fault`` names."""
+    real = subprocess.run
+
+    def fake(cmd: Any, *args: Any, **kwargs: Any) -> Any:
+        if not (isinstance(cmd, list) and cmd and cmd[0] == "ffprobe"):
+            return real(cmd, *args, **kwargs)
+        if fault == "timeout":
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout") or 15)
+        if fault == "missing":
+            raise FileNotFoundError(2, "No such file or directory", "ffprobe")
+        if fault == "fails":
+            return subprocess.CompletedProcess(cmd, 1, "", "ffprobe: something went wrong\n")
+        return subprocess.CompletedProcess(cmd, 0, "not what ffprobe prints\n", "")
+
+    return fake
+
+
+@pytest.mark.parametrize("fault", ["timeout", "missing", "fails", "unparsable"])
+def test_a_video_ffprobe_cannot_read_is_kept_and_named(
+    run: Any, out: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    # Only ffprobe breaks: yt-dlp runs its own processes, and ffmpeg stays real.
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe(fault))
+        code, output = run("-y", "https://fake.test/single-webm")
+    assert code == 0
+    assert names(out) == ["Clip.webm"]
+    assert codecs(out / "Clip.webm") == {"video": "vp8", "audio": "vorbis"}
+    assert container_steps(output) == 0
+    assert output.count(t("not_converted", "Clip.webm", "mp4")) == 1
+    assert t("done") in output
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
+
+
+def test_a_junk_body_ffprobe_cannot_read_is_not_converted(
+    generic: Any, media_url: str, out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A conversion would turn the text body into a .mkv holding a subtitle track.
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", _broken_ffprobe("missing"))
+        code, output = generic(JUNK, flags=("-y", "--video-format", "mkv", "-o", str(out)))
+    assert code == 1
+    assert t("failed", f"{media_url}/{JUNK}") in output
+    assert names(out) == ["junk.mp4"]
+    assert container_steps(output) == 0
+    assert history_rows() == []
+
+
 @pytest.mark.parametrize(
     ("flags", "saved"),
     [

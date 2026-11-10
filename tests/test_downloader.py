@@ -377,12 +377,13 @@ def fake_ffprobe(folder: Path, script: str, monkeypatch: pytest.MonkeyPatch) -> 
         # A file holding no audio or video doesn't count as saved.
         ("printf 'subtitle\\ndata\\nattachment\\n'", False),
         ("true", False),
-        # ffprobe failed: its output can't be trusted.
-        ("echo video; exit 1", False),
+        # ffprobe failed, or printed something it never prints: no answer either way.
+        ("echo video; exit 1", None),
+        ("echo garbage", None),
     ],
 )
 def test_media_streams_by_what_ffprobe_says(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str, expected: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str, expected: bool | None
 ) -> None:
     from download_media.downloader import _has_media_streams
 
@@ -390,11 +391,11 @@ def test_media_streams_by_what_ffprobe_says(
     assert _has_media_streams(str(tmp_path / "clip.ogx")) is expected
 
 
-def test_no_ffprobe_means_no_media(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_ffprobe_means_no_answer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from download_media.downloader import _has_media_streams
 
     monkeypatch.setenv("PATH", str(tmp_path / "empty"))
-    assert _has_media_streams(str(tmp_path / "clip.ogx")) is False
+    assert _has_media_streams(str(tmp_path / "clip.ogx")) is None
 
 
 def test_a_hung_ffprobe_is_given_up_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -410,7 +411,7 @@ def test_a_hung_ffprobe_is_given_up_on(tmp_path: Path, monkeypatch: pytest.Monke
         return real_run(*args, **{**kwargs, "timeout": 0.5})
 
     monkeypatch.setattr(subprocess, "run", short_run)
-    assert _has_media_streams(str(tmp_path / "clip.ogx")) is False
+    assert _has_media_streams(str(tmp_path / "clip.ogx")) is None
 
 
 def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(

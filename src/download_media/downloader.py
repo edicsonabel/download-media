@@ -572,14 +572,21 @@ class _EmbedSubtitles(FFmpegEmbedSubtitlePP):  # type: ignore[misc]
         return [], info
 
 
-def _has_media_streams(path: str) -> bool:
+_STREAM_TYPES = frozenset({"video", "audio", "subtitle", "data", "attachment", "unknown"})
+
+
+def _has_media_streams(path: str) -> bool | None:
+    """Whether ffprobe finds audio or video in the file; None when ffprobe can't answer."""
     try:
         cmd = ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0"]
         cmd.append(_probe_path(path))
         done = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
     except (OSError, subprocess.SubprocessError):
-        return False
-    return done.returncode == 0 and bool({"audio", "video"} & set(done.stdout.split()))
+        return None
+    types = set(done.stdout.split())
+    if done.returncode != 0 or not types <= _STREAM_TYPES:
+        return None
+    return bool({"audio", "video"} & types)
 
 
 class _TagSource(FFmpegMetadataPP):  # type: ignore[misc]
@@ -638,7 +645,13 @@ class _ContainerStep(FFmpegVideoConvertorPP):  # type: ignore[misc]
             return [], info
         # ffmpeg reads a text body as a subtitle track, and would convert it into a file that
         # passes for saved. The metadata step fails it, as it does without a conversion.
-        if not _has_media_streams(path):
+        media = _has_media_streams(path)
+        if media is False:
+            return [], info
+        if media is None:
+            # Not knowing what the file holds, converting it could pass a text body for saved.
+            # Keep it as downloaded and say so: the metadata step still fails a body it can't tag.
+            self._not_converted.append(Path(path).name)
             return [], info
         converted = Path(replace_extension(path, target, ext))
         converted_was_there = converted.exists()
