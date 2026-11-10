@@ -1,6 +1,6 @@
 # 22 — Intent flags in any spelling, and `-l` for every URL
 
-Status: draft
+Status: done
 Item: `fix/intent-flags`
 
 > **For the human's review (0.4.0 list): D1, D2 and D3 change published behaviour.** The roles decided them under the overnight delegation, each on the recommended option. None changes a default or renames a flag, so none is breaking under `AGENTS.md`. What changes: `-l <url>` lists at once instead of walking the wizard first, and it now lists every URL instead of only the first (D1, D4). Intent flags count in any spelling argparse accepts: bundled (`-as`), with the value attached (`-q720`), abbreviated (`--aud`). Those runs now skip the wizard, as `AGENTS.md` and the README already say they do (D2). `-l` with no URL, or with `-i`, only asks for the URLs (D3). What a user loses: `-l` on a login wall no longer offers cookies along the way. It fails with the existing `--cookies` hint, as `-y -l` always has. See Cases.
@@ -205,26 +205,26 @@ Unchanged. `-l` returns before `_print_equivalent` on every path, as today (`tes
 
 `[fix]` criteria fail on `main` (`e447bea`) and pass with the change. `[pin]` criteria pass on both. Prove each `[fix]` by reverting `cli.py` and `wizard.py` only.
 
-- [ ] `scripts/pre-release.sh --no-live` passes.
-- [ ] **[fix]** unit `test_bundled_and_attached_intent_flags_are_detected`, parametrized over `-as`, `-sa`, `-q720`, `-ao/tmp/x`, `-fopus`: `has_intent_flags([flag, "u"])` is true.
-- [ ] **[fix]** unit `test_abbreviated_intent_flags_are_detected`, over `--aud`, `--qual 720`, `--qual=720`, `--sub-l en`, `--no-p`, `--playlist-i 1`, `--video-f mkv`, `--cook firefox`, `--out x`: true.
-- [ ] **[fix]** unit `test_list_is_an_intent_flag`, over `-l`, `--list`, `--li`: `has_intent_flags` is true, and `should_run_wizard` is false with a URL and true without one.
-- [ ] **[fix]** unit `test_tokens_after_double_dash_are_urls_not_flags`: `has_intent_flags(["--", "-a"])` and `has_intent_flags(["--", "--cookies"])` are false.
-- [ ] **[pin]** unit `test_a_default_value_given_explicitly_still_counts`, over `-q 1080`, `-f mp3`, `--video-format mp4`: true.
-- [ ] **[pin]** unit `test_non_intent_flags_do_not_count`, over `-i`, `--inter`, `-y`, `-iy`: false.
-- [ ] unit `test_every_option_is_an_intent_flag_or_named_as_not_one`: every `dest` in `build_parser()._actions` is in `cli._INTENT_DESTS` or in `{"help", "version", "urls", "interactive", "no_confirm"}`. This catches a future flag left out of either list.
-- [ ] **[fix]** e2e `test_list_formats_lists_every_url_without_a_prompt` (replaces the pin at `:6107`): `wizard_urls(["-l", VIDEO, VIDEO_B])` with no replies. 0 prompts, exit 0, both URLs extracted, `"Available formats for"` printed twice, no `t("equiv_cmd")`, nothing under `home`.
-- [ ] **[fix]** e2e `test_list_formats_lists_every_url_in_every_direct_mode`, over `("-y",)` and `("-a",)`: `-l VIDEO VIDEO_B`, both extracted in that order, exit 0.
-- [ ] **[fix]** e2e `test_list_formats_goes_on_after_a_failed_url_and_exits_1`: `-l PRIVATE VIDEO`, `t("failed", PRIVATE)` printed, `VIDEO` listed, exit 1.
-- [ ] **[fix]** e2e `test_list_formats_without_a_url_asks_only_for_it`: `wizard_urls(["-l"], f"{VIDEO} {VIDEO_B}")`. 1 prompt, both listed, exit 0.
-- [ ] **[fix]** e2e `test_interactive_list_formats_asks_each_url_and_nothing_else`: `wizard_urls(["-i", "-l", VIDEO, VIDEO_B], "", "")`. 2 prompts, `f"{t('wizard_title')} (2/2)"` in the output, both listed, exit 0.
-- [ ] **[fix]** e2e `test_list_formats_on_a_cookie_site_asks_nothing` (replaces `:5263`): `wizard_urls(["-l", X_CAROUSEL])`. 0 prompts, `t("auth_needed_pre")` not printed, `"Available formats for v1"` printed.
-- [ ] **[fix]** e2e `test_list_formats_on_a_login_wall_says_to_pass_cookies` (replaces `:5444`): `cli.main(["-l", GATED])` with no replies. Exit 1, `t("failed", GATED)`, `--cookies <browser>` in the output, no `t("ask_cookies")`.
-- [ ] **[fix]** e2e `test_list_formats_alone_lists_media_without_codec_info` (replaces `:2037`): `generic("multi.html", flags=("-l",))` with no replies. Exit 0, `"Available formats"`, no `t("no_supported_items")`, nothing under `home / "Videos"`.
-- [ ] **[fix]** e2e `test_list_formats_agrees_with_and_without_yes`, over `VIDEO`, `CAROUSEL`, `IMAGE`, `PRIVATE`: `-l <url>` and `-y -l <url>` give the same exit code and the same output, and `-l` asks nothing. This replaces `test_a_lone_image_refused_by_the_list_formats_wizard_exits_1` (`:10469`), which is deleted: the lone image's wording belongs to spec 61.
-- [ ] **[pin]** e2e `test_cancelling_the_list_formats_wizard_exits_1` (`:10461`), rewritten to `wizard_urls(["-l"], "c")`, and parametrized with `EOFError`: 1 prompt, exit 1, `t("cancelled")`, no `"Available formats"`.
-- [ ] **[fix]** e2e `test_bundled_and_abbreviated_flags_skip_the_wizard`, over `["-as"]`, `["-q720"]`, `["--aud"]`, `["--qual", "720"]`: `wizard_urls([*flags, VIDEO], "")` with `home`. 1 prompt (the preview), `t("wizard_title")` not printed, exit 0, and one file under `home`: `.mp3` in `Music` for the audio cases, `Clip.mp4` in `Videos` for the others.
-- [ ] `ruff check`, `ruff format --check` and `mypy` pass. `AGENTS.md` says what the Design section says. `grep -n "_INTENT_FLAGS" -r src tests` is empty.
+- [x] `scripts/pre-release.sh --no-live` passes.
+- [x] **[fix]** unit `test_bundled_and_attached_intent_flags_are_detected`, parametrized over `-as`, `-sa`, `-q720`, `-ao/tmp/x`, `-fopus`: `has_intent_flags([flag, "u"])` is true.
+- [x] **[fix]** unit `test_abbreviated_intent_flags_are_detected`, over `--aud`, `--qual 720`, `--qual=720`, `--sub-l en`, `--no-p`, `--playlist-i 1`, `--video-f mkv`, `--cook firefox`, `--out x`: true.
+- [x] **[fix]** unit `test_list_is_an_intent_flag`, over `-l`, `--list`, `--li`: `has_intent_flags` is true, and `should_run_wizard` is false with a URL and true without one.
+- [x] **[fix]** unit `test_tokens_after_double_dash_are_urls_not_flags`: `has_intent_flags(["--", "-a"])` and `has_intent_flags(["--", "--cookies"])` are false.
+- [x] **[pin]** unit `test_a_default_value_given_explicitly_still_counts`, over `-q 1080`, `-f mp3`, `--video-format mp4`: true.
+- [x] **[pin]** unit `test_non_intent_flags_do_not_count`, over `-i`, `--inter`, `-y`, `-iy`: false.
+- [x] unit `test_every_option_is_an_intent_flag_or_named_as_not_one`: every `dest` in `build_parser()._actions` is in `cli._INTENT_DESTS` or in `{"help", "version", "urls", "interactive", "no_confirm"}`. This catches a future flag left out of either list.
+- [x] **[fix]** e2e `test_list_formats_lists_every_url_without_a_prompt` (replaces the pin at `:6107`): `wizard_urls(["-l", VIDEO, VIDEO_B])` with no replies. 0 prompts, exit 0, both URLs extracted, `"Available formats for"` printed twice, no `t("equiv_cmd")`, nothing under `home`.
+- [x] **[fix]** e2e `test_list_formats_lists_every_url_in_every_direct_mode`, over `("-y",)` and `("-a",)`: `-l VIDEO VIDEO_B`, both extracted in that order, exit 0.
+- [x] **[fix]** e2e `test_list_formats_goes_on_after_a_failed_url_and_exits_1`: `-l PRIVATE VIDEO`, `t("failed", PRIVATE)` printed, `VIDEO` listed, exit 1.
+- [x] **[fix]** e2e `test_list_formats_without_a_url_asks_only_for_it`: `wizard_urls(["-l"], f"{VIDEO} {VIDEO_B}")`. 1 prompt, both listed, exit 0.
+- [x] **[fix]** e2e `test_interactive_list_formats_asks_each_url_and_nothing_else`: `wizard_urls(["-i", "-l", VIDEO, VIDEO_B], "", "")`. 2 prompts, `f"{t('wizard_title')} (2/2)"` in the output, both listed, exit 0.
+- [x] **[fix]** e2e `test_list_formats_on_a_cookie_site_asks_nothing` (replaces `:5263`): `wizard_urls(["-l", X_CAROUSEL])`. 0 prompts, `t("auth_needed_pre")` not printed, `"Available formats for v1"` printed.
+- [x] **[fix]** e2e `test_list_formats_on_a_login_wall_says_to_pass_cookies` (replaces `:5444`): `cli.main(["-l", GATED])` with no replies. Exit 1, `t("failed", GATED)`, `--cookies <browser>` in the output, no `t("ask_cookies")`.
+- [x] **[fix]** e2e `test_list_formats_alone_lists_media_without_codec_info` (replaces `:2037`): `generic("multi.html", flags=("-l",))` with no replies. Exit 0, `"Available formats"`, no `t("no_supported_items")`, nothing under `home / "Videos"`.
+- [x] **[fix]** e2e `test_list_formats_agrees_with_and_without_yes`, over `VIDEO`, `CAROUSEL`, `IMAGE`, `PRIVATE`: `-l <url>` and `-y -l <url>` give the same exit code and the same output, and `-l` asks nothing. This replaces `test_a_lone_image_refused_by_the_list_formats_wizard_exits_1` (`:10469`), which is deleted: the lone image's wording belongs to spec 61.
+- [x] **[pin]** e2e `test_cancelling_the_list_formats_wizard_exits_1` (`:10461`), rewritten to `wizard_urls(["-l"], "c")`, and parametrized with `EOFError`: 1 prompt, exit 1, `t("cancelled")`, no `"Available formats"`.
+- [x] **[fix]** e2e `test_bundled_and_abbreviated_flags_skip_the_wizard`, over `["-as"]`, `["-q720"]`, `["--aud"]`, `["--qual", "720"]`: `wizard_urls([*flags, VIDEO], "")` with `home`. 1 prompt (the preview), `t("wizard_title")` not printed, exit 0, and one file under `home`: `.mp3` in `Music` for the audio cases, `Clip.mp4` in `Videos` for the others.
+- [x] `ruff check`, `ruff format --check` and `mypy` pass. `AGENTS.md` says what the Design section says. `grep -n "_INTENT_FLAGS" -r src tests` is empty.
 
 ## Live check
 
@@ -266,3 +266,46 @@ Resolved by the roles under the human's overnight delegation, each on the recomm
 ## Open decisions
 
 None for the human beyond reviewing the decisions above. Nothing here adds a dependency, changes a default, renames a flag or moves state.
+
+## Validation
+
+On `main` at `27f42a4`: the merge `8ff961c`, then `untagged-per-item`'s merge `e070f3a`, then `.ai/` only. yt-dlp 2026.10.26, Python 3.14.9, ffmpeg on `PATH`. GitHub CI run 42802950238 on `590fc9b` (this merge plus `.ai/`) passed; the run on `27f42a4` (42805905463) was still in progress when this was written.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on `8ff961c`: exit 0, 2898 passed, 15 xfailed, in es and en. The gate on `e070f3a`, which carries this merge and `untagged-per-item`, also passed: exit 0, 2920 passed, 15 xfailed. Since then only `.ai/` has changed.
+- **Criteria tests:** a `pytest -k` selection over `test_wizard_dispatch.py`, `test_e2e.py`, `test_equivalent.py` and `test_wizard_flow.py` covering every test the criteria name, `[fix]` and `[pin]`, plus every other `-l` test: 87 passed, 4 xfailed (the two strict xfails below), exit 0. The three tests the criteria remove are gone (`test_list_formats_still_walks_and_lists_only_the_first_url`, `test_listing_formats_goes_through_the_cookie_retry`, `test_a_lone_image_refused_by_the_list_formats_wizard_exits_1`). `grep -rn "_INTENT_FLAGS" src tests` is empty. `AGENTS.md` (the intent list, the `-l` paragraph, "(with `-l`, listed)") says what the Design section says, read on the merge diff. The revert proof of the `[fix]` tests belongs to the developer (36 fail with `cli.py` and `wizard.py` reverted) and the test-engineer (189 new tests fail on the old `src/`). It wasn't repeated.
+- **Scope:** `src/` changes only in `cli.py` and `wizard.py`, as in the Files table. The code matches the Design snippets. No message, flag, default, path or dependency changes.
+- **Console check:** `main`'s real console script, `.venv/bin/download-media`, under `env -i` with `LANG=en_US.UTF-8`, `PATH=/usr/bin:/bin`, a dead D-Bus address, no display, and a fresh `HOME` plus all four `XDG_*` folders for each run in the scratchpad. A scratch `http.server` on `127.0.0.1` served two 1 s H.264/AAC clips (`clip.mp4`, `second.mp4`) and a 64×64 `pic.jpg`. Everything was deleted afterwards.
+
+| Run | stdin | Output | Exit | Disk |
+| --- | --- | --- | --- | --- |
+| `-l <clip>` (R1) | `/dev/null` | `[generic] Extracting URL`, the table; no `Download wizard` | 0 | nothing; one request for `clip.mp4` |
+| `-q720 <clip>`, `-as <clip>`, `--aud <clip>` (R1) | `/dev/null` | `Fetching info...`, `Preview`, `Proceed with download? [Y/n]: Cancelled.`; no `Download wizard` | 1 | nothing |
+| same three | Enter | preview, download, `Done.`; the printed command is `-y -q 720`, `-y -a -s` and `-y -a` | 0 | `Videos/clip.mp4`, then `Music/clip.mp3` twice, one history row each |
+| `-l a b`, `-y -l a b`, `-a -l a b` (R2, R6, R7) | `/dev/null` | `Extracting URL` and `Available formats for` for `clip`, then `second` | 0 | nothing; one request for `second.mp4` per run (3 in all) |
+| `-l <404> <clip>` | `/dev/null` | yt-dlp's `ERROR: … HTTP Error 404`, `Download failed: <404>`, then the table for `clip` | 1 | nothing |
+| `-l`, `a b` typed (D3) | `a b` | `Download wizard`, one `Video URL` prompt, then both tables | 0 | nothing |
+| `-i -l a b` (D3) | Enter, Enter | `Download wizard (1/2)`, the prompt preset to `a`, `(2/2)` preset to `b`, then both tables; no type, quality, folder or cookies prompt | 0 | nothing |
+| `-l`, no URL | `/dev/null`, and `c` | `Video URL (c=cancel): Cancelled.` | 1 | nothing |
+| `-y -l`, no URL | `/dev/null` | `Missing URL.` | 1 | nothing |
+| `-- -a` (R10) | `/dev/null` | `Download wizard`, `Video URL [-a] (c=cancel): Cancelled.` | 1 | nothing |
+| `-l <pic.jpg>` and `-y -l <pic.jpg>` | `/dev/null` | the same output apart from the command line: yt-dlp's two generic warnings and a one-row `jpg` table | 0, 0 | nothing |
+
+With stdout on a pipe, the 404 run prints `Download failed: <404>` after the next URL's `Extracting URL` line. That's the pre-existing ordering defect the first strict xfail below pins. It wasn't run on a terminal here.
+
+- **Cases, tests only:** these come from criterion or test-engineer tests in the selection above and weren't run by hand: the cookie site (`X_CAROUSEL`, no up-front prompt), the login wall (`--cookies <browser>` hint, no `ask_cookies`), the carousel and `multi.html` listings, `-l` with the playlist flags, `-l --cookies` with an unreadable browser for each URL, Ctrl-C while listing, and EOF at the URL prompt for `-i -l`. There's no live check (see Live check).
+
+### What changed after approval
+
+Nothing in `src/` or `AGENTS.md` departs from the Design. The test-engineer added tests outside the Files table: two `wizard.ask_urls` tests in `tests/test_wizard_flow.py` (it leaves the options it starts from alone, including on a cancel at the second URL), and the strict xfail in `tests/test_equivalent.py` below. `test_a_lone_image_refused_by_the_list_formats_wizard_exits_1` was deleted, as the criteria ask. Spec 61's branch adjusts its own `test_wizard_in_list_mode_names_a_lone_image` to a single reply, since `-i -l` now asks only for the URL (QA found it on the three-way tree; `ig-lone-images` merged `main` and cut it in `33a464c`).
+
+### Strict xfails added in testing, both pre-existing
+
+1. `test_e2e.py::test_a_failed_line_stays_before_the_next_url_when_stdout_is_a_file[-l|-y]`: with stdout on a file or pipe, the tool's `print` lines lag behind yt-dlp's, which writes to `sys.stdout.buffer`, so a URL's `Download failed` lands after the next URL's output. `-l` with several URLs makes it easy to see, and downloads do the same. Planner row 52 (`output-order`).
+2. `test_equivalent.py::test_a_url_that_starts_with_a_dash_round_trips[-a|-x]`: `equivalent.build` never emits `--`. So `download-media -y -- -a`, once it reaches the download, prints `download-media -y -a` (audio with no URL), and `-- -x` prints a usage error. No planner row yet; the planner decides whether it gets one. This spec's "every printed command passes `should_run_wizard(...) is False`" (Equivalent command) holds only for URLs that don't start with `-`.
+
+### Notes from review, no change made
+
+1. **Stdout ordering with a file or pipe** (QA minor, `cli.py:511`): the first strict xfail above, row 52.
+2. **The equivalent command never emits `--`** (QA minor): the second strict xfail above.
+3. **`-l` with no URL prints the wizard title** (QA minor, `wizard.py:516`): `Download wizard` heads a run that only asks for the URL. Accepted under D3, which reuses `run_all`'s URL phase, title included, so `-l` and `-i -l` look like the start of any wizard run.
+4. **For the human (0.4.0 review list):** `-l` on a login wall loses the wizard's cookie offer and gets the `--cookies` hint instead, as `-y -l` always has (row 82, `list-cookie-retry`, if the human wants it back). `-- -a` now opens the wizard.
