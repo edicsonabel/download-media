@@ -583,7 +583,10 @@ def _has_media_streams(path: str) -> bool | None:
         done = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
-    types = set(done.stdout.split())
+    # A stream's side data (a phone's display matrix, HDR metadata, stereo 3D) prints as an
+    # empty field after its type: "video,". Stream groups and programs add blank rows.
+    rows = (row.split(",", 1)[0].strip() for row in done.stdout.splitlines())
+    types = {row for row in rows if row}
     if done.returncode != 0 or not types <= _STREAM_TYPES:
         return None
     return bool({"audio", "video"} & types)

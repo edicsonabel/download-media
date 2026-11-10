@@ -422,6 +422,10 @@ def media_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     rotate = ["ffmpeg", "-v", "error", "-display_rotation", "90", "-i", str(root / "tiny.mp4")]
     for ext in ("mov", "mp4"):
         subprocess.run([*rotate, "-c", "copy", str(root / f"rotated.{ext}")], check=True)
+    subprocess.run([*rotate, "-an", "-c", "copy", str(root / "rotated-silent.mov")], check=True)
+    # Stereo 3D side data, from a Matroska tag: "video," as well.
+    stereo = ["-c", "copy", "-metadata:s:v", "stereo_mode=left_right", str(root / "stereo.mkv")]
+    subprocess.run([*source, *stereo], check=True)
     # Enough for imghdr to say webp, and for ffmpeg to fail on it.
     (root / "webp-signature.bin").write_bytes(b"RIFF\0\0\0\0WEBP")
     handler = functools.partial(_QuietHandler, directory=str(root))

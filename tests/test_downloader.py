@@ -381,15 +381,15 @@ def fake_ffprobe(folder: Path, script: str, monkeypatch: pytest.MonkeyPatch) -> 
         # ffprobe failed, or printed something it never prints: no answer either way.
         ("echo video; exit 1", None),
         ("echo garbage", None),
+        ("printf 'garbage,\\n'", None),
         # What ffprobe 9 prints for a stream carrying side data, like a phone's display matrix.
-        *(
-            pytest.param(
-                script,
-                True,
-                marks=pytest.mark.xfail(strict=True, reason="'video,' read as no answer"),
-            )
-            for script in ("printf 'video,\\naudio\\n'", "printf 'video,\\n'")
-        ),
+        ("printf 'video,\\naudio\\n'", True),
+        ("printf 'video,\\n'", True),
+        ("printf 'data,\\nattachment\\n'", False),
+        # Measured on n9.0.2: a rotated .mov with a timecode track (its stream group lists
+        # streams again, after a blank row), and an MPEG-TS (its program does the same).
+        ("printf 'video,\\ndata\\n\\nvideo,\\naudio\\ndata\\n'", True),
+        ("printf 'video\\naudio\\n\\nvideo\\naudio\\n\\n\\n'", True),
     ],
 )
 def test_media_streams_by_what_ffprobe_says(

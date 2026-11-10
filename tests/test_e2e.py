@@ -8414,11 +8414,6 @@ def test_wizard_names_a_video_ffprobe_cannot_read(
     assert len(history_rows()) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="ffprobe prints 'video,' for a stream with side data: read as no answer",
-)
 @pytest.mark.parametrize(
     ("page", "flags", "saved"),
     [
@@ -8437,6 +8432,45 @@ def test_a_rotated_video_is_converted(
     assert t("not_converted", page, saved.rsplit(".")[-1]) not in output
     assert names(out) == [saved]
     assert codecs(out / saved) == {"video": "h264", "audio": "aac"}
+
+
+@pytest.mark.parametrize(
+    ("page", "kinds"),
+    [
+        ("rotated-silent.mov", {"video": "h264"}),
+        ("stereo.mkv", {"video": "h264", "audio": "aac"}),
+    ],
+    ids=["rotated-no-audio", "stereo-3d"],
+)
+def test_a_video_with_side_data_is_converted(
+    generic: Any, out: Path, page: str, kinds: dict[str, str]
+) -> None:
+    # Side data on the only stream left nothing for the old reading to fall back on.
+    code, output = generic(page, flags=("-y", "-o", str(out)))
+    assert code == 0
+    assert t("done") in output
+    assert t("not_converted", page, "mp4") not in output
+    [saved] = names(out)
+    assert saved.endswith(".mp4")
+    assert codecs(out / saved) == kinds
+
+
+@pytest.mark.parametrize("folder", ["single", "playlist"])
+def test_a_rotated_video_ffmpeg_cannot_tag_is_a_success(
+    generic: Any, media_url: str, out: Path, folder: str
+) -> None:
+    # The metadata step asks ffprobe too, when ffmpeg can't tag the file.
+    page = "typed/audio/ogg/rotated.mp4/clip.oga"
+    flags = ("-y", "-o", str(out), *(("-p",) if folder == "playlist" else ()))
+    code, output = generic(page, flags=flags)
+    assert code == 0
+    assert names(out) == ["clip.oga"]
+    assert codecs(out / "clip.oga") == {"video": "h264", "audio": "aac"}
+    assert output.count(t("untagged", "clip.oga")) == 1
+    assert t("failed", f"{media_url}/{page}") not in output
+    assert not said_partial_result(output)
+    assert step_leftovers(out) == []
+    assert len(history_rows()) == 1
 
 
 @pytest.mark.xfail(
