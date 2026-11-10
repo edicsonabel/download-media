@@ -10598,11 +10598,6 @@ def test_a_subtitle_part_file_left_by_an_earlier_run_is_kept(run: Any, out: Path
     assert len(subs_failed_lines(output)) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="D4 deletes a subtitle file an earlier run saved: yt-dlp rewrites it, then the "
-    "failed video's cleanup removes it; on main the file stays",
-)
 def test_a_failed_video_never_takes_a_subtitle_an_earlier_run_saved(run: Any, out: Path) -> None:
     code, _ = run("-y", "-a", "-s", "https://fake.test/subs-en")
     assert code == 0

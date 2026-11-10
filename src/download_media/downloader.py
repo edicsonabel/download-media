@@ -321,6 +321,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
                 path = subtitles_filename(filename, lang, sub["ext"], info_dict.get("ext"))
                 part = Path(f"{path}.part")  # The downloader's scratch file.
                 part_was_there = part.exists()
+                # yt-dlp deletes an earlier run's copy and writes it again: still not this run's.
+                file_was_there = Path(path).exists()
                 self.sub_reasons = []
                 had_ignore, ignore = "ignoreerrors" in self.params, self.params.get("ignoreerrors")
                 self.params["ignoreerrors"] = True
@@ -337,7 +339,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
                 saved = sub.get("filepath")
                 if saved and Path(saved).is_file():
                     written += files or []
-                    self.item_subs.append(saved)
+                    if not file_was_there:
+                        self.item_subs.append(saved)
                     continue
                 sub.pop("filepath", None)
                 if not part_was_there:
@@ -353,7 +356,6 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_thumbs = []
 
     def drop_subs(self) -> None:
-        # All of them are this run's: overwrites is unset, so yt-dlp deleted any earlier copy.
         for path in self.item_subs:
             Path(path).unlink(missing_ok=True)
         self.item_subs = []
