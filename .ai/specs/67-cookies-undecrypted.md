@@ -1,6 +1,6 @@
 # 67 — Say so when the browser's cookies load but none of them can be used
 
-Status: draft
+Status: done
 Item: `fix/cookies-undecrypted`
 
 > **For the 0.4.0 review list:** this item changes published behaviour. See SemVer. All of it moves a silent run onto the path specs 26, 45 and 50 already built: notice, no cookies, closing line. No exit code changes, and no page that saves today stops saving.
@@ -259,22 +259,22 @@ New fixtures in `tests/test_e2e.py`:
 
 Criteria:
 
-- [ ] `scripts/pre-release.sh --no-live` passes
-- [ ] **[fix]** `test_cookies_that_decrypt_to_nothing_go_on_without_cookies`. Over `UNDECRYPTED`, run `-y` on `seen/<token>/poster.html`, plus `-y -p` and `-y --playlist-items 1,2` on `seen/<token>/multi.html`. Expect exit 0 and the expected files. The notice appears once, and the next line is `keyring_hint()`. `after_done(output) == [without_cookies()]`. The command has no `--cookies`, there's one history row, and `no_cookie_sent(token)` holds
-- [ ] **[fix]** `test_undecryptable_cookies_are_named_before_the_preview`. `basictext`, no `-y`, Enter. Expect one prompt, the notice once and before `t("preview")`, the `t("p_title")` line, the closing line after `t("done")`, exit 0, 1 file
-- [ ] **[fix]** `test_a_preview_cancelled_after_undecryptable_cookies_still_said_it`. Same, with `n`. Expect the notice before `t("preview")`, `t("cancelled")`, no files and no command
-- [ ] **[fix]** `test_formats_are_listed_after_undecryptable_cookies`. `basictext`, `-l` on `seen/<token>/poster.html`. Expect exit 0, the notice, the format table, and `no_cookie_sent(token)`
-- [ ] **[fix]** `test_the_wizard_names_undecryptable_cookies_at_the_probe`. `basictext`, `-i --cookies chrome+basictext` on `multi.html`, `PICKER_WALK`. Expect the notice once, the picker offered, `t("done_without_cookies", "chrome")` absent (spec 50 D2), a command without `--cookies`, 4 files
-- [ ] **[fix]** `test_undecryptable_cookies_at_the_last_wizard_step_say_so_after_done`. `unreadable_chrome`, no desktop set (yt-dlp picks `basictext`), chrome at the late step on `multi.html`. Expect the notice once, `keyring_hint()`, the closing line after `t("done")`, a command that keeps the items and drops `--cookies`
-- [ ] **[fix]** `test_a_dead_page_after_undecryptable_cookies_is_tried_once`. `basictext`, `-y` and `-y -p` on `status/404`. Expect exit 1, the notice, `t("failed", url)`, no `t("cookies_retry", "chrome+basictext")`, no closing line, a command that keeps `--cookies chrome+basictext`
-- [ ] **[fix]** `test_undecryptable_cookies_are_named_for_each_url`. `basictext`, `-y -p` on `poster.html` and `multi.html`. Expect the notice twice and `after_done(output) == [without_cookies()] * 2`
-- [ ] **[fix]** `test_an_empty_cookie_database_is_named` (D2). `empty_chrome` with `--cookies chrome`, and `empty_firefox` with `--cookies firefox`, `-y` on `seen/<token>/poster.html`. Expect `t("cookies_no_browser", <browser>)` once, no `keyring_hint`, the closing line, a command without `--cookies`, exit 0
-- [ ] **[fix]** `test_undecryptable_cookies_in_both_languages`. `LANG=es*` and `en`, `-y`. Expect the notice built from each block's `cookies_unreadable` and `cookies_none_decrypted`, and the closing line
-- [ ] **[pin]** `test_a_jar_with_one_usable_cookie_keeps_it`. The R9 profile (`chrome_cookie`'s `v10` row encrypted with `peanuts`, plus one `v11`), `chrome+basictext`, `-y` and `-y -p` on `cookie/<token>/…`. Expect no notice, `dm=ok` on every request, a command that keeps `--cookies`
-- [ ] **[pin]** `test_the_right_key_sends_its_cookie`. `chrome_v11(b"token", b"realpass")`, `keyring_says(b"realpass")`. Expect `s=token` on every request and no notice
-- [ ] **[pin]** spec 45's `KEYRING_CAUSES` tests, `test_a_browser_that_loads_sends_its_cookies_to_every_item`, `test_a_jar_that_never_asks_the_keyring_keeps_its_cookies` and `test_an_unreachable_keyring_named_by_hand_gets_no_keyring_hint` pass unchanged
-- [ ] **[fix]** `test_cookies_that_decrypt_to_nothing_are_a_cookie_failure` (`tests/test_probe.py`). `probe(<media_url>/poster.html, "chrome+basictext")` on `unreadable_chrome`'s profile. Expect `failed` true, `cookie_failure.undecrypted` true, `missing` false
-- [ ] **[fix]** `test_a_jar_with_nothing_usable_is_a_failure` (`tests/test_cookies.py`), one table over the jar check:
+- [x] `scripts/pre-release.sh --no-live` passes
+- [x] **[fix]** `test_cookies_that_decrypt_to_nothing_go_on_without_cookies`. Over `UNDECRYPTED`, run `-y` on `seen/<token>/poster.html`, plus `-y -p` and `-y --playlist-items 1,2` on `seen/<token>/multi.html`. Expect exit 0 and the expected files. The notice appears once, and the next line is `keyring_hint()`. `after_done(output) == [without_cookies()]`. The command has no `--cookies`, there's one history row, and `no_cookie_sent(token)` holds
+- [x] **[fix]** `test_undecryptable_cookies_are_named_before_the_preview`. `basictext`, no `-y`, Enter. Expect one prompt, the notice once and before `t("preview")`, the `t("p_title")` line, the closing line after `t("done")`, exit 0, 1 file
+- [x] **[fix]** `test_a_preview_cancelled_after_undecryptable_cookies_still_said_it`. Same, with `n`. Expect the notice before `t("preview")`, `t("cancelled")`, no files and no command
+- [x] **[fix]** `test_formats_are_listed_after_undecryptable_cookies`. `basictext`, `-l` on `seen/<token>/poster.html`. Expect exit 0, the notice, the format table, and `no_cookie_sent(token)`
+- [x] **[fix]** `test_the_wizard_names_undecryptable_cookies_at_the_probe`. `basictext`, `-i --cookies chrome+basictext` on `multi.html`, `PICKER_WALK`. Expect the notice once, the picker offered, `t("done_without_cookies", "chrome")` absent (spec 50 D2), a command without `--cookies`, 4 files
+- [x] **[fix]** `test_undecryptable_cookies_at_the_last_wizard_step_say_so_after_done`. `unreadable_chrome`, no desktop set (yt-dlp picks `basictext`), chrome at the late step on `multi.html`. Expect the notice once, `keyring_hint()`, the closing line after `t("done")`, a command that keeps the items and drops `--cookies`
+- [x] **[fix]** `test_a_dead_page_after_undecryptable_cookies_is_tried_once`. `basictext`, `-y` and `-y -p` on `status/404`. Expect exit 1, the notice, `t("failed", url)`, no `t("cookies_retry", "chrome+basictext")`, no closing line, a command that keeps `--cookies chrome+basictext`
+- [x] **[fix]** `test_undecryptable_cookies_are_named_for_each_url`. `basictext`, `-y -p` on `poster.html` and `multi.html`. Expect the notice twice and `after_done(output) == [without_cookies()] * 2`
+- [x] **[fix]** `test_an_empty_cookie_database_is_named` (D2). `empty_chrome` with `--cookies chrome`, and `empty_firefox` with `--cookies firefox`, `-y` on `seen/<token>/poster.html`. Expect `t("cookies_no_browser", <browser>)` once, no `keyring_hint`, the closing line, a command without `--cookies`, exit 0
+- [x] **[fix]** `test_undecryptable_cookies_in_both_languages`. `LANG=es*` and `en`, `-y`. Expect the notice built from each block's `cookies_unreadable` and `cookies_none_decrypted`, and the closing line
+- [x] **[pin]** `test_a_jar_with_one_usable_cookie_keeps_it`. The R9 profile (`chrome_cookie`'s `v10` row encrypted with `peanuts`, plus one `v11`), `chrome+basictext`, `-y` and `-y -p` on `cookie/<token>/…`. Expect no notice, `dm=ok` on every request, a command that keeps `--cookies`
+- [x] **[pin]** `test_the_right_key_sends_its_cookie`. `chrome_v11(b"token", b"realpass")`, `keyring_says(b"realpass")`. Expect `s=token` on every request and no notice
+- [x] **[pin]** spec 45's `KEYRING_CAUSES` tests, `test_a_browser_that_loads_sends_its_cookies_to_every_item`, `test_a_jar_that_never_asks_the_keyring_keeps_its_cookies` and `test_an_unreachable_keyring_named_by_hand_gets_no_keyring_hint` pass unchanged
+- [x] **[fix]** `test_cookies_that_decrypt_to_nothing_are_a_cookie_failure` (`tests/test_probe.py`). `probe(<media_url>/poster.html, "chrome+basictext")` on `unreadable_chrome`'s profile. Expect `failed` true, `cookie_failure.undecrypted` true, `missing` false
+- [x] **[fix]** `test_a_jar_with_nothing_usable_is_a_failure` (`tests/test_cookies.py`), one table over the jar check:
   - chrome, 0 cookies, warned → undecrypted, with the reason `t("cookies_none_decrypted")`
   - chrome, 1 cookie, no value, not warned → undecrypted
   - chrome, 0 cookies, not warned → missing
@@ -282,11 +282,11 @@ Criteria:
   - firefox, 1 cookie, no value → `None`
   - any browser with a value → `None`
   - `report_failure` on an undecrypted failure for `chrome+basictext` prints the hint, and on a `logged_failure` for `chrome+kwallet6` it doesn't
-- [ ] **[flip]** `test_a_keyring_that_answers_and_decrypts_nothing_stays_as_it_was` (`test_e2e.py:7475`) pins today's behaviour. It becomes `test_a_keyring_that_answers_and_decrypts_nothing_is_named`, with the notice, the closing line and a command without `--cookies`
-- [ ] **[flip]** `test_loading_cookies_leaves_report_error_alone` (`test_downloader.py:455`). The `loads` case returns an empty jar, which is now D2's `missing`. Its jar gets one cookie with a value. The test also asserts `"report_warning" not in vars(ydl)`, and gains a `warns` case: the stub calls `ydl.report_warning(...)` and returns an empty jar, for `chrome` → `CookiesUnavailable`
-- [ ] On the prototype these were the only two existing tests that flipped. That covered the cookie tests by name in `test_e2e.py`, `test_cookies.py`, `test_probe.py` and `test_downloader.py` (in `en` and `es`), plus 138 other tests that mention cookies or a browser (333 passed). Any other flip must be explained in the developer's report
-- [ ] `test_es_and_en_have_same_keys` passes, with `cookies_none_decrypted` in both blocks
-- [ ] On disk, by hand, once, in the Problem's environment: R1, R2, R6, R9 and R10 compared with what was reported, and the server log checked for `Cookie`
+- [x] **[flip]** `test_a_keyring_that_answers_and_decrypts_nothing_stays_as_it_was` (`test_e2e.py:7475`) pins today's behaviour. It becomes `test_a_keyring_that_answers_and_decrypts_nothing_is_named`, with the notice, the closing line and a command without `--cookies`
+- [x] **[flip]** `test_loading_cookies_leaves_report_error_alone` (`test_downloader.py:455`). The `loads` case returns an empty jar, which is now D2's `missing`. Its jar gets one cookie with a value. The test also asserts `"report_warning" not in vars(ydl)`, and gains a `warns` case: the stub calls `ydl.report_warning(...)` and returns an empty jar, for `chrome` → `CookiesUnavailable`
+- [x] On the prototype these were the only two existing tests that flipped. That covered the cookie tests by name in `test_e2e.py`, `test_cookies.py`, `test_probe.py` and `test_downloader.py` (in `en` and `es`), plus 138 other tests that mention cookies or a browser (333 passed). Any other flip must be explained in the developer's report
+- [x] `test_es_and_en_have_same_keys` passes, with `cookies_none_decrypted` in both blocks
+- [x] On disk, by hand, once, in the Problem's environment: R1, R2, R6, R9 and R10 compared with what was reported, and the server log checked for `Cookie`
 
 ## Live check
 
@@ -310,9 +310,47 @@ None turns a save into a failure: the jars dropped held no value a site could us
 
 **Release note (for the planner):** "When a browser's cookies load but none of them can be decrypted, such as with the wrong keyring, the tool now says so, suggests another keyring, and goes on without cookies in every mode. It used to carry on silently, sometimes sending empty cookies. An empty cookie database is now named the same way."
 
+## Validation
+
+On `main` at `09ea96a` (merge `cfc7c54`, then `.ai/` commits only: `git diff cfc7c54 HEAD -- . ':!.ai'` is empty), yt-dlp 2026.10.26, ffmpeg n9.0.2, Python 3.14.9. GitHub CI run 42763848261 on `64ea0a2` (origin/main, same tree outside `.ai/`): success. `fix/container-choice` (spec 30) and its `not_converted` key are on `main` alongside.
+
+- **Gate:** not re-run. The tech-lead's `scripts/pre-release.sh --no-live` on the merge `cfc7c54`, the first gate with spec 30 and this item together: exit 0, ruff, format and mypy clean, 2264 passed, 9 deselected and 4 xfailed in `es` and in `en`. Nothing outside `.ai/` changed since.
+- **Criteria:** every test the criteria name exists on `main`, and the two `[flip]` tests are the only existing tests the merge changed (`git diff f5d2b39 cfc7c54 -- tests`, removed lines). A `pytest -k` selection over the criteria's names, which also catches some of the additions below, ran on `main`: 46 passed.
+- **Reverting the fix:** on a `git archive` copy of `HEAD` in the scratchpad, not on `main`, with `cookies.py`, `downloader.py` and `i18n.py` from the pre-merge `f5d2b39` (spec 30 included) and the merged tests, through `PYTHONPATH`. `tests/test_cookies.py` fails to collect (no `jar_failure`). Of the rest of the selection, 29 failed and 7 passed. Every `[fix]` test fails, in every parameter, and so do both `[flip]` tests and the test-engineer's additions caught by the selection. The 7 that pass are the `[pin]` tests and `test_es_and_en_have_same_keys`.
+- **Reproduction:** the Problem's environment, with `main`'s real console script: `env -i`, `PATH` holding only links to ffmpeg and ffprobe plus a fake `kwallet-query` that logs its call, a fresh `HOME` and `XDG_*_HOME` per run, `LANG=en_US.UTF-8` (one run `es_ES.UTF-8`), `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/bus`. Fake Chrome profiles under the throwaway config folder, an empty Firefox `cookies.sqlite` under the throwaway `HOME`. A scratch `http.server` on `127.0.0.1:18973` logged each request's `Cookie` header. No real cookie database or keyring was read, and the real `kwallet-query` and `dbus-send` weren't reachable. Downloads went to the scratchpad and were deleted afterwards.
+
+| Run | Output | Disk, server |
+| --- | ------ | ------------ |
+| R1 `-y`, `+basictext` | yt-dlp's `Extracted 0 … (1 could not be decrypted)`, the notice, the hint, `Done.`, the closing line, command without `--cookies`, exit 0 | `one (1).mp4`, 1 history row; no `Cookie` |
+| R2 `-y -p`, `two.html` | As R1, command keeps `-p` | 2 files, 1 row; no `Cookie` |
+| R3 preview, Enter / `n` | Notice and hint before `Preview`, the title; Enter: `Done.`, closing line, no `--cookies`, exit 0; `n`: `Cancelled.`, no command, exit 1 | 1 file / none; no `Cookie` |
+| R4 `-l` | yt-dlp's `WARNING:` (row 66), the notice, the hint, the format table, exit 0 | no `Cookie` |
+| R5 wizard `-i`, `two.html` | Notice and hint at the probe, re-probe, picker, the cookies step defaults to `No cookies`, `Done.`, no closing line (spec 50 D2), command `--playlist-items 1,2` without `--cookies` | 2 files; no `Cookie` |
+| R6, R7, R8 (wrong key short and long, `Failed to read`) | yt-dlp's `Extracted 1 cookies` (R6, R8) or `Extracted 0 …` (R7), then as R1 | 1 file each; no `Cookie` (R6 and R8 sent `s=` before) |
+| R9 mixed, `-y` and `-y -p` | No notice, `Done.`, command keeps `--cookies chrome+basictext` | 1 and 2 files; `Cookie: dm=ok` on every request |
+| R10 empty Chrome, R15 empty Firefox | `No <browser> cookies found: …`, no hint, `Done.`, closing line, no `--cookies`, exit 0 | 1 file each; no `Cookie` |
+| R11 right key | No notice, command keeps `--cookies` | both cookies sent |
+| R12 bare `chrome`, no desktop | As R1, with the hint | 1 file; no `Cookie` |
+| R13 / R14 404, `-y` and `-y -p` | Notice, hint, yt-dlp's 404 `ERROR:`, `Download failed`, no retry line, no closing line, command keeps `--cookies chrome+basictext`, exit 1 | nothing saved, 0 rows; 2 requests, as in the planning prototype (4 before) |
+| `es`, R1's shape | `No se pudieron leer las cookies de chrome (no se pudo descifrar ninguna). Se continúa sin cookies.`, the Spanish hint, `Listo.`, `Guardado sin las cookies de chrome: …` | 1 file; no `Cookie` |
+| With spec 30: `-y --video-format mkv`, and `-y -p --video-format webm` on `two.html` | As R1 and R2, plus the remux and the conversions; commands keep `--video-format` and drop `--cookies` | `one (1).mkv`; two `.webm`, no `.mp4` left; no `Cookie` |
+
+`kwallet-query` was called once per keyring run (R6, R7, R8, R11) and never for `+basictext`.
+
+- **Cases, tests only:** `-y -P`, `--playlist-items`, the late wizard step, the 401 page, two URLs, `-a`, and the `KEYRING_CAUSES` pins. Each is a named test above or one of the additions below. All passed in the gate.
+- **Not run:** the optional live step (`+basictext` on a real profile through the tool), skipped at this validation; it stays for the human. The full gate was not re-run, for the reason above.
+- **Scope:** `f5d2b39..cfc7c54` touches exactly the seven files in the Files table. No change to `cli.py`, `wizard.py`, `probe.py`, `equivalent.py`, `README.md`, `AGENTS.md`, `pyproject.toml`, `PKGBUILD` or the version.
+
+### What changed after approval
+
+- **Code:** nothing. `jar_failure`, the `undecrypted` field, the `report_warning` wrapper and the hint condition are Design's, as written, and so are both message texts.
+- **Tests beyond the criteria** (`d01cbcf`, test-engineer): `test_every_offered_browser_gets_the_jar_rule_of_its_kind`, `test_an_empty_database_is_named_without_a_hint`, `test_the_undecrypted_notice_reads_in_each_language`, `test_a_load_stopped_halfway_leaves_report_warning_alone`, `test_undecryptable_cookies_with_playlists_off_or_audio`, `test_a_login_wall_after_undecryptable_cookies_suggests_cookies`, `test_undecryptable_cookies_of_another_chromium_browser_are_named`, `test_a_logged_keyring_error_outranks_the_empty_jar_behind_it`, `test_cookies_empty_on_purpose_go_along_with_the_valued_ones`, `test_firefox_cookies_go_as_they_are`, `test_a_warning_while_loading_a_working_jar_changes_nothing`, `test_an_empty_cookie_database_at_the_wizard_probe`, `test_formats_are_listed_after_an_empty_cookie_database` and `test_a_working_jar_picked_at_the_last_wizard_step_is_used`.
+
 ## Open decisions
 
 Delegated to the roles by the human ("sigue trabajando y haz lo que más puedas"). Each has a recommendation I'd defend in review. Changes to published behaviour are listed under SemVer.
+
+**Approved under that delegation: option A for D1 to D5**, the recommendations. They're in `PLAN.md`'s 0.4.0 review list for the human.
 
 ### D1: the detection rule
 
