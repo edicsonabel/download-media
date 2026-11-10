@@ -9847,11 +9847,6 @@ def test_every_item_kept_as_downloaded_is_named_once(
     assert t("done") in output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="pre-existing, out of fix/container-choice: the metadata step names an item as "
-    "untagged before a later check fails it, the way the container step did (planner row)",
-)
 @pytest.mark.parametrize(
     "flags", [("-p",), ("--playlist-items", "1,2")], ids=["-p", "--playlist-items"]
 )
@@ -9866,6 +9861,32 @@ def test_an_item_that_failed_is_not_named_as_untagged(
     assert "02 - silent-oga-and-m4a (2) [silent-oga-and-m4a-2].mp3" in names(out)
     assert t("partial_result", 1, 2, 0, 1) in output
     assert t("untagged", failed) not in output
+    assert never_said("untagged", output)
+
+
+@pytest.mark.parametrize(
+    "flags", [("-p",), ("--playlist-items", "1,2")], ids=["-p", "--playlist-items"]
+)
+def test_an_item_that_failed_is_not_named_as_not_embedded(
+    run: Any, out: Path, flags: tuple[str, ...]
+) -> None:
+    # Item 1's embed leaves out its TTML track, then the metadata step fails its junk body.
+    code, output = run("-y", "-s", *flags, "https://fake.test/subs-junk-ttml-carousel")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert "02 - Clip [s2].mp4" in names(out)
+    assert never_said("subs_not_embedded", output)
+    assert output.count(t("subs_none", "es,en")) == 1
+
+
+@pytest.mark.parametrize("flags", [(), ("-a",)], ids=["video", "audio"])
+def test_subs_none_counts_only_saved_items(run: Any, out: Path, flags: tuple[str, ...]) -> None:
+    # Only the failed item got a subtitle, and its file is gone with it.
+    code, output = run("-y", "-p", "-s", *flags, "https://fake.test/subs-junk-carousel")
+    assert code == 0
+    assert t("partial_result", 1, 2, 0, 1) in output
+    assert output.count(t("subs_none", "es,en")) == 1
+    assert [name for name in names(out) if ".vtt" in name] == []
 
 
 @pytest.mark.parametrize(

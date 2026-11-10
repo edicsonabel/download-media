@@ -1104,6 +1104,16 @@ class FakeSiteIE(InfoExtractor):
                 self._video("s2"),
             ]
             return self.playlist_result(entries, "post", "Post")
+        if page == "subs-junk-carousel":  # Item 1 a junk body with a subtitle, item 2 plain.
+            entries = [
+                {**self._video("s1", path=JUNK), "subtitles": self._tracks(en="en.vtt")},
+                self._video("s2"),
+            ]
+            return self.playlist_result(entries, "post", "Post")
+        if page == "subs-junk-ttml-carousel":  # As subs-junk-carousel, plus a TTML track.
+            tracks = self._tracks(en="en.vtt", es="en.ttml")
+            entries = [{**self._video("s1", path=JUNK), "subtitles": tracks}, self._video("s2")]
+            return self.playlist_result(entries, "post", "Post")
         if page == "subs-garbage-carousel":  # Item 1's subtitle holds no text, item 2's does.
             entries = [
                 {**self._video("s1"), "subtitles": self._tracks(en="garbage.vtt")},

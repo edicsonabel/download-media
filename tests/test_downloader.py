@@ -482,9 +482,7 @@ def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(
     # Driven directly: in a full run yt-dlp's metadata step goes first and takes the same name.
     from urllib.request import urlopen
 
-    from yt_dlp import YoutubeDL
-
-    from download_media.downloader import _EmbedSubtitles
+    from download_media.downloader import _EmbedSubtitles, _Ydl
 
     video, track = tmp_path / "Clip.mp4", tmp_path / "Clip.en.ttml"
     for path, name in ((video, "tiny.mp4"), (track, "en.ttml")):
@@ -496,11 +494,10 @@ def test_a_failed_subtitle_embed_leaves_a_temp_file_it_did_not_write(
         "ext": "mp4",
         "requested_subtitles": {"en": {"ext": "ttml", "filepath": str(track)}},
     }
-    not_embedded: list[str] = []
-    with YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
-        _EmbedSubtitles(ydl, not_embedded).run(info)
+    with _Ydl({"quiet": True, "no_warnings": True}) as ydl:
+        _EmbedSubtitles(ydl).run(info)
     # ffmpeg can't read the TTML track, so it fails before opening its temp file.
-    assert not_embedded == ["Clip.mp4"]
+    assert ydl.item_not_embedded == ["Clip.mp4"]
     assert (tmp_path / "Clip.temp.mp4").read_text(encoding="utf-8") == "mine"
 
 
