@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-10T01:28:06-04:00",
+  "updated": "2026-11-10T01:31:02-04:00",
   "items": {
     "feature/ci-on-push": {
       "type": "feature",
@@ -2580,6 +2580,27 @@
           "result": "approved",
           "at": "2026-11-10T01:22:39-04:00",
           "note": "Spec approved under the human's overnight delegation, every recommended option (D1 ignoreerrors only around subtitle writing, D2 subs_failed warning, D3 ffprobe packet count leaves empty subtitles out of the embed with subs_empty, D4 delete a failed item's subtitle files, D5 README). Not breaking; two new messages. 0.4.0 review list: five changes in the spec. Development waits until m4a-cover, cookies-undecrypted and cancel-exits merge (it touches lines next to all three)."
+        }
+      ]
+    },
+    "fix/kind-edges": {
+      "type": "fix",
+      "title": "Close the remaining media-kind edge cases",
+      "stage": "planning",
+      "status": "in_progress",
+      "next_agent": "architect",
+      "doc": ".ai/specs/37-kind-edges.md",
+      "branch": "fix/kind-edges",
+      "worktree": null,
+      "commits": [],
+      "review": null,
+      "history": [
+        {
+          "stage": "planning",
+          "agent": "orchestrator",
+          "result": "approved",
+          "at": "2026-11-10T01:31:02-04:00",
+          "note": "Planner's recommendation after subs-failures (c717a8e), under the human's overnight delegation. Lives in probe.py's _format_kind and downloader.py's extension helpers, away from the items in flight; spec written now."
         }
       ]
     }
