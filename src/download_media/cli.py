@@ -401,6 +401,8 @@ def _download_one(url: str, opts: DownloadOptions) -> _Outcome:
         return _Outcome(False, cookies_dropped, pmode)
     if result.skipped or result.failed:
         warn(t("partial_result", result.saved, result.total, result.skipped, result.failed))
+    for name, lang, reason in result.subs_failed:
+        warn(t("subs_failed", name, lang, reason))
     for name in result.subs_not_embedded:
         warn(t("subs_not_embedded", name))
     for name in result.untagged:

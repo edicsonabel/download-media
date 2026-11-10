@@ -34,11 +34,19 @@ from yt_dlp.utils import (
     int_or_none,
     prepend_extension,
     replace_extension,
+    subtitles_filename,
 )
 from yt_dlp.utils._utils import _UnsafeExtensionError
 
 from .config import DownloadOptions
-from .cookies import CookieFailure, cookie_failure, jar_failure, logged_failure, ydl_cookies
+from .cookies import (
+    CookieFailure,
+    cookie_failure,
+    jar_failure,
+    logged_failure,
+    short_reason,
+    ydl_cookies,
+)
 from .i18n import t
 from .selection import missing_items
 
@@ -85,6 +93,8 @@ class DownloadResult:
     no_cover: tuple[str, ...] = ()
     # Videos kept as downloaded because ffmpeg couldn't put them in the chosen container.
     not_converted: tuple[str, ...] = ()
+    # Per saved file, a subtitle language that couldn't be fetched, and yt-dlp's reason.
+    subs_failed: tuple[tuple[str, str, str], ...] = ()
 
     @property
     def total(self) -> int:
@@ -152,6 +162,14 @@ class _WholeBody:
         return getattr(self._response, name)
 
 
+def _subtitle_reason(lang: str, messages: list[str]) -> str:
+    """yt-dlp's first word on a subtitle it couldn't write, without its own framing."""
+    if not messages:
+        return "?"
+    _, framed, reason = messages[0].partition(f"Unable to download video subtitles for {lang!r}: ")
+    return short_reason(reason if framed else messages[0])
+
+
 class _Ydl(YoutubeDL):  # type: ignore[misc]
     """Keeps the errors that ``ignoreerrors`` would otherwise only print."""
 
@@ -164,6 +182,8 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
     item_errors = 0
     # Errors beyond the first of an item that failed in several steps.
     repeated_errors = 0
+    # While yt-dlp writes one subtitle: its errors are the subtitle's, not the item's.
+    writing_subs = False
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.errors: list[str] = []
@@ -179,6 +199,11 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.fetching_image = False
         # Candidate paths that were free when yt-dlp checked them, while fetching one image.
         self.image_new: set[str] = set()
+        # What yt-dlp reported while writing the current subtitle.
+        self.sub_reasons: list[str] = []
+        # Subtitle files this run wrote for the current item, and the languages it couldn't.
+        self.item_subs: list[str] = []
+        self.item_subs_failed: list[tuple[str, str]] = []
         super().__init__(*args, **kwargs)
 
     def existing_file(self, filepaths: Any, *, default_overwrite: bool = True) -> Any:
@@ -218,6 +243,7 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_errors = len(self.errors)
         self.item_thumbs, self.item_no_cover, self.item_images = [], False, []
         self.item_not_converted = []
+        self.item_subs, self.item_subs_failed = [], []
         try:
             result = super().process_info(info_dict)
         except BaseException:
@@ -276,6 +302,46 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         self.item_thumbs += [path for path, _ in written or []]
         return written
 
+    def _write_subtitles(self, info_dict: Any, filename: Any) -> Any:
+        subtitles = info_dict.get("requested_subtitles")
+        wanted = self.params.get("writesubtitles") or self.params.get("writeautomaticsub")
+        if not (subtitles and wanted):
+            return super()._write_subtitles(info_dict, filename)
+        # Without ignoreerrors, a subtitle that can't be fetched ends the item before its media
+        # is requested. One language per call, so each reason belongs to its language.
+        written: list[Any] = []
+        try:
+            for lang, sub in subtitles.items():
+                info_dict["requested_subtitles"] = {lang: sub}
+                path = subtitles_filename(filename, lang, sub["ext"], info_dict.get("ext"))
+                part = Path(f"{path}.part")  # The downloader's scratch file.
+                part_was_there = part.exists()
+                self.sub_reasons = []
+                had_ignore, ignore = "ignoreerrors" in self.params, self.params.get("ignoreerrors")
+                self.params["ignoreerrors"] = True
+                self.writing_subs = True
+                try:
+                    files = super()._write_subtitles(info_dict, filename)
+                finally:
+                    self.writing_subs = False
+                    self.params.pop("ignoreerrors", None)
+                    if had_ignore:
+                        self.params["ignoreerrors"] = ignore
+                # After an empty body, the downloader returns without raising, and yt-dlp
+                # records a path it never wrote.
+                saved = sub.get("filepath")
+                if saved and Path(saved).is_file():
+                    written += files or []
+                    self.item_subs.append(saved)
+                    continue
+                sub.pop("filepath", None)
+                if not part_was_there:
+                    part.unlink(missing_ok=True)
+                self.item_subs_failed.append((lang, _subtitle_reason(lang, self.sub_reasons)))
+        finally:
+            info_dict["requested_subtitles"] = subtitles
+        return written
+
     def drop_thumbs(self) -> None:
         for path in self.item_thumbs:
             Path(path).unlink(missing_ok=True)
@@ -286,9 +352,18 @@ class _Ydl(YoutubeDL):  # type: ignore[misc]
         return len(self.errors) > self.item_errors
 
     def report_error(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        if self.writing_subs:
+            # Named after the download; an ERROR: line above "Done." would read as a failure.
+            self.report_warning(message)
+            return
         if kwargs.get("is_error", True):
             self.errors.append(str(message))
         super().report_error(message, *args, **kwargs)
+
+    def report_warning(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        if self.writing_subs:
+            self.sub_reasons.append(str(message))
+        super().report_warning(message, *args, **kwargs)
 
     def process_ie_result(self, ie_result: Any, *args: Any, **kwargs: Any) -> Any:
         if self.count_entries and ie_result.get("_type") in ("playlist", "multi_video"):
@@ -783,6 +858,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
     untagged: list[str] = []
     no_cover: list[str] = []
     not_converted: list[str] = []
+    subs_failed: list[tuple[str, str, str]] = []
     with _Ydl(ydl_opts) as ydl:
         load_browser_cookies(ydl, opts.cookies_browser)
         ydl.save_images = True
@@ -793,6 +869,8 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
                 if ydl.item_no_cover:
                     no_cover.append(Path(path).name)
                 not_converted.extend(ydl.item_not_converted)
+                name = Path(path).name
+                subs_failed.extend((name, lang, why) for lang, why in ydl.item_subs_failed)
 
         ydl.add_post_hook(keep)
         container = None if opts.audio_only else opts.video_format
@@ -839,6 +917,7 @@ def download(url: str, opts: DownloadOptions) -> DownloadResult:
         untagged=tuple(untagged),
         no_cover=tuple(no_cover),
         not_converted=tuple(not_converted),
+        subs_failed=tuple(subs_failed),
     )
 
 

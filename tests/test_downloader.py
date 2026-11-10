@@ -721,3 +721,30 @@ def test_a_load_stopped_halfway_leaves_report_warning_alone(
         with pytest.raises(type(raised)):
             load_browser_cookies(ydl, "chrome")
         assert "report_warning" not in vars(ydl)
+
+
+def test_report_error_outside_subtitles_still_counts() -> None:
+    from download_media.downloader import _Ydl
+
+    with _Ydl({"quiet": True, "no_warnings": True, "ignoreerrors": True}) as ydl:
+        ydl.report_error("the video is gone")
+        assert ydl.errors == ["the video is gone"]
+        assert ydl.sub_reasons == []
+        ydl.writing_subs = True
+        ydl.report_error("Did not get any data blocks")
+        assert ydl.errors == ["the video is gone"]
+        assert ydl.sub_reasons == ["Did not get any data blocks"]
+
+
+@pytest.mark.parametrize(
+    ("messages", "expected"),
+    [
+        (["Unable to download video subtitles for 'en': HTTP Error 404: Not Found"], "HTTP Error"),
+        (["\r[download] Got error: Downloaded 44 bytes", "later"], "[download] Got error"),
+        ([], "?"),
+    ],
+)
+def test_a_subtitle_reason_drops_yt_dlps_framing(messages: list[str], expected: str) -> None:
+    from download_media.downloader import _subtitle_reason
+
+    assert _subtitle_reason("en", messages).startswith(expected)

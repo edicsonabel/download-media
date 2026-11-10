@@ -987,6 +987,8 @@ class FakeSiteIE(InfoExtractor):
             "subs-garbage": {"en": "garbage.vtt"},
             "subs-one-broken": {"en": "en.vtt", "es": "en.ttml"},
             "subs-404": {"en": "missing.vtt"},
+            "subs-404-two": {"en": "en.vtt", "es": "missing.vtt"},
+            "subs-short": {"en": "short/en.vtt"},  # Cut off long before its stated length.
             "subs-srt": {"en": "en.srt"},
             "subs-ass": {"en": "en.ass"},
         }
